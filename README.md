@@ -1,4 +1,4 @@
-# Confeitaria - Precificacao
+# Doce_horizonte_app
 
 MVP inicial do app de precificacao para confeitaria, com login, cadastro de insumos, receitas, produtos e configuracoes de custos/taxas por empresa.
 
