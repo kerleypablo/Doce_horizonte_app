@@ -119,15 +119,19 @@ export const RecipesPage = () => {
   };
 
   const handleIngredientChange = (index: number, field: string, value: string | number) => {
-    const next = [...form.ingredients];
-    next[index] = { ...next[index], [field]: value };
-    setForm({ ...form, ingredients: next });
+    setForm((prev) => {
+      const next = [...prev.ingredients];
+      next[index] = { ...next[index], [field]: value };
+      return { ...prev, ingredients: next };
+    });
   };
 
   const handleSubRecipeChange = (index: number, field: string, value: string | number) => {
-    const next = [...form.subRecipes];
-    next[index] = { ...next[index], [field]: value };
-    setForm({ ...form, subRecipes: next });
+    setForm((prev) => {
+      const next = [...prev.subRecipes];
+      next[index] = { ...next[index], [field]: value };
+      return { ...prev, subRecipes: next };
+    });
   };
 
   const addIngredient = () => {
@@ -192,6 +196,27 @@ export const RecipesPage = () => {
     () => inputs.map((input) => ({ value: input.id, label: input.name })),
     [inputs]
   );
+
+  const inputsMap = useMemo(() => new Map(inputs.map((input) => [input.id, input])), [inputs]);
+
+  const unitOptionsForInput = (inputId: string) => {
+    const input = inputsMap.get(inputId);
+    if (!input) return units.map((unit) => ({ value: unit, label: unit }));
+    if (input.unit === 'un') return [{ value: 'un', label: 'un' }];
+    if (input.unit === 'kg' || input.unit === 'g') {
+      return [
+        { value: 'kg', label: 'kg' },
+        { value: 'g', label: 'g' }
+      ];
+    }
+    if (input.unit === 'l' || input.unit === 'ml') {
+      return [
+        { value: 'l', label: 'l' },
+        { value: 'ml', label: 'ml' }
+      ];
+    }
+    return units.map((unit) => ({ value: unit, label: unit }));
+  };
 
   const recipeOptions = useMemo(
     () =>
@@ -315,8 +340,8 @@ export const RecipesPage = () => {
                   Tempo de preparo (min)
                   <input
                     type="number"
-                    value={form.prepTimeMinutes}
-                    onChange={(e) => setForm({ ...form, prepTimeMinutes: Number(e.target.value) })}
+                    value={form.prepTimeMinutes === 0 ? '' : form.prepTimeMinutes}
+                    onChange={(e) => setForm({ ...form, prepTimeMinutes: Number(e.target.value || 0) })}
                     min={0}
                   />
                 </label>
@@ -363,27 +388,55 @@ export const RecipesPage = () => {
             <h3>Insumos</h3>
             <div className="ingredients">
               {form.ingredients.map((ingredient, index) => (
-                <div key={`${ingredient.inputId}-${index}`} className="ingredients-row">
+                <div key={`${ingredient.inputId}-${index}`} className="ingredients-row ingredients-row-3">
                   <SearchableSelect
                     value={ingredient.inputId}
-                    onChange={(value) => handleIngredientChange(index, 'inputId', value)}
+                    onChange={(value) => {
+                      const input = inputsMap.get(value);
+                      setForm((prev) => {
+                        const next = [...prev.ingredients];
+                        next[index] = {
+                          ...next[index],
+                          inputId: value,
+                          unit: input ? input.unit : next[index].unit
+                        };
+                        return { ...prev, ingredients: next };
+                      });
+                    }}
                     options={inputOptions}
                     placeholder="Selecione o insumo"
                   />
                   <div className="inline-field">
                     <input
                       type="number"
-                      value={ingredient.quantity}
-                      onChange={(e) => handleIngredientChange(index, 'quantity', Number(e.target.value))}
+                      value={ingredient.quantity === 0 ? '' : ingredient.quantity}
+                      onChange={(e) => handleIngredientChange(index, 'quantity', Number(e.target.value || 0))}
                       min={0}
                       step="0.01"
                     />
-                    <SelectField
-                      className="unit-select"
-                      value={ingredient.unit}
-                      onChange={(value) => handleIngredientChange(index, 'unit', value)}
-                      options={units.map((unit) => ({ value: unit, label: unit }))}
-                    />
+                    <div className="inline-right">
+                      <SelectField
+                        className="unit-select"
+                        value={ingredient.unit}
+                        onChange={(value) => handleIngredientChange(index, 'unit', value)}
+                        options={unitOptionsForInput(ingredient.inputId)}
+                      />
+                      <button
+                        type="button"
+                        className="icon-button tiny"
+                        aria-label="Remover"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            ingredients: prev.ingredients.filter((_, itemIndex) => itemIndex !== index)
+                          }))
+                        }
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -397,7 +450,7 @@ export const RecipesPage = () => {
             <h3>Outras receitas</h3>
             <div className="ingredients">
               {form.subRecipes.map((item, index) => (
-                <div key={`${item.recipeId}-${index}`} className="ingredients-row">
+                <div key={`${item.recipeId}-${index}`} className="ingredients-row ingredients-row-3">
                   <SearchableSelect
                     value={item.recipeId}
                     onChange={(value) => handleSubRecipeChange(index, 'recipeId', value)}
@@ -407,12 +460,29 @@ export const RecipesPage = () => {
                   <div className="inline-field">
                     <input
                       type="number"
-                      value={item.quantity}
-                      onChange={(e) => handleSubRecipeChange(index, 'quantity', Number(e.target.value))}
+                      value={item.quantity === 0 ? '' : item.quantity}
+                      onChange={(e) => handleSubRecipeChange(index, 'quantity', Number(e.target.value || 0))}
                       min={0}
                       step="0.01"
                     />
-                    <div className="unit-tag">{form.yieldUnit}</div>
+                    <div className="inline-right">
+                      <div className="unit-tag">{form.yieldUnit}</div>
+                      <button
+                        type="button"
+                        className="icon-button tiny"
+                        aria-label="Remover"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            subRecipes: prev.subRecipes.filter((_, itemIndex) => itemIndex !== index)
+                          }))
+                        }
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -83,6 +83,7 @@ export const SearchableSelect = ({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 onChange(option.value);
+                setQuery(option.label);
                 setOpen(false);
               }}
             >

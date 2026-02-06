@@ -10,7 +10,9 @@ if (!container) throw new Error('Root element not found');
 
 createRoot(container).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <AuthProvider>
         <App />
       </AuthProvider>

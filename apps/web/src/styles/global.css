@@ -412,6 +412,12 @@ button:disabled {
   align-items: center;
 }
 
+.inline-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .card {
   padding: 20px;
   border-radius: 18px;
@@ -485,6 +491,14 @@ button:disabled {
   grid-template-columns: 2fr 1fr;
   gap: 12px;
   align-items: center;
+}
+
+.ingredients-row-3 {
+  grid-template-columns: 2fr 1fr auto;
+}
+
+.ingredients-row-3 .icon-button {
+  align-self: center;
 }
 
 .unit-tag {
@@ -590,10 +604,48 @@ button:disabled {
   font-size: 14px;
 }
 
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.google-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  padding: 12px 16px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.google-button svg {
+  width: 18px;
+  height: 18px;
+}
+
 .login-hint {
   font-size: 12px;
   color: var(--muted);
   text-align: center;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
 }
 
 .mobile-header {
@@ -605,6 +657,25 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 8px;
+}
+
+.icon-button.small {
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+
+.icon-button.tiny {
+  padding: 6px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--accent-strong);
 }
 
 .mobile-title {

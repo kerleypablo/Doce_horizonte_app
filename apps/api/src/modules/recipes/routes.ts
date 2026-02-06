@@ -1,12 +1,16 @@
 import type { FastifyInstance } from 'fastify';
-import crypto from 'node:crypto';
 import { z } from 'zod';
-import { db } from '../../db/mock.js';
+import { supabaseAdmin } from '../../db/supabase.js';
 
 const ingredientSchema = z.object({
   inputId: z.string().min(1),
   quantity: z.number().positive(),
   unit: z.enum(['kg', 'g', 'l', 'ml', 'un'])
+});
+
+const subRecipeSchema = z.object({
+  recipeId: z.string().min(1),
+  quantity: z.number().positive()
 });
 
 const recipeSchema = z.object({
@@ -16,46 +20,97 @@ const recipeSchema = z.object({
   yield: z.number().positive(),
   yieldUnit: z.enum(['kg', 'g', 'l', 'ml', 'un']),
   ingredients: z.array(ingredientSchema),
-  subRecipes: z.array(z.object({ recipeId: z.string().min(1), quantity: z.number().positive() })).default([]),
+  subRecipes: z.array(subRecipeSchema).default([]),
   tags: z.array(z.string()).default([]),
   notes: z.string().optional()
 });
 
 export const recipeRoutes = async (app: FastifyInstance) => {
+  const mapRecipe = (row: any) => ({
+    id: row.id,
+    name: row.name,
+    description: row.description ?? undefined,
+    prepTimeMinutes: Number(row.prep_time_minutes ?? 0),
+    yield: Number(row.yield),
+    yieldUnit: row.yield_unit,
+    ingredients: row.ingredients ?? [],
+    subRecipes: row.sub_recipes ?? [],
+    tags: row.tags ?? [],
+    notes: row.notes ?? undefined
+  });
+
   app.get('/recipes', { preHandler: app.authenticate }, async (request) => {
-    const user = request.user as { companyId: string };
-    return db.recipes.filter((recipe) => recipe.companyId === user.companyId);
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const { data } = await supabaseAdmin
+      .from('recipes')
+      .select('*')
+      .eq('company_id', auth.companyId)
+      .order('created_at', { ascending: false });
+    return (data ?? []).map(mapRecipe);
   });
 
   app.post('/recipes', { preHandler: app.authenticate }, async (request, reply) => {
-    const user = request.user as { companyId: string };
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = recipeSchema.parse(request.body);
 
-    const recipe = {
-      id: crypto.randomUUID(),
-      companyId: user.companyId,
-      ...data
-    };
+    const { data: created, error } = await supabaseAdmin
+      .from('recipes')
+      .insert({
+        company_id: auth.companyId,
+        name: data.name,
+        description: data.description,
+        prep_time_minutes: data.prepTimeMinutes,
+        yield: data.yield,
+        yield_unit: data.yieldUnit,
+        ingredients: data.ingredients,
+        sub_recipes: data.subRecipes,
+        tags: data.tags,
+        notes: data.notes
+      })
+      .select('*')
+      .single();
 
-    db.recipes.push(recipe);
-    return reply.status(201).send(recipe);
+    if (error) return reply.status(400).send({ message: 'Erro ao criar receita' });
+    return reply.status(201).send(mapRecipe(created));
   });
 
   app.get('/recipes/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const user = request.user as { companyId: string };
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
-    const recipe = db.recipes.find((r) => r.id === id.id && r.companyId === user.companyId);
-    if (!recipe) return reply.status(404).send({ message: 'Nao encontrado' });
-    return recipe;
+    const { data, error } = await supabaseAdmin
+      .from('recipes')
+      .select('*')
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId)
+      .single();
+    if (error || !data) return reply.status(404).send({ message: 'Nao encontrado' });
+    return mapRecipe(data);
   });
 
   app.put('/recipes/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const user = request.user as { companyId: string };
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = recipeSchema.parse(request.body);
     const id = request.params as { id: string };
-    const idx = db.recipes.findIndex((r) => r.id === id.id && r.companyId === user.companyId);
-    if (idx === -1) return reply.status(404).send({ message: 'Nao encontrado' });
-    db.recipes[idx] = { ...db.recipes[idx], ...data };
-    return reply.send(db.recipes[idx]);
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('recipes')
+      .update({
+        name: data.name,
+        description: data.description,
+        prep_time_minutes: data.prepTimeMinutes,
+        yield: data.yield,
+        yield_unit: data.yieldUnit,
+        ingredients: data.ingredients,
+        sub_recipes: data.subRecipes,
+        tags: data.tags,
+        notes: data.notes
+      })
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId)
+      .select('*')
+      .single();
+
+    if (error) return reply.status(404).send({ message: 'Nao encontrado' });
+    return reply.send(mapRecipe(updated));
   });
 };

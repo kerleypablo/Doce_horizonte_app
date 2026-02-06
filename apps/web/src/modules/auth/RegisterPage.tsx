@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from './AuthContext.tsx';
 import { GoogleButton } from './GoogleButton.tsx';
 
-export const LoginPage = () => {
-  const [email, setEmail] = useState('admin@demo.com');
-  const [password, setPassword] = useState('admin');
+export const RegisterPage = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -18,17 +19,21 @@ export const LoginPage = () => {
     setError(null);
 
     try {
-      const data = await apiFetch<{ token: string; role: 'admin' | 'common' }>(
-        '/auth/login',
-        {
-          method: 'POST',
-          body: JSON.stringify({ email, password })
-        }
-      );
-      login(data.token, data.role);
-      navigate('/app');
+      const signup = await apiFetch<{ token: string }>('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+
+      await apiFetch('/onboarding/company', {
+        method: 'POST',
+        token: signup.token,
+        body: JSON.stringify({ companyName })
+      });
+
+      login(signup.token, 'admin');
+      navigate('/app/empresa');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao entrar');
+      setError(err instanceof Error ? err.message : 'Erro ao criar conta');
     } finally {
       setLoading(false);
     }
@@ -41,9 +46,17 @@ export const LoginPage = () => {
           <span>Confeitaria</span>
           <strong>Precificacao</strong>
         </div>
-        <h1>Bem-vinda de volta</h1>
-        <p>Entre para continuar com o controle de custos e margens.</p>
+        <h1>Criar conta</h1>
+        <p>Crie sua empresa e comece a precificar.</p>
         <form onSubmit={handleSubmit}>
+          <label>
+            Nome da empresa
+            <input
+              value={companyName}
+              onChange={(event) => setCompanyName(event.target.value)}
+              required
+            />
+          </label>
           <label>
             Email
             <input
@@ -64,16 +77,14 @@ export const LoginPage = () => {
           </label>
           {error && <div className="error">{error}</div>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? 'Criando...' : 'Criar conta'}
           </button>
         </form>
         <div className="divider">
           <span>ou</span>
         </div>
-        <GoogleButton label="Entrar com Google" />
-        <div className="login-hint">
-          <span>Primeiro acesso?</span> <Link to="/register">Criar conta</Link>
-        </div>
+        <GoogleButton label="Continuar com Google" />
+        <div className="login-hint">Ja tem conta? Volte para o login.</div>
       </div>
     </div>
   );

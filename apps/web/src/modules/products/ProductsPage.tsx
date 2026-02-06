@@ -383,8 +383,8 @@ export const ProductsPage = () => {
                   Tempo de preparo (min)
                   <input
                     type="number"
-                    value={form.prepTimeMinutes}
-                    onChange={(e) => setForm({ ...form, prepTimeMinutes: Number(e.target.value) })}
+                    value={form.prepTimeMinutes === 0 ? '' : form.prepTimeMinutes}
+                    onChange={(e) => setForm({ ...form, prepTimeMinutes: Number(e.target.value || 0) })}
                     min={0}
                   />
                 </label>
@@ -431,10 +431,10 @@ export const ProductsPage = () => {
                 Unidades produzidas
                 <input
                   type="number"
-                  value={form.unitsCount}
+                  value={form.unitsCount === 0 ? '' : form.unitsCount}
                   onChange={(e) => {
                     lastEditedRef.current = 'profit';
-                    setForm({ ...form, unitsCount: Number(e.target.value) });
+                    setForm({ ...form, unitsCount: Number(e.target.value || 0) });
                   }}
                   min={1}
                 />
@@ -444,7 +444,7 @@ export const ProductsPage = () => {
                 <input
                   type="number"
                   value={unitPriceInput}
-                  onChange={(e) => handleUnitPriceChange(Number(e.target.value))}
+                  onChange={(e) => handleUnitPriceChange(Number(e.target.value || 0))}
                 />
               </label>
             </div>
@@ -456,7 +456,7 @@ export const ProductsPage = () => {
                   value={form.targetProfitPercent}
                   onChange={(e) => {
                     lastEditedRef.current = 'profit';
-                    setForm({ ...form, targetProfitPercent: Number(e.target.value) });
+                    setForm({ ...form, targetProfitPercent: Number(e.target.value || 0) });
                   }}
                   min={0}
                 />
@@ -468,7 +468,7 @@ export const ProductsPage = () => {
                   value={form.extraPercent}
                   onChange={(e) => {
                     lastEditedRef.current = 'profit';
-                    setForm({ ...form, extraPercent: Number(e.target.value) });
+                    setForm({ ...form, extraPercent: Number(e.target.value || 0) });
                   }}
                   min={0}
                 />
@@ -480,7 +480,7 @@ export const ProductsPage = () => {
             <h3>Adicionar receitas</h3>
             <div className="ingredients">
               {form.extraRecipes.map((item, index) => (
-                <div key={`${item.recipeId}-${index}`} className="ingredients-row">
+                <div key={`${item.recipeId}-${index}`} className="ingredients-row ingredients-row-3">
                   <SearchableSelect
                     value={item.recipeId}
                     onChange={(value) => {
@@ -494,16 +494,33 @@ export const ProductsPage = () => {
                   <div className="inline-field">
                     <input
                       type="number"
-                      value={item.quantity}
+                      value={item.quantity === 0 ? '' : item.quantity}
                       onChange={(e) => {
                         const next = [...form.extraRecipes];
-                        next[index] = { ...next[index], quantity: Number(e.target.value) };
+                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
                         setForm({ ...form, extraRecipes: next });
                       }}
                       min={0}
                       step="0.01"
                     />
-                    <div className="unit-tag">{form.unitsCount}</div>
+                    <div className="inline-right">
+                      <div className="unit-tag">{form.unitsCount}</div>
+                      <button
+                        type="button"
+                        className="icon-button tiny"
+                        aria-label="Remover"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            extraRecipes: prev.extraRecipes.filter((_, itemIndex) => itemIndex !== index)
+                          }))
+                        }
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -517,7 +534,7 @@ export const ProductsPage = () => {
             <h3>Adicionar produtos</h3>
             <div className="ingredients">
               {form.extraProducts.map((item, index) => (
-                <div key={`${item.productId}-${index}`} className="ingredients-row">
+                <div key={`${item.productId}-${index}`} className="ingredients-row ingredients-row-3">
                   <SearchableSelect
                     value={item.productId}
                     onChange={(value) => {
@@ -531,16 +548,33 @@ export const ProductsPage = () => {
                   <div className="inline-field">
                     <input
                       type="number"
-                      value={item.quantity}
+                      value={item.quantity === 0 ? '' : item.quantity}
                       onChange={(e) => {
                         const next = [...form.extraProducts];
-                        next[index] = { ...next[index], quantity: Number(e.target.value) };
+                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
                         setForm({ ...form, extraProducts: next });
                       }}
                       min={0}
                       step="0.01"
                     />
-                    <div className="unit-tag">un</div>
+                    <div className="inline-right">
+                      <div className="unit-tag">un</div>
+                      <button
+                        type="button"
+                        className="icon-button tiny"
+                        aria-label="Remover"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            extraProducts: prev.extraProducts.filter((_, itemIndex) => itemIndex !== index)
+                          }))
+                        }
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -554,7 +588,7 @@ export const ProductsPage = () => {
             <h3>Embalagens</h3>
             <div className="ingredients">
               {form.packagingInputs.map((item, index) => (
-                <div key={`${item.inputId}-${index}`} className="ingredients-row">
+                <div key={`${item.inputId}-${index}`} className="ingredients-row ingredients-row-3">
                   <SearchableSelect
                     value={item.inputId}
                     onChange={(value) => {
@@ -568,25 +602,42 @@ export const ProductsPage = () => {
                   <div className="inline-field">
                     <input
                       type="number"
-                      value={item.quantity}
+                      value={item.quantity === 0 ? '' : item.quantity}
                       onChange={(e) => {
                         const next = [...form.packagingInputs];
-                        next[index] = { ...next[index], quantity: Number(e.target.value) };
+                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
                         setForm({ ...form, packagingInputs: next });
                       }}
                       min={0}
                       step="0.01"
                     />
-                    <SelectField
-                      className="unit-select"
-                      value={item.unit}
-                      onChange={(value) => {
-                        const next = [...form.packagingInputs];
-                        next[index] = { ...next[index], unit: value as 'kg' | 'g' | 'l' | 'ml' | 'un' };
-                        setForm({ ...form, packagingInputs: next });
-                      }}
-                      options={units.map((unit) => ({ value: unit, label: unit }))}
-                    />
+                    <div className="inline-right">
+                      <SelectField
+                        className="unit-select"
+                        value={item.unit}
+                        onChange={(value) => {
+                          const next = [...form.packagingInputs];
+                          next[index] = { ...next[index], unit: value as 'kg' | 'g' | 'l' | 'ml' | 'un' };
+                          setForm({ ...form, packagingInputs: next });
+                        }}
+                        options={units.map((unit) => ({ value: unit, label: unit }))}
+                      />
+                      <button
+                        type="button"
+                        className="icon-button tiny"
+                        aria-label="Remover"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            packagingInputs: prev.packagingInputs.filter((_, itemIndex) => itemIndex !== index)
+                          }))
+                        }
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

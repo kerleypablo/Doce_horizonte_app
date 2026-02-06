@@ -5,6 +5,7 @@ MVP inicial do app de precificacao para confeitaria, com login, cadastro de insu
 ## Stack
 - Frontend: React + Vite + TypeScript
 - Backend: Node.js + Fastify + TypeScript (mock em memoria)
+- Banco/Auth: Supabase
 
 ## Como rodar
 1. Instale dependencias
@@ -27,9 +28,7 @@ npm run dev:web
 
 Acesse `http://localhost:5173`.
 
-## Credenciais demo
-- Email: admin@demo.com
-- Senha: admin
+## Supabase\nVeja `docs/SUPABASE_SETUP.md` para criar schema, empresa e usuario admin.
 
 ## Pastas
 - `apps/api`: backend

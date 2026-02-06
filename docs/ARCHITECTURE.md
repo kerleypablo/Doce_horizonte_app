@@ -7,15 +7,15 @@
 
 ## Backend
 - `src/app.ts` registra plugins e rotas.
-- `src/db/mock.ts` contem o banco em memoria e o seed inicial.
+- `src/db/supabase.ts` concentra o cliente Supabase e funcoes auxiliares.
 - Cada modulo tem `routes.ts` com rotas REST simples.
-- Calculo de precificacao isolado em `src/modules/pricing/calc.ts`.
+- Calculo de precificacao isolado em `src/modules/pricing/calc.ts` e `src/modules/pricing/product-calc.ts`.
 
 ## Frontend
 - `src/modules` organiza as telas por dominio.
 - `src/modules/shared` concentra o layout e o cliente HTTP.
 - Layout responsivo com sidebar no desktop e bottom-nav no mobile.
 
-## Evolucao para Supabase
-- Substituir `src/db/mock.ts` por repositorios conectados ao Supabase.
-- Manter contratos de DTO e rotas, trocando apenas a camada de persistencia.
+## Supabase
+- O backend usa `SUPABASE_SERVICE_ROLE_KEY` para persistencia.
+- Auth email/senha via Supabase Auth.

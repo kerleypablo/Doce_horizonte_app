@@ -1,4 +1,4 @@
-import type { CompanySettings, Input, Product, Recipe } from '../../db/mock.js';
+import type { CompanySettings, Input, Product, Recipe } from '../../db/types.js';
 import { normalizeQuantity } from '../common/units.js';
 import { calcRecipeDirectCost } from './calc.js';
 

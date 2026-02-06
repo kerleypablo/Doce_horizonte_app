@@ -1,4 +1,4 @@
-import type { CompanySettings, Input, Recipe } from '../../db/mock.js';
+import type { CompanySettings, Input, Recipe } from '../../db/types.js';
 import { normalizeQuantity } from '../common/units.js';
 
 export type PricePreview = {

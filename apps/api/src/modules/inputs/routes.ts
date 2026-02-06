@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import crypto from 'node:crypto';
 import { z } from 'zod';
-import { db } from '../../db/mock.js';
+import { supabaseAdmin } from '../../db/supabase.js';
 
 const inputSchema = z.object({
   name: z.string().min(2),
@@ -15,45 +14,89 @@ const inputSchema = z.object({
 });
 
 export const inputRoutes = async (app: FastifyInstance) => {
+  const mapInput = (row: any) => ({
+    id: row.id,
+    name: row.name,
+    brand: row.brand ?? undefined,
+    category: row.category,
+    unit: row.unit,
+    packageSize: Number(row.package_size),
+    packagePrice: Number(row.package_price),
+    tags: row.tags ?? [],
+    notes: row.notes ?? undefined
+  });
+
   app.get('/inputs', { preHandler: app.authenticate }, async (request) => {
-    const user = request.user as { companyId: string };
-    return db.inputs.filter((input) => input.companyId === user.companyId);
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const { data } = await supabaseAdmin
+      .from('inputs')
+      .select('*')
+      .eq('company_id', auth.companyId)
+      .order('created_at', { ascending: false });
+    return (data ?? []).map(mapInput);
   });
 
   app.post('/inputs', { preHandler: app.authenticate }, async (request, reply) => {
-    const user = request.user as { companyId: string };
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = inputSchema.parse(request.body);
 
-    const input = {
-      id: crypto.randomUUID(),
-      companyId: user.companyId,
-      ...data
-    };
+    const { data: created, error } = await supabaseAdmin
+      .from('inputs')
+      .insert({
+        company_id: auth.companyId,
+        name: data.name,
+        brand: data.brand,
+        category: data.category,
+        unit: data.unit,
+        package_size: data.packageSize,
+        package_price: data.packagePrice,
+        tags: data.tags,
+        notes: data.notes
+      })
+      .select('*')
+      .single();
 
-    db.inputs.push(input);
-    return reply.status(201).send(input);
+    if (error) return reply.status(400).send({ message: 'Erro ao criar insumo' });
+    return reply.status(201).send(mapInput(created));
   });
 
   app.put('/inputs/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const user = request.user as { companyId: string };
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = inputSchema.parse(request.body);
     const id = request.params as { id: string };
-    const idx = db.inputs.findIndex((input) => input.id === id.id && input.companyId === user.companyId);
 
-    if (idx === -1) return reply.status(404).send({ message: 'Nao encontrado' });
+    const { data: updated, error } = await supabaseAdmin
+      .from('inputs')
+      .update({
+        name: data.name,
+        brand: data.brand,
+        category: data.category,
+        unit: data.unit,
+        package_size: data.packageSize,
+        package_price: data.packagePrice,
+        tags: data.tags,
+        notes: data.notes
+      })
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId)
+      .select('*')
+      .single();
 
-    db.inputs[idx] = { ...db.inputs[idx], ...data };
-    return reply.send(db.inputs[idx]);
+    if (error) return reply.status(404).send({ message: 'Nao encontrado' });
+    return reply.send(mapInput(updated));
   });
 
   app.delete('/inputs/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    const user = request.user as { companyId: string };
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
-    const idx = db.inputs.findIndex((input) => input.id === id.id && input.companyId === user.companyId);
 
-    if (idx === -1) return reply.status(404).send({ message: 'Nao encontrado' });
+    const { error } = await supabaseAdmin
+      .from('inputs')
+      .delete()
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId);
 
-    db.inputs.splice(idx, 1);
+    if (error) return reply.status(404).send({ message: 'Nao encontrado' });
     return reply.status(204).send();
   });
 };

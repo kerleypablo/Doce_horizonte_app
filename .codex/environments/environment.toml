@@ -12,3 +12,8 @@ command = '''
 npm install all 
 npn run
 '''
+
+[[actions]]
+name = "run:web"
+icon = "tool"
+command = "npm run dev:web"
