@@ -40,6 +40,24 @@ const navItems = [
     )
   },
   {
+    path: '/app/clientes',
+    label: 'Clientes',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M16 19a4 4 0 0 0-8 0M12 12a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm7 7a5 5 0 0 0-3-4.6M17 11a2.5 2.5 0 1 0-1.2-4.7M5 19a5 5 0 0 1 3-4.6M7 6.3A2.5 2.5 0 1 1 8.2 11" />
+      </svg>
+    )
+  },
+  {
+    path: '/app/pedidos',
+    label: 'Pedidos',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 4h9l3 3v13H6zM9 10h6M9 14h6M9 18h4" />
+      </svg>
+    )
+  },
+  {
     path: '/app/empresa',
     label: 'Empresa',
     icon: (

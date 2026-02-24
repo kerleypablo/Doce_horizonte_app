@@ -7,17 +7,17 @@ export type AuthContext = {
   role: 'admin' | 'common';
 };
 
+const httpError = (statusCode: number, message: string) => Object.assign(new Error(message), { statusCode });
+
 export const registerAuth = (app: FastifyInstance) => {
   app.decorate('authenticateSupabase', async (request: FastifyRequest) => {
     const header = request.headers.authorization;
-    if (!header) throw app.httpErrors.unauthorized('Token ausente');
+    if (!header) throw httpError(401, 'Token ausente');
 
     const token = header.replace('Bearer ', '');
     const { data, error } = await supabaseAdmin.auth.getUser(token);
 
-    if (error || !data.user) {
-      throw app.httpErrors.unauthorized('Token invalido');
-    }
+    if (error || !data.user) throw httpError(401, 'Token invalido');
 
     (request as FastifyRequest & { authUserId: string }).authUserId = data.user.id;
   });
@@ -28,7 +28,7 @@ export const registerAuth = (app: FastifyInstance) => {
 
     const appUser = await getAppUserByAuthId(authUserId);
     if (!appUser) {
-      throw app.httpErrors.forbidden('Usuario sem empresa vinculada');
+      throw httpError(403, 'Usuario sem empresa vinculada');
     }
     (request as FastifyRequest & { auth: AuthContext }).auth = {
       userId: appUser.auth_user_id,
@@ -40,7 +40,7 @@ export const registerAuth = (app: FastifyInstance) => {
   app.decorate('authorize', (role: AuthContext['role']) => async (request: FastifyRequest) => {
     const auth = (request as FastifyRequest & { auth?: AuthContext }).auth;
     if (!auth || auth.role !== role) {
-      throw app.httpErrors.forbidden('Sem permissao');
+      throw httpError(403, 'Sem permissao');
     }
   });
 };

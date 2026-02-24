@@ -85,6 +85,54 @@ create table if not exists products (
   created_at timestamp with time zone default now()
 );
 
+create table if not exists customers (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id) on delete cascade,
+  name text not null,
+  phone text not null,
+  person_type text not null check (person_type in ('PF', 'PJ')),
+  email text,
+  address text,
+  number text,
+  city text,
+  neighborhood text,
+  zip_code text,
+  notes text,
+  created_at timestamp with time zone default now()
+);
+
+create table if not exists orders (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id) on delete cascade,
+  number text not null,
+  type text not null check (type in ('PEDIDO', 'ORCAMENTO')),
+  order_datetime timestamp with time zone not null default now(),
+  customer_id uuid references customers(id) on delete set null,
+  customer_snapshot jsonb,
+  delivery_type text not null check (delivery_type in ('ENTREGA', 'RETIRADA')),
+  delivery_date date,
+  status text not null check (status in ('AGUARDANDO_RETORNO', 'CONCLUIDO', 'CONFIRMADO', 'CANCELADO')),
+  products jsonb not null default '[]',
+  additions jsonb not null default '[]',
+  discount_mode text not null default 'FIXED' check (discount_mode in ('PERCENT', 'FIXED')),
+  discount_value numeric not null default 0,
+  shipping_value numeric not null default 0,
+  notes_delivery text,
+  notes_general text,
+  notes_payment text,
+  pix text,
+  terms text,
+  payments jsonb not null default '[]',
+  images jsonb not null default '[]',
+  alerts jsonb not null default '[]',
+  created_at timestamp with time zone default now()
+);
+
+alter table orders drop constraint if exists orders_status_check;
+alter table orders add constraint orders_status_check check (status in ('AGUARDANDO_RETORNO', 'CONCLUIDO', 'CONFIRMADO', 'CANCELADO'));
+
+create unique index if not exists orders_company_number_idx on orders(company_id, number);
+
 -- RLS (optional)
 alter table companies enable row level security;
 alter table app_users enable row level security;
@@ -93,30 +141,49 @@ alter table sales_channels enable row level security;
 alter table inputs enable row level security;
 alter table recipes enable row level security;
 alter table products enable row level security;
+alter table customers enable row level security;
+alter table orders enable row level security;
 
 -- Basic policies (service role bypasses RLS)
+drop policy if exists "Users can view own company" on companies;
 create policy "Users can view own company" on companies
   for select using (exists (select 1 from app_users u where u.company_id = id and u.auth_user_id = auth.uid()));
 
+drop policy if exists "Users can view own profile" on app_users;
 create policy "Users can view own profile" on app_users
   for select using (auth_user_id = auth.uid());
 
+drop policy if exists "Users can manage own data" on inputs;
 create policy "Users can manage own data" on inputs
   for all using (company_id in (select company_id from app_users where auth_user_id = auth.uid()))
   with check (company_id in (select company_id from app_users where auth_user_id = auth.uid()));
 
+drop policy if exists "Users can manage own recipes" on recipes;
 create policy "Users can manage own recipes" on recipes
   for all using (company_id in (select company_id from app_users where auth_user_id = auth.uid()))
   with check (company_id in (select company_id from app_users where auth_user_id = auth.uid()));
 
+drop policy if exists "Users can manage own products" on products;
 create policy "Users can manage own products" on products
   for all using (company_id in (select company_id from app_users where auth_user_id = auth.uid()))
   with check (company_id in (select company_id from app_users where auth_user_id = auth.uid()));
 
+drop policy if exists "Users can manage own customers" on customers;
+create policy "Users can manage own customers" on customers
+  for all using (company_id in (select company_id from app_users where auth_user_id = auth.uid()))
+  with check (company_id in (select company_id from app_users where auth_user_id = auth.uid()));
+
+drop policy if exists "Users can manage own orders" on orders;
+create policy "Users can manage own orders" on orders
+  for all using (company_id in (select company_id from app_users where auth_user_id = auth.uid()))
+  with check (company_id in (select company_id from app_users where auth_user_id = auth.uid()));
+
+drop policy if exists "Users can manage own settings" on company_settings;
 create policy "Users can manage own settings" on company_settings
   for all using (company_id in (select company_id from app_users where auth_user_id = auth.uid()))
   with check (company_id in (select company_id from app_users where auth_user_id = auth.uid()));
 
+drop policy if exists "Users can manage own channels" on sales_channels;
 create policy "Users can manage own channels" on sales_channels
   for all using (company_id in (select company_id from app_users where auth_user_id = auth.uid()))
   with check (company_id in (select company_id from app_users where auth_user_id = auth.uid()));

@@ -59,6 +59,11 @@ export const SelectField = ({ value, onChange, options, placeholder, disabled, c
               className={`select-option ${option.value === value ? 'active' : ''}`}
               onPointerDown={(event) => {
                 event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
                 onChange(option.value);
                 setOpen(false);
               }}

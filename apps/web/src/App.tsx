@@ -9,6 +9,8 @@ import { InputsPage } from './modules/inputs/InputsPage.tsx';
 import { RecipesPage } from './modules/recipes/RecipesPage.tsx';
 import { ProductsPage } from './modules/products/ProductsPage.tsx';
 import { CompanySettingsPage } from './modules/company/CompanySettingsPage.tsx';
+import { CustomersPage } from './modules/customers/CustomersPage.tsx';
+import { OrdersPage } from './modules/orders/OrdersPage.tsx';
 
 const App = () => {
   return (
@@ -23,6 +25,9 @@ const App = () => {
         <Route path="/app/insumos" element={<InputsPage />} />
         <Route path="/app/receitas" element={<RecipesPage />} />
         <Route path="/app/produtos" element={<ProductsPage />} />
+        <Route path="/app/clientes" element={<CustomersPage />} />
+        <Route path="/app/pedidos" element={<OrdersPage />} />
+        <Route path="/app/pedidos/novo" element={<OrdersPage />} />
         <Route path="/app/empresa" element={<CompanySettingsPage />} />
       </Route>
     </Routes>

@@ -84,6 +84,11 @@ export const SearchableSelect = ({
               className={`select-option ${option.value === value ? 'active' : ''}`}
               onPointerDown={(event) => {
                 event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
                 onChange(option.value);
                 setQuery(option.label);
                 setOpen(false);

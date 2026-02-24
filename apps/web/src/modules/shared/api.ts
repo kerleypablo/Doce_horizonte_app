@@ -1,4 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3333';
+const AUTH_STORAGE_KEY = 'confeitaria.auth';
 
 export const apiFetch = async <T>(
   path: string,
@@ -16,6 +17,12 @@ export const apiFetch = async <T>(
 
   if (!response.ok) {
     const message = await response.text();
+    if (response.status === 401) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
     throw new Error(message || 'Erro na requisicao');
   }
 
