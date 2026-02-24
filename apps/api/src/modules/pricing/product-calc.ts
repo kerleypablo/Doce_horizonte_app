@@ -33,7 +33,7 @@ export const calcProductPreview = ({
   paymentFeePercent,
   feeFixed
 }: {
-  baseRecipe: Recipe;
+  baseRecipe?: Recipe;
   unitsCount: number;
   prepTimeMinutes: number;
   targetProfitPercent: number;
@@ -50,9 +50,8 @@ export const calcProductPreview = ({
   feeFixed: number;
 }): ProductPricePreview => {
   const safeUnits = unitsCount > 0 ? unitsCount : 1;
-
-  const baseRecipeCost = calcRecipeDirectCost(baseRecipe, inputs, recipes);
-  const basePerUnit = baseRecipe.yield > 0 ? baseRecipeCost / baseRecipe.yield : baseRecipeCost;
+  const baseRecipeCost = baseRecipe ? calcRecipeDirectCost(baseRecipe, inputs, recipes) : 0;
+  const basePerUnit = baseRecipe ? (baseRecipe.yield > 0 ? baseRecipeCost / baseRecipe.yield : baseRecipeCost) : 0;
 
   const recipesCost = extraRecipes.reduce((sum, item) => {
     const recipe = recipes.find((r) => r.id === item.recipeId);
@@ -88,18 +87,19 @@ export const calcProductPreview = ({
   const fixedCost = settings.fixedCostPerHour * hours;
   const overheadCost = baseOverhead + laborCost + fixedCost;
 
-  const variablePercent = settings.taxesPercent + feePercent + paymentFeePercent + targetProfitPercent + extraPercent;
+  const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
+  const denominator = Math.max(1 - variablePercentBase / 100, 0.001);
   const baseCost = directCost + overheadCost + feeFixed;
-
-  const totalPrice = baseCost / (1 - variablePercent / 100);
+  const markupMultiplier = 1 + (targetProfitPercent + extraPercent) / 100;
+  const totalPrice = (baseCost * markupMultiplier) / denominator;
   const unitPrice = totalPrice / safeUnits;
   const profitValue = totalPrice - baseCost - (totalPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
-  const profitPercent = (profitValue / totalPrice) * 100;
+  const profitPercent = totalPrice > 0 ? (profitValue / totalPrice) * 100 : 0;
 
   return {
     directCost: round2(directCost),
     overheadCost: round2(overheadCost),
-    variablePercent: round2(variablePercent),
+    variablePercent: round2(variablePercentBase + targetProfitPercent + extraPercent),
     feeFixed: round2(feeFixed),
     unitsCount: round2(safeUnits),
     unitPrice: round2(unitPrice),

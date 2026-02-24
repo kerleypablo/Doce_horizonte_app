@@ -6,6 +6,8 @@ import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
+import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
+import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 
 export type InputItem = {
   id: string;
@@ -26,6 +28,8 @@ export const InputsPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -39,8 +43,12 @@ export const InputsPage = () => {
   });
 
   const load = async () => {
-    const data = await apiFetch<InputItem[]>('/inputs', { token: user?.token });
-    setInputs(data);
+    try {
+      const data = await apiFetch<InputItem[]>('/inputs', { token: user?.token });
+      setInputs(data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -49,29 +57,34 @@ export const InputsPage = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSaving(true);
     const payload = {
       ...form,
       packageSize: Number(form.packageSize),
       packagePrice: Number(form.packagePrice)
     };
 
-    if (editingId) {
-      await apiFetch<InputItem>(`/inputs/${editingId}`, {
-        method: 'PUT',
-        token: user?.token,
-        body: JSON.stringify(payload)
-      });
-    } else {
-      await apiFetch<InputItem>('/inputs', {
-        method: 'POST',
-        token: user?.token,
-        body: JSON.stringify(payload)
-      });
-    }
+    try {
+      if (editingId) {
+        await apiFetch<InputItem>(`/inputs/${editingId}`, {
+          method: 'PUT',
+          token: user?.token,
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await apiFetch<InputItem>('/inputs', {
+          method: 'POST',
+          token: user?.token,
+          body: JSON.stringify(payload)
+        });
+      }
 
-    resetForm();
-    setShowForm(false);
-    await load();
+      resetForm();
+      setShowForm(false);
+      await load();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const resetForm = () => {
@@ -116,48 +129,52 @@ export const InputsPage = () => {
           actionLabel="Novo insumo"
           onAction={handleNew}
         />
-        <div className="table">
-          <div className="table-head">
-            <span>Nome</span>
-            <span>Categoria</span>
-            <span>Pacote</span>
-            <span>Preco</span>
-          </div>
-          {filtered.map((input) => (
-            <div key={input.id} className="list-row">
-              <div>
-                <strong>{input.name}</strong>
-                <span className="muted">
-                  {input.category} • {input.packageSize} {input.unit} • R$ {input.packagePrice.toFixed(2)}
-                  {input.tags?.length ? ` • ${input.tags.join(', ')}` : ''}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Editar"
-                onClick={() => {
-                  setEditingId(input.id);
-                  setForm({
-                    name: input.name,
-                    brand: input.brand ?? '',
-                    category: input.category,
-                    unit: input.unit,
-                    packageSize: input.packageSize,
-                    packagePrice: input.packagePrice,
-                    notes: input.notes ?? '',
-                    tags: input.tags ?? []
-                  });
-                  setShowForm(true);
-                }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                </svg>
-              </button>
+        {loading ? (
+          <ListSkeleton withTableHead />
+        ) : (
+          <div className="table">
+            <div className="table-head">
+              <span>Nome</span>
+              <span>Categoria</span>
+              <span>Pacote</span>
+              <span>Preco</span>
             </div>
-          ))}
-        </div>
+            {filtered.map((input) => (
+              <div key={input.id} className="list-row">
+                <div>
+                  <strong>{input.name}</strong>
+                  <span className="muted">
+                    {input.category} • {input.packageSize} {input.unit} • R$ {input.packagePrice.toFixed(2)}
+                    {input.tags?.length ? ` • ${input.tags.join(', ')}` : ''}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Editar"
+                  onClick={() => {
+                    setEditingId(input.id);
+                    setForm({
+                      name: input.name,
+                      brand: input.brand ?? '',
+                      category: input.category,
+                      unit: input.unit,
+                      packageSize: input.packageSize,
+                      packagePrice: input.packagePrice,
+                      notes: input.notes ?? '',
+                      tags: input.tags ?? []
+                    });
+                    setShowForm(true);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -192,8 +209,8 @@ export const InputsPage = () => {
                 <div className="inline-field">
                   <input
                     type="number"
-                    value={form.packageSize}
-                    onChange={(e) => setForm({ ...form, packageSize: Number(e.target.value) })}
+                    value={form.packageSize === 0 ? '' : form.packageSize}
+                    onChange={(e) => setForm({ ...form, packageSize: Number(e.target.value || 0) })}
                     min={0}
                     step="0.01"
                   />
@@ -252,6 +269,7 @@ export const InputsPage = () => {
           setConfirmOpen(false);
         }}
       />
+      <LoadingOverlay open={saving} label="Salvando insumo..." />
     </div>
   );
 };

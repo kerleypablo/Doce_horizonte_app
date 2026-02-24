@@ -19,6 +19,7 @@ export const SearchableSelect = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const sorted = useMemo(
     () => [...options].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
@@ -37,20 +38,21 @@ export const SearchableSelect = ({
   }, [selected?.label]);
 
   useEffect(() => {
-    const handler = (event: MouseEvent) => {
+    const handler = (event: PointerEvent) => {
       if (!ref.current) return;
       if (ref.current.contains(event.target as Node)) return;
       setOpen(false);
     };
 
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, []);
 
   return (
     <div className={`select-field searchable ${open ? 'open' : ''}`} ref={ref}>
       <div className="select-trigger">
         <input
+          ref={inputRef}
           className="select-search"
           placeholder={placeholder}
           value={query}
@@ -80,11 +82,12 @@ export const SearchableSelect = ({
               key={option.value}
               type="button"
               className={`select-option ${option.value === value ? 'active' : ''}`}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
+              onPointerDown={(event) => {
+                event.preventDefault();
                 onChange(option.value);
                 setQuery(option.label);
                 setOpen(false);
+                inputRef.current?.blur();
               }}
             >
               {option.label}

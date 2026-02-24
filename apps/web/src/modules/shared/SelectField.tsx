@@ -21,14 +21,14 @@ export const SelectField = ({ value, onChange, options, placeholder, disabled, c
   const selected = options.find((option) => option.value === value);
 
   useEffect(() => {
-    const handler = (event: MouseEvent) => {
+    const handler = (event: PointerEvent) => {
       if (!ref.current) return;
       if (ref.current.contains(event.target as Node)) return;
       setOpen(false);
     };
 
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, []);
 
   useEffect(() => {
@@ -57,10 +57,8 @@ export const SelectField = ({ value, onChange, options, placeholder, disabled, c
               key={option.value}
               type="button"
               className={`select-option ${option.value === value ? 'active' : ''}`}
-              onMouseDown={(event) => {
+              onPointerDown={(event) => {
                 event.preventDefault();
-              }}
-              onClick={() => {
                 onChange(option.value);
                 setOpen(false);
               }}

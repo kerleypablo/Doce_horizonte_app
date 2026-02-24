@@ -7,6 +7,8 @@ import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { SearchableSelect } from '../shared/SearchableSelect.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
+import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
+import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 
 export type RecipeItem = {
   id: string;
@@ -43,6 +45,7 @@ type Settings = {
 };
 
 const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
+const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
 const normalizeQuantity = (quantity: number, unit: string, target: string) => {
   if (unit === 'un' || target === 'un') return quantity;
@@ -64,6 +67,8 @@ export const RecipesPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -77,14 +82,18 @@ export const RecipesPage = () => {
   });
 
   const load = async () => {
-    const [inputsData, recipesData, settingsData] = await Promise.all([
-      apiFetch<InputItem[]>('/inputs', { token: user?.token }),
-      apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
-      apiFetch<Settings>('/company/settings', { token: user?.token })
-    ]);
-    setInputs(inputsData);
-    setRecipes(recipesData);
-    setSettings(settingsData);
+    try {
+      const [inputsData, recipesData, settingsData] = await Promise.all([
+        apiFetch<InputItem[]>('/inputs', { token: user?.token }),
+        apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
+        apiFetch<Settings>('/company/settings', { token: user?.token })
+      ]);
+      setInputs(inputsData);
+      setRecipes(recipesData);
+      setSettings(settingsData);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -150,6 +159,7 @@ export const RecipesPage = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSaving(true);
     const payload = {
       name: form.name,
       description: form.description,
@@ -168,23 +178,27 @@ export const RecipesPage = () => {
       tags: form.tags
     };
 
-    if (editingId) {
-      await apiFetch<RecipeItem>(`/recipes/${editingId}`, {
-        method: 'PUT',
-        token: user?.token,
-        body: JSON.stringify(payload)
-      });
-    } else {
-      await apiFetch<RecipeItem>('/recipes', {
-        method: 'POST',
-        token: user?.token,
-        body: JSON.stringify(payload)
-      });
-    }
+    try {
+      if (editingId) {
+        await apiFetch<RecipeItem>(`/recipes/${editingId}`, {
+          method: 'PUT',
+          token: user?.token,
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await apiFetch<RecipeItem>('/recipes', {
+          method: 'POST',
+          token: user?.token,
+          body: JSON.stringify(payload)
+        });
+      }
 
-    resetForm();
-    setShowForm(false);
-    await load();
+      resetForm();
+      setShowForm(false);
+      await load();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const filtered = recipes.filter((recipe) => {
@@ -193,7 +207,11 @@ export const RecipesPage = () => {
   });
 
   const inputOptions = useMemo(
-    () => inputs.map((input) => ({ value: input.id, label: input.name })),
+    () =>
+      inputs.map((input) => ({
+        value: input.id,
+        label: `${input.name} • ${formatCurrency(input.packagePrice)} / ${input.packageSize} ${input.unit}`
+      })),
     [inputs]
   );
 
@@ -222,7 +240,10 @@ export const RecipesPage = () => {
     () =>
       recipes
         .filter((recipe) => recipe.id !== editingId)
-        .map((recipe) => ({ value: recipe.id, label: recipe.name })),
+        .map((recipe) => ({
+          value: recipe.id,
+          label: `${recipe.name} • rendimento ${recipe.yield} ${recipe.yieldUnit}`
+        })),
     [recipes, editingId]
   );
 
@@ -288,42 +309,46 @@ export const RecipesPage = () => {
           actionLabel="Nova receita"
           onAction={handleNew}
         />
-        <div className="table">
-          {filtered.map((recipe) => (
-            <div key={recipe.id} className="list-row">
-              <div>
-                <strong>{recipe.name}</strong>
-                <span className="muted">
-                  {recipe.prepTimeMinutes ?? 0} min • Rendimento {recipe.yield} {recipe.yieldUnit}
-                  {recipe.tags?.length ? ` • ${recipe.tags.join(', ')}` : ''}
-                </span>
+        {loading ? (
+          <ListSkeleton />
+        ) : (
+          <div className="table">
+            {filtered.map((recipe) => (
+              <div key={recipe.id} className="list-row">
+                <div>
+                  <strong>{recipe.name}</strong>
+                  <span className="muted">
+                    {recipe.prepTimeMinutes ?? 0} min • Rendimento {recipe.yield} {recipe.yieldUnit}
+                    {recipe.tags?.length ? ` • ${recipe.tags.join(', ')}` : ''}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Editar"
+                  onClick={() => {
+                    setEditingId(recipe.id);
+                    setForm({
+                      name: recipe.name,
+                      description: recipe.description ?? '',
+                      prepTimeMinutes: recipe.prepTimeMinutes ?? 0,
+                      yield: recipe.yield,
+                      yieldUnit: recipe.yieldUnit ?? 'un',
+                      ingredients: recipe.ingredients ?? [],
+                      subRecipes: recipe.subRecipes ?? [],
+                      tags: recipe.tags ?? []
+                    });
+                    setShowForm(true);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
+                  </svg>
+                </button>
               </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Editar"
-                onClick={() => {
-                  setEditingId(recipe.id);
-                  setForm({
-                    name: recipe.name,
-                    description: recipe.description ?? '',
-                    prepTimeMinutes: recipe.prepTimeMinutes ?? 0,
-                    yield: recipe.yield,
-                    yieldUnit: recipe.yieldUnit ?? 'un',
-                    ingredients: recipe.ingredients ?? [],
-                    subRecipes: recipe.subRecipes ?? [],
-                    tags: recipe.tags ?? []
-                  });
-                  setShowForm(true);
-                }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -351,8 +376,8 @@ export const RecipesPage = () => {
                 <div className="inline-field">
                   <input
                     type="number"
-                    value={form.yield}
-                    onChange={(e) => setForm({ ...form, yield: Number(e.target.value) })}
+                    value={form.yield === 0 ? '' : form.yield}
+                    onChange={(e) => setForm({ ...form, yield: Number(e.target.value || 0) })}
                     min={1}
                   />
                   <SelectField
@@ -532,6 +557,7 @@ export const RecipesPage = () => {
           setConfirmOpen(false);
         }}
       />
+      <LoadingOverlay open={saving} label="Salvando receita..." />
     </div>
   );
 };

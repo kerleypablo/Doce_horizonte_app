@@ -7,11 +7,14 @@ import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { SearchableSelect } from '../shared/SearchableSelect.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';
+import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
+import { MoneyInput } from '../shared/MoneyInput.tsx';
+import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 
 export type ProductItem = {
   id: string;
   name: string;
-  recipeId: string;
+  recipeId?: string;
   prepTimeMinutes: number;
   notes?: string;
   unitsCount: number;
@@ -44,6 +47,7 @@ type Settings = {
 };
 
 const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
+const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
 export const ProductsPage = () => {
   const { user } = useAuth();
@@ -55,12 +59,13 @@ export const ProductsPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
   const lastEditedRef = useRef<'profit' | 'unitPrice' | null>(null);
   const [form, setForm] = useState({
     name: '',
-    recipeId: '',
     prepTimeMinutes: 0,
     notes: '',
     unitsCount: 1,
@@ -74,24 +79,28 @@ export const ProductsPage = () => {
   });
 
   const load = async () => {
-    const [recipesData, productsData, settingsData, inputsData] = await Promise.all([
-      apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
-      apiFetch<ProductItem[]>('/products', { token: user?.token }),
-      apiFetch<Settings>('/company/settings', { token: user?.token }),
-      apiFetch<InputItem[]>('/inputs', { token: user?.token })
-    ]);
+    try {
+      const [recipesData, productsData, settingsData, inputsData] = await Promise.all([
+        apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
+        apiFetch<ProductItem[]>('/products', { token: user?.token }),
+        apiFetch<Settings>('/company/settings', { token: user?.token }),
+        apiFetch<InputItem[]>('/inputs', { token: user?.token })
+      ]);
 
-    setRecipes(recipesData);
-    setProducts(productsData);
-    setSettings(settingsData);
-    setInputs(inputsData);
+      setRecipes(recipesData);
+      setProducts(productsData);
+      setSettings(settingsData);
+      setInputs(inputsData);
 
-    setForm((current) => ({
-      ...current,
-      targetProfitPercent: settingsData.defaultProfitPercent,
-      channelId: settingsData.salesChannels[0]?.id ?? ''
-    }));
-    setUnitPriceInput(0);
+      setForm((current) => ({
+        ...current,
+        targetProfitPercent: settingsData.defaultProfitPercent,
+        channelId: settingsData.salesChannels[0]?.id ?? ''
+      }));
+      setUnitPriceInput(0);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -101,7 +110,6 @@ export const ProductsPage = () => {
   const resetForm = () => {
     setForm({
       name: '',
-      recipeId: '',
       prepTimeMinutes: 0,
       notes: '',
       unitsCount: 1,
@@ -144,10 +152,11 @@ export const ProductsPage = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSaving(true);
 
     const payload = {
       name: form.name,
-      recipeId: form.recipeId,
+      recipeId: form.extraRecipes[0]?.recipeId,
       prepTimeMinutes: Number(form.prepTimeMinutes),
       notes: form.notes,
       unitsCount: Number(form.unitsCount),
@@ -169,20 +178,24 @@ export const ProductsPage = () => {
       }))
     };
 
-    const response = await apiFetch<{ product: ProductItem }>(editingId ? `/products/${editingId}` : '/products', {
-      method: editingId ? 'PUT' : 'POST',
-      token: user?.token,
-      body: JSON.stringify(payload)
-    });
+    try {
+      const response = await apiFetch<{ product: ProductItem }>(editingId ? `/products/${editingId}` : '/products', {
+        method: editingId ? 'PUT' : 'POST',
+        token: user?.token,
+        body: JSON.stringify(payload)
+      });
 
-    setProducts((prev) => {
-      if (!editingId) return [response.product, ...prev];
-      return prev.map((item) => (item.id === response.product.id ? response.product : item));
-    });
+      setProducts((prev) => {
+        if (!editingId) return [response.product, ...prev];
+        return prev.map((item) => (item.id === response.product.id ? response.product : item));
+      });
 
-    resetForm();
-    setShowForm(false);
-    lastEditedRef.current = null;
+      resetForm();
+      setShowForm(false);
+      lastEditedRef.current = null;
+    } finally {
+      setSaving(false);
+    }
   };
 
   const filtered = products.filter((product) =>
@@ -190,9 +203,14 @@ export const ProductsPage = () => {
   );
 
   const recipeOptions = useMemo(
-    () => recipes.map((recipe) => ({ value: recipe.id, label: recipe.name })),
+    () =>
+      recipes.map((recipe) => ({
+        value: recipe.id,
+        label: `${recipe.name} • rendimento ${recipe.yield} ${recipe.yieldUnit}`
+      })),
     [recipes]
   );
+  const recipesById = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
 
   const productOptions = useMemo(
     () => products.filter((p) => p.id !== editingId).map((p) => ({ value: p.id, label: p.name })),
@@ -200,16 +218,17 @@ export const ProductsPage = () => {
   );
 
   const packagingOptions = useMemo(
-    () => inputs.filter((input) => input.category === 'embalagem').map((input) => ({ value: input.id, label: input.name })),
+    () =>
+      inputs
+        .filter((input) => input.category === 'embalagem')
+        .map((input) => ({
+          value: input.id,
+          label: `${input.name} • ${formatCurrency(input.packagePrice)} / ${input.packageSize} ${input.unit}`
+        })),
     [inputs]
   );
 
   const costSummary = useMemo(() => {
-    const baseRecipe = recipes.find((recipe) => recipe.id === form.recipeId);
-    if (!baseRecipe) {
-      return { labor: 0, fixed: 0, inputs: 0, total: 0, unitPrice: 0, profitPercent: form.targetProfitPercent };
-    }
-
     const inputsMap = new Map(inputs.map((input) => [input.id, input]));
     const recipesMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
     const productsMap = new Map(products.map((product) => [product.id, product]));
@@ -247,9 +266,6 @@ export const ProductsPage = () => {
       return ingredientsCost + subCost;
     };
 
-    const baseRecipeCost = calcRecipeCost(baseRecipe);
-    const basePerUnit = baseRecipe.yield > 0 ? baseRecipeCost / baseRecipe.yield : baseRecipeCost;
-
     const extraRecipesCost = form.extraRecipes.reduce((sum, item) => {
       const recipe = recipesMap.get(item.recipeId);
       if (!recipe || recipe.yield <= 0) return sum;
@@ -272,7 +288,7 @@ export const ProductsPage = () => {
       return sum + unitCost * normalized;
     }, 0);
 
-    const directCost = basePerUnit * form.unitsCount + extraRecipesCost + extraProductsCost + packagingCost;
+    const directCost = extraRecipesCost + extraProductsCost + packagingCost;
 
     const baseOverhead = settings?.overheadMethod === 'PERCENT_DIRECT'
       ? (directCost * (settings?.overheadPercent ?? 0)) / 100
@@ -285,9 +301,11 @@ export const ProductsPage = () => {
     const totalCost = directCost + baseOverhead + labor + fixed;
     const channel = settings?.salesChannels.find((c) => c.id === form.channelId);
     const variablePercentBase = (settings?.taxesPercent ?? 0) + (channel?.feePercent ?? 0) + (channel?.paymentFeePercent ?? 0);
-    const variablePercent = variablePercentBase + form.targetProfitPercent + form.extraPercent;
-
-    const totalPrice = totalCost / (1 - variablePercent / 100);
+    const feeFixed = channel?.feeFixed ?? 0;
+    const denominator = Math.max(1 - variablePercentBase / 100, 0.001);
+    const baseCost = totalCost + feeFixed;
+    const markupMultiplier = 1 + (form.targetProfitPercent + form.extraPercent) / 100;
+    const totalPrice = (baseCost * markupMultiplier) / denominator;
     const unitPrice = totalPrice / (form.unitsCount || 1);
 
     return {
@@ -295,6 +313,7 @@ export const ProductsPage = () => {
       fixed,
       inputs: directCost,
       total: totalCost,
+      baseCost,
       unitPrice,
       profitPercent: form.targetProfitPercent,
       variablePercentBase
@@ -303,9 +322,8 @@ export const ProductsPage = () => {
 
   useEffect(() => {
     if (lastEditedRef.current === 'unitPrice') return;
-    if (!form.recipeId) return;
     setUnitPriceInput(Number(costSummary.unitPrice.toFixed(2)));
-  }, [costSummary.unitPrice, form.recipeId]);
+  }, [costSummary.unitPrice]);
 
   const handleUnitPriceChange = (value: number) => {
     lastEditedRef.current = 'unitPrice';
@@ -314,8 +332,11 @@ export const ProductsPage = () => {
     const totalPrice = value * (form.unitsCount || 1);
     if (totalPrice <= 0) return;
 
-    const profitPercent = (1 - costSummary.total / totalPrice) * 100 - costSummary.variablePercentBase - form.extraPercent;
-    setForm({ ...form, targetProfitPercent: Number(profitPercent.toFixed(2)) });
+    const denominator = Math.max(1 - costSummary.variablePercentBase / 100, 0.001);
+    const recoveredBase = totalPrice * denominator;
+    const markupPercent = (recoveredBase / Math.max(costSummary.baseCost, 0.0001) - 1) * 100;
+    const profitPercent = markupPercent - form.extraPercent;
+    setForm({ ...form, targetProfitPercent: Number(Math.max(profitPercent, 0).toFixed(2)) });
   };
 
   return (
@@ -328,45 +349,48 @@ export const ProductsPage = () => {
           actionLabel="Novo produto"
           onAction={handleNew}
         />
-        <div className="table">
-          {filtered.map((product) => (
-            <div key={product.id} className="list-row">
-              <div>
-                <strong>{product.name}</strong>
-                <span className="muted">R$ {product.unitPrice?.toFixed(2)} un • R$ {product.salePrice.toFixed(2)}</span>
+        {loading ? (
+          <ListSkeleton />
+        ) : (
+          <div className="table">
+            {filtered.map((product) => (
+              <div key={product.id} className="list-row">
+                <div>
+                  <strong>{product.name}</strong>
+                  <span className="muted">R$ {product.unitPrice?.toFixed(2)} un • R$ {product.salePrice.toFixed(2)}</span>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Editar"
+                  onClick={() => {
+                    setEditingId(product.id);
+                    setForm({
+                      name: product.name,
+                      prepTimeMinutes: product.prepTimeMinutes ?? 0,
+                      notes: product.notes ?? '',
+                      unitsCount: product.unitsCount ?? 1,
+                      targetProfitPercent: product.targetProfitPercent,
+                      extraPercent: product.extraPercent ?? 0,
+                      unitPrice: product.unitPrice ?? 0,
+                      channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',
+                      extraRecipes: product.extraRecipes ?? [],
+                      extraProducts: product.extraProducts ?? [],
+                      packagingInputs: product.packagingInputs ?? []
+                    });
+                    setUnitPriceInput(product.unitPrice ?? 0);
+                    lastEditedRef.current = null;
+                    setShowForm(true);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
+                  </svg>
+                </button>
               </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Editar"
-                onClick={() => {
-                  setEditingId(product.id);
-                  setForm({
-                    name: product.name,
-                    recipeId: product.recipeId,
-                    prepTimeMinutes: product.prepTimeMinutes ?? 0,
-                    notes: product.notes ?? '',
-                    unitsCount: product.unitsCount ?? 1,
-                    targetProfitPercent: product.targetProfitPercent,
-                    extraPercent: product.extraPercent ?? 0,
-                    unitPrice: product.unitPrice ?? 0,
-                    channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',
-                    extraRecipes: product.extraRecipes ?? [],
-                    extraProducts: product.extraProducts ?? [],
-                    packagingInputs: product.packagingInputs ?? []
-                  });
-                  setUnitPriceInput(product.unitPrice ?? 0);
-                  lastEditedRef.current = null;
-                  setShowForm(true);
-                }}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                </svg>
-              </button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -406,12 +430,15 @@ export const ProductsPage = () => {
             <h3>Calculo por unidade</h3>
             <div className="grid-2">
               <label>
-                Receita base
-                <SearchableSelect
-                  value={form.recipeId}
-                  onChange={(value) => setForm({ ...form, recipeId: value })}
-                  options={recipeOptions}
-                  placeholder="Selecione a receita"
+                Unidades produzidas
+                <input
+                  type="number"
+                  value={form.unitsCount === 0 ? '' : form.unitsCount}
+                  onChange={(e) => {
+                    lastEditedRef.current = 'profit';
+                    setForm({ ...form, unitsCount: Number(e.target.value || 0) });
+                  }}
+                  min={1}
                 />
               </label>
               <label>
@@ -428,23 +455,10 @@ export const ProductsPage = () => {
             </div>
             <div className="grid-2">
               <label>
-                Unidades produzidas
-                <input
-                  type="number"
-                  value={form.unitsCount === 0 ? '' : form.unitsCount}
-                  onChange={(e) => {
-                    lastEditedRef.current = 'profit';
-                    setForm({ ...form, unitsCount: Number(e.target.value || 0) });
-                  }}
-                  min={1}
-                />
-              </label>
-              <label>
                 Valor por unidade (calculado)
-                <input
-                  type="number"
+                <MoneyInput
                   value={unitPriceInput}
-                  onChange={(e) => handleUnitPriceChange(Number(e.target.value || 0))}
+                  onChange={handleUnitPriceChange}
                 />
               </label>
             </div>
@@ -453,7 +467,7 @@ export const ProductsPage = () => {
                 % de lucro
                 <input
                   type="number"
-                  value={form.targetProfitPercent}
+                  value={form.targetProfitPercent === 0 ? '' : form.targetProfitPercent}
                   onChange={(e) => {
                     lastEditedRef.current = 'profit';
                     setForm({ ...form, targetProfitPercent: Number(e.target.value || 0) });
@@ -465,7 +479,7 @@ export const ProductsPage = () => {
                 Taxa adicional (%)
                 <input
                   type="number"
-                  value={form.extraPercent}
+                  value={form.extraPercent === 0 ? '' : form.extraPercent}
                   onChange={(e) => {
                     lastEditedRef.current = 'profit';
                     setForm({ ...form, extraPercent: Number(e.target.value || 0) });
@@ -504,7 +518,7 @@ export const ProductsPage = () => {
                       step="0.01"
                     />
                     <div className="inline-right">
-                      <div className="unit-tag">{form.unitsCount}</div>
+                      <div className="unit-tag">{recipesById.get(item.recipeId)?.yieldUnit ?? 'un'}</div>
                       <button
                         type="button"
                         className="icon-button tiny"
@@ -687,6 +701,7 @@ export const ProductsPage = () => {
           setConfirmOpen(false);
         }}
       />
+      <LoadingOverlay open={saving} label="Salvando produto..." />
     </div>
   );
 };

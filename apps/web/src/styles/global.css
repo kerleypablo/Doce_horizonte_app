@@ -387,6 +387,99 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(245, 241, 236, 0.66);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+}
+
+.loading-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-strong);
+  animation: loading-spin 0.8s linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.skeleton-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.skeleton-line,
+.skeleton-dot {
+  position: relative;
+  overflow: hidden;
+  background: #ece3d9;
+}
+
+.skeleton-line::after,
+.skeleton-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%);
+  animation: skeleton-shimmer 1.2s infinite;
+}
+
+.skeleton-line {
+  height: 10px;
+  border-radius: 999px;
+  display: block;
+}
+
+.skeleton-line-sm {
+  width: 65%;
+}
+
+.skeleton-line-md {
+  width: 48%;
+}
+
+.skeleton-line-lg {
+  width: 72%;
+}
+
+.skeleton-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

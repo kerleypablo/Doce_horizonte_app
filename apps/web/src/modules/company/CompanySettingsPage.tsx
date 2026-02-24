@@ -3,6 +3,7 @@ import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
+import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 
 type SalesChannel = {
   id?: string;
@@ -101,8 +102,8 @@ export const CompanySettingsPage = () => {
               Percentual de rateio (%)
               <input
                 type="number"
-                value={settings.overheadPercent}
-                onChange={(e) => setSettings({ ...settings, overheadPercent: Number(e.target.value) })}
+                value={settings.overheadPercent === 0 ? '' : settings.overheadPercent}
+                onChange={(e) => setSettings({ ...settings, overheadPercent: Number(e.target.value || 0) })}
                 min={0}
               />
             </label>
@@ -119,8 +120,8 @@ export const CompanySettingsPage = () => {
               Impostos (%)
               <input
                 type="number"
-                value={settings.taxesPercent}
-                onChange={(e) => setSettings({ ...settings, taxesPercent: Number(e.target.value) })}
+                value={settings.taxesPercent === 0 ? '' : settings.taxesPercent}
+                onChange={(e) => setSettings({ ...settings, taxesPercent: Number(e.target.value || 0) })}
                 min={0}
               />
             </label>
@@ -146,8 +147,8 @@ export const CompanySettingsPage = () => {
               Margem padrao (%)
               <input
                 type="number"
-                value={settings.defaultProfitPercent}
-                onChange={(e) => setSettings({ ...settings, defaultProfitPercent: Number(e.target.value) })}
+                value={settings.defaultProfitPercent === 0 ? '' : settings.defaultProfitPercent}
+                onChange={(e) => setSettings({ ...settings, defaultProfitPercent: Number(e.target.value || 0) })}
                 min={0}
               />
             </label>
@@ -175,8 +176,8 @@ export const CompanySettingsPage = () => {
                 <span>Taxa canal (%)</span>
                 <input
                   type="number"
-                  value={channel.feePercent}
-                  onChange={(e) => updateChannel(index, 'feePercent', Number(e.target.value))}
+                  value={channel.feePercent === 0 ? '' : channel.feePercent}
+                  onChange={(e) => updateChannel(index, 'feePercent', Number(e.target.value || 0))}
                   min={0}
                 />
               </label>
@@ -184,8 +185,8 @@ export const CompanySettingsPage = () => {
                 <span>Taxa pagamento (%)</span>
                 <input
                   type="number"
-                  value={channel.paymentFeePercent}
-                  onChange={(e) => updateChannel(index, 'paymentFeePercent', Number(e.target.value))}
+                  value={channel.paymentFeePercent === 0 ? '' : channel.paymentFeePercent}
+                  onChange={(e) => updateChannel(index, 'paymentFeePercent', Number(e.target.value || 0))}
                   min={0}
                 />
               </label>
@@ -216,6 +217,7 @@ export const CompanySettingsPage = () => {
           </button>
         </div>
       </div>
+      <LoadingOverlay open={saving} label="Salvando configuracoes..." />
     </div>
   );
 };

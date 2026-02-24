@@ -23,9 +23,9 @@ const parseDigitsToNumber = (digits: string) => {
 };
 
 export const MoneyInput = ({ value, onChange, placeholder, min = 0, disabled }: MoneyInputProps) => {
-  const [text, setText] = useState(() => formatBRL(value));
+  const [text, setText] = useState(() => (value === 0 ? '' : formatBRL(value)));
 
-  const formatted = useMemo(() => formatBRL(value), [value]);
+  const formatted = useMemo(() => (value === 0 ? '' : formatBRL(value)), [value]);
 
   useEffect(() => {
     setText(formatted);
@@ -39,6 +39,11 @@ export const MoneyInput = ({ value, onChange, placeholder, min = 0, disabled }: 
       disabled={disabled}
       onChange={(event) => {
         const digits = event.target.value.replace(/\D/g, '');
+        if (!digits) {
+          onChange(min);
+          setText('');
+          return;
+        }
         const nextValue = Math.max(parseDigitsToNumber(digits), min);
         onChange(nextValue);
         setText(formatBRL(nextValue));

@@ -57,7 +57,7 @@ export type Product = {
   id: string;
   companyId: string;
   name: string;
-  recipeId: string;
+  recipeId?: string;
   prepTimeMinutes: number;
   notes?: string;
   unitsCount: number;

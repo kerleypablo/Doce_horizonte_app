@@ -6,7 +6,7 @@ import { calcProductPreview } from '../pricing/product-calc.js';
 
 const productSchema = z.object({
   name: z.string().min(2),
-  recipeId: z.string().min(1),
+  recipeId: z.string().min(1).optional(),
   prepTimeMinutes: z.number().min(0).default(0),
   notes: z.string().optional(),
   unitsCount: z.number().positive(),
@@ -50,7 +50,7 @@ export const productRoutes = async (app: FastifyInstance) => {
     id: row.id,
     companyId: row.company_id,
     name: row.name,
-    recipeId: row.recipe_id,
+    recipeId: row.recipe_id ?? undefined,
     prepTimeMinutes: Number(row.prep_time_minutes ?? 0),
     notes: row.notes ?? undefined,
     unitsCount: Number(row.units_count ?? 1),
@@ -78,14 +78,17 @@ export const productRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = productSchema.parse(request.body);
 
-    const { data: recipe } = await supabaseAdmin
-      .from('recipes')
-      .select('*')
-      .eq('id', data.recipeId)
-      .eq('company_id', auth.companyId)
-      .single();
-
-    if (!recipe) return reply.status(404).send({ message: 'Receita nao encontrada' });
+    let recipe: any = null;
+    if (data.recipeId) {
+      const result = await supabaseAdmin
+        .from('recipes')
+        .select('*')
+        .eq('id', data.recipeId)
+        .eq('company_id', auth.companyId)
+        .single();
+      recipe = result.data;
+      if (!recipe) return reply.status(404).send({ message: 'Receita nao encontrada' });
+    }
 
     const { data: companySettings } = await supabaseAdmin
       .from('company_settings')
@@ -117,7 +120,7 @@ export const productRoutes = async (app: FastifyInstance) => {
 
     const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
     const preview = calcProductPreview({
-      baseRecipe: mapRecipe(recipe),
+      baseRecipe: recipe ? mapRecipe(recipe) : undefined,
       unitsCount: data.unitsCount,
       prepTimeMinutes: data.prepTimeMinutes,
       targetProfitPercent: data.targetProfitPercent,
@@ -149,7 +152,7 @@ export const productRoutes = async (app: FastifyInstance) => {
         id: crypto.randomUUID(),
         company_id: auth.companyId,
         name: data.name,
-        recipe_id: data.recipeId,
+        recipe_id: data.recipeId ?? null,
         prep_time_minutes: data.prepTimeMinutes,
         notes: data.notes,
         units_count: data.unitsCount,
@@ -174,14 +177,17 @@ export const productRoutes = async (app: FastifyInstance) => {
     const data = productSchema.parse(request.body);
     const id = request.params as { id: string };
 
-    const { data: recipe } = await supabaseAdmin
-      .from('recipes')
-      .select('*')
-      .eq('id', data.recipeId)
-      .eq('company_id', auth.companyId)
-      .single();
-
-    if (!recipe) return reply.status(404).send({ message: 'Receita nao encontrada' });
+    let recipe: any = null;
+    if (data.recipeId) {
+      const result = await supabaseAdmin
+        .from('recipes')
+        .select('*')
+        .eq('id', data.recipeId)
+        .eq('company_id', auth.companyId)
+        .single();
+      recipe = result.data;
+      if (!recipe) return reply.status(404).send({ message: 'Receita nao encontrada' });
+    }
 
     const { data: companySettings } = await supabaseAdmin
       .from('company_settings')
@@ -213,7 +219,7 @@ export const productRoutes = async (app: FastifyInstance) => {
 
     const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
     const preview = calcProductPreview({
-      baseRecipe: mapRecipe(recipe),
+      baseRecipe: recipe ? mapRecipe(recipe) : undefined,
       unitsCount: data.unitsCount,
       prepTimeMinutes: data.prepTimeMinutes,
       targetProfitPercent: data.targetProfitPercent,
@@ -243,7 +249,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       .from('products')
       .update({
         name: data.name,
-        recipe_id: data.recipeId,
+        recipe_id: data.recipeId ?? null,
         prep_time_minutes: data.prepTimeMinutes,
         notes: data.notes,
         units_count: data.unitsCount,
