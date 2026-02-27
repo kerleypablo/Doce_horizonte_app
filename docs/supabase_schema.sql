@@ -17,6 +17,12 @@ create table if not exists app_users (
 
 create table if not exists company_settings (
   company_id uuid primary key references companies(id) on delete cascade,
+  logo_data_url text not null default '',
+  app_theme text not null default 'caramelo',
+  dark_mode boolean not null default false,
+  default_notes_delivery text not null default '',
+  default_notes_general text not null default '',
+  default_notes_payment text not null default '',
   overhead_method text not null default 'PERCENT_DIRECT',
   overhead_percent numeric not null default 0,
   overhead_per_unit numeric not null default 0,
@@ -25,6 +31,13 @@ create table if not exists company_settings (
   taxes_percent numeric not null default 0,
   default_profit_percent numeric not null default 0
 );
+
+alter table company_settings add column if not exists logo_data_url text not null default '';
+alter table company_settings add column if not exists app_theme text not null default 'caramelo';
+alter table company_settings add column if not exists dark_mode boolean not null default false;
+alter table company_settings add column if not exists default_notes_delivery text not null default '';
+alter table company_settings add column if not exists default_notes_general text not null default '';
+alter table company_settings add column if not exists default_notes_payment text not null default '';
 
 create table if not exists sales_channels (
   id uuid primary key default gen_random_uuid(),

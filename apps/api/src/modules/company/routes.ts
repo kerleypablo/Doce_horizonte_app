@@ -12,6 +12,13 @@ const salesChannelSchema = z.object({
 });
 
 const settingsSchema = z.object({
+  companyName: z.string().min(2).optional(),
+  logoDataUrl: z.string().optional(),
+  appTheme: z.enum(['caramelo', 'oceano', 'floresta']).optional(),
+  darkMode: z.boolean().optional(),
+  defaultNotesDelivery: z.string().optional(),
+  defaultNotesGeneral: z.string().optional(),
+  defaultNotesPayment: z.string().optional(),
   overheadMethod: z.enum(['PERCENT_DIRECT', 'PER_UNIT']),
   overheadPercent: z.number().min(0),
   overheadPerUnit: z.number().min(0),
@@ -32,6 +39,12 @@ export const companyRoutes = async (app: FastifyInstance) => {
       .eq('company_id', auth.companyId)
       .single();
 
+    const { data: company } = await supabaseAdmin
+      .from('companies')
+      .select('name')
+      .eq('id', auth.companyId)
+      .single();
+
     if (!settings) return reply.status(404).send({ message: 'Empresa nao encontrada' });
 
     const { data: channels } = await supabaseAdmin
@@ -41,6 +54,13 @@ export const companyRoutes = async (app: FastifyInstance) => {
       .order('created_at', { ascending: true });
 
     return {
+      companyName: company?.name ?? 'Minha empresa',
+      logoDataUrl: settings.logo_data_url ?? '',
+      appTheme: settings.app_theme ?? 'caramelo',
+      darkMode: settings.dark_mode ?? false,
+      defaultNotesDelivery: settings.default_notes_delivery ?? '',
+      defaultNotesGeneral: settings.default_notes_general ?? '',
+      defaultNotesPayment: settings.default_notes_payment ?? '',
       overheadMethod: settings.overhead_method,
       overheadPercent: settings.overhead_percent,
       overheadPerUnit: settings.overhead_per_unit,
@@ -65,10 +85,25 @@ export const companyRoutes = async (app: FastifyInstance) => {
 
     const data = settingsSchema.parse(request.body);
 
+    if (data.companyName) {
+      const { error: companyError } = await supabaseAdmin
+        .from('companies')
+        .update({ name: data.companyName })
+        .eq('id', auth.companyId);
+
+      if (companyError) return reply.status(400).send({ message: 'Erro ao salvar nome da empresa' });
+    }
+
     const { error: settingsError } = await supabaseAdmin
       .from('company_settings')
       .upsert({
         company_id: auth.companyId,
+        logo_data_url: data.logoDataUrl ?? '',
+        app_theme: data.appTheme ?? 'caramelo',
+        dark_mode: data.darkMode ?? false,
+        default_notes_delivery: data.defaultNotesDelivery ?? '',
+        default_notes_general: data.defaultNotesGeneral ?? '',
+        default_notes_payment: data.defaultNotesPayment ?? '',
         overhead_method: data.overheadMethod,
         overhead_percent: data.overheadPercent,
         overhead_per_unit: data.overheadPerUnit,
@@ -78,7 +113,22 @@ export const companyRoutes = async (app: FastifyInstance) => {
         default_profit_percent: data.defaultProfitPercent
       }, { onConflict: 'company_id' });
 
-    if (settingsError) return reply.status(400).send({ message: 'Erro ao salvar configuracoes' });
+    if (settingsError) {
+      const { error: legacyError } = await supabaseAdmin
+        .from('company_settings')
+        .upsert({
+          company_id: auth.companyId,
+          overhead_method: data.overheadMethod,
+          overhead_percent: data.overheadPercent,
+          overhead_per_unit: data.overheadPerUnit,
+          labor_cost_per_hour: data.laborCostPerHour,
+          fixed_cost_per_hour: data.fixedCostPerHour,
+          taxes_percent: data.taxesPercent,
+          default_profit_percent: data.defaultProfitPercent
+        }, { onConflict: 'company_id' });
+
+      if (legacyError) return reply.status(400).send({ message: 'Erro ao salvar configuracoes' });
+    }
 
     const existing = await supabaseAdmin
       .from('sales_channels')
@@ -105,6 +155,9 @@ export const companyRoutes = async (app: FastifyInstance) => {
       });
     }
 
-    return reply.send(data);
+    return reply.send({
+      ...data,
+      companyName: data.companyName ?? undefined
+    });
   });
 };

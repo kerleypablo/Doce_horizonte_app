@@ -8,6 +8,8 @@ import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
+import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
+import { queryKeys } from '../shared/queryKeys.ts';
 
 export type InputItem = {
   id: string;
@@ -29,7 +31,6 @@ export const InputsPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -42,18 +43,15 @@ export const InputsPage = () => {
     tags: [] as string[]
   });
 
-  const load = async () => {
-    try {
-      const data = await apiFetch<InputItem[]>('/inputs', { token: user?.token });
-      setInputs(data);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const inputsQuery = useCachedQuery(
+    queryKeys.inputs,
+    () => apiFetch<InputItem[]>('/inputs', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    if (inputsQuery.data) setInputs(inputsQuery.data);
+  }, [inputsQuery.data]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -81,7 +79,8 @@ export const InputsPage = () => {
 
       resetForm();
       setShowForm(false);
-      await load();
+      invalidateQueryCache(queryKeys.inputs);
+      await inputsQuery.refetch();
     } finally {
       setSaving(false);
     }
@@ -129,7 +128,7 @@ export const InputsPage = () => {
           actionLabel="Novo insumo"
           onAction={handleNew}
         />
-        {loading ? (
+        {inputsQuery.loading && inputs.length === 0 ? (
           <ListSkeleton withTableHead />
         ) : (
           <div className="table">

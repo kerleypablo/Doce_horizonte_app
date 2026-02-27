@@ -12,7 +12,10 @@ import { customerRoutes } from './modules/customers/routes.js';
 import { orderRoutes } from './modules/orders/routes.js';
 
 export const buildApp = () => {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    bodyLimit: 8 * 1024 * 1024
+  });
 
   app.register(cors, { origin: true });
 

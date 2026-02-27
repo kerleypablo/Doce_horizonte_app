@@ -1,77 +1,98 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useAuth } from '../auth/AuthContext.tsx';
+import { apiFetch } from './api.ts';
+import { prefetchWithCache, useCachedQuery } from './queryCache.ts';
+import { queryKeys } from './queryKeys.ts';
 
 const navItems = [
   {
     path: '/app',
     label: 'Home',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 10.5L12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z" />
-      </svg>
-    )
+    icon: 'home'
   },
   {
     path: '/app/insumos',
     label: 'Insumos',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 4h10a2 2 0 0 1 2 2v14H5V6a2 2 0 0 1 2-2zm0 4h10M7 12h6" />
-      </svg>
-    )
+    icon: 'inventory_2'
   },
   {
     path: '/app/receitas',
     label: 'Receitas',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 4h9a3 3 0 0 1 3 3v13H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm3 7h6M9 15h6" />
-      </svg>
-    )
+    icon: 'menu_book'
   },
   {
     path: '/app/produtos',
     label: 'Produtos',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 7l6-3 6 3v10l-6 3-6-3V7zm6 0v13" />
-      </svg>
-    )
+    icon: 'shopping_bag'
   },
   {
     path: '/app/clientes',
     label: 'Clientes',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M16 19a4 4 0 0 0-8 0M12 12a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm7 7a5 5 0 0 0-3-4.6M17 11a2.5 2.5 0 1 0-1.2-4.7M5 19a5 5 0 0 1 3-4.6M7 6.3A2.5 2.5 0 1 1 8.2 11" />
-      </svg>
-    )
+    icon: 'groups'
   },
   {
     path: '/app/pedidos',
     label: 'Pedidos',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 4h9l3 3v13H6zM9 10h6M9 14h6M9 18h4" />
-      </svg>
-    )
+    icon: 'receipt_long'
   },
   {
     path: '/app/empresa',
     label: 'Empresa',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 20V6l6-2v16H4zm10-9h6v9h-6v-9z" />
-      </svg>
-    )
+    icon: 'domain'
+  },
+  {
+    path: '/app/configuracoes',
+    label: 'Configuracoes',
+    icon: 'settings'
   }
 ];
+
+const bottomNavItems = navItems.filter((item) =>
+  ['/app', '/app/receitas', '/app/produtos', '/app/pedidos'].includes(item.path)
+);
+
+const isPathActive = (pathname: string, path: string) => {
+  if (path === '/app') return pathname === '/app';
+  return pathname === path || pathname.startsWith(`${path}/`);
+};
 
 export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const activeBottomIndex = bottomNavItems.findIndex((item) => isPathActive(pathname, item.path));
+  const settingsQuery = useCachedQuery(
+    queryKeys.companySettings,
+    () => apiFetch<{ appTheme?: string; darkMode?: boolean }>('/company/settings', { token: user?.token }),
+    { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!settingsQuery.data) {
+      root.setAttribute('data-theme', 'caramelo');
+      root.setAttribute('data-dark', 'false');
+      return;
+    }
+    root.setAttribute('data-theme', settingsQuery.data.appTheme ?? 'caramelo');
+    root.setAttribute('data-dark', settingsQuery.data.darkMode ? 'true' : 'false');
+  }, [settingsQuery.data]);
+
+  useEffect(() => {
+    if (!user?.token) return;
+    prefetchWithCache(
+      queryKeys.customers,
+      () => apiFetch('/customers', { token: user.token }),
+      { staleTime: 3 * 60_000 }
+    );
+    prefetchWithCache(
+      queryKeys.products,
+      () => apiFetch('/products', { token: user.token }),
+      { staleTime: 3 * 60_000 }
+    );
+  }, [user?.token]);
 
   return (
     <div className="app-shell">
@@ -85,11 +106,11 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             <Link
               key={item.path}
               to={item.path}
-              className={pathname === item.path ? 'active' : ''}
+              className={isPathActive(pathname, item.path) ? 'active' : ''}
               onClick={() => setDrawerOpen(false)}
             >
-              {item.icon}
-              <span>{item.label}</span>
+              <span className="material-symbols-outlined nav-icon" aria-hidden="true">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
             </Link>
           ))}
         </nav>
@@ -102,18 +123,14 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
       <main>
         <header className="mobile-header">
           <button className="icon-button" onClick={() => setDrawerOpen((prev) => !prev)} aria-label="Menu">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <span className="material-symbols-outlined" aria-hidden="true">menu</span>
           </button>
           <div className="mobile-title">
             <span>Controle</span>
             <strong>Precificacao</strong>
           </div>
           <div className="mobile-user" aria-label="Usuario logado">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-7 8a7 7 0 0 1 14 0" />
-            </svg>
+            <span className="material-symbols-outlined" aria-hidden="true">person</span>
           </div>
         </header>
         <header className="app-header">
@@ -127,15 +144,16 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
         </header>
         <section className="content">{children}</section>
       </main>
-      <nav className="bottom-nav">
-        {navItems.map((item) => (
+      <nav className="bottom-nav" style={{ '--bottom-nav-index': Math.max(activeBottomIndex, 0) } as CSSProperties}>
+        <span className="bottom-nav-indicator" aria-hidden="true" />
+        {bottomNavItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
-            className={pathname === item.path ? 'active' : ''}
+            className={isPathActive(pathname, item.path) ? 'active' : ''}
           >
-            {item.icon}
-            <span>{item.label}</span>
+            <span className="material-symbols-outlined nav-icon" aria-hidden="true">{item.icon}</span>
+            <span className="nav-label">{item.label}</span>
           </Link>
         ))}
       </nav>

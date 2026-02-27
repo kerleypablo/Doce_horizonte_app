@@ -10,6 +10,8 @@ import type { InputItem } from '../inputs/InputsPage.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
+import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
+import { queryKeys } from '../shared/queryKeys.ts';
 
 export type ProductItem = {
   id: string;
@@ -60,7 +62,6 @@ export const ProductsPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
   const lastEditedRef = useRef<'profit' | 'unitPrice' | null>(null);
@@ -78,34 +79,49 @@ export const ProductsPage = () => {
     packagingInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[]
   });
 
-  const load = async () => {
-    try {
-      const [recipesData, productsData, settingsData, inputsData] = await Promise.all([
-        apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
-        apiFetch<ProductItem[]>('/products', { token: user?.token }),
-        apiFetch<Settings>('/company/settings', { token: user?.token }),
-        apiFetch<InputItem[]>('/inputs', { token: user?.token })
-      ]);
-
-      setRecipes(recipesData);
-      setProducts(productsData);
-      setSettings(settingsData);
-      setInputs(inputsData);
-
-      setForm((current) => ({
-        ...current,
-        targetProfitPercent: settingsData.defaultProfitPercent,
-        channelId: settingsData.salesChannels[0]?.id ?? ''
-      }));
-      setUnitPriceInput(0);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const recipesQuery = useCachedQuery(
+    queryKeys.recipes,
+    () => apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const productsQuery = useCachedQuery(
+    queryKeys.products,
+    () => apiFetch<ProductItem[]>('/products', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const settingsQuery = useCachedQuery(
+    queryKeys.companySettings,
+    () => apiFetch<Settings>('/company/settings', { token: user?.token }),
+    { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const inputsQuery = useCachedQuery(
+    queryKeys.inputs,
+    () => apiFetch<InputItem[]>('/inputs', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    if (recipesQuery.data) setRecipes(recipesQuery.data);
+  }, [recipesQuery.data]);
+
+  useEffect(() => {
+    if (productsQuery.data) setProducts(productsQuery.data);
+  }, [productsQuery.data]);
+
+  useEffect(() => {
+    if (!settingsQuery.data) return;
+    setSettings(settingsQuery.data);
+    setForm((current) => ({
+      ...current,
+      targetProfitPercent: settingsQuery.data.defaultProfitPercent,
+      channelId: settingsQuery.data.salesChannels[0]?.id ?? ''
+    }));
+    setUnitPriceInput(0);
+  }, [settingsQuery.data]);
+
+  useEffect(() => {
+    if (inputsQuery.data) setInputs(inputsQuery.data);
+  }, [inputsQuery.data]);
 
   const resetForm = () => {
     setForm({
@@ -189,6 +205,8 @@ export const ProductsPage = () => {
         if (!editingId) return [response.product, ...prev];
         return prev.map((item) => (item.id === response.product.id ? response.product : item));
       });
+      invalidateQueryCache(queryKeys.products);
+      productsQuery.refetch().catch(() => undefined);
 
       resetForm();
       setShowForm(false);
@@ -349,7 +367,7 @@ export const ProductsPage = () => {
           actionLabel="Novo produto"
           onAction={handleNew}
         />
-        {loading ? (
+        {productsQuery.loading && products.length === 0 ? (
           <ListSkeleton />
         ) : (
           <div className="table">

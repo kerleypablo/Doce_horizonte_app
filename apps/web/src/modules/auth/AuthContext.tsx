@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
+import { clearQueryCache } from '../shared/queryCache.ts';
 
 export type AuthUser = {
   token: string;
@@ -32,11 +33,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const next = { token, role };
     setUser(next);
     localStorage.setItem(storageKey, JSON.stringify(next));
+    clearQueryCache();
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem(storageKey);
+    clearQueryCache();
   };
 
   const value = useMemo(() => ({ user, login, logout }), [user]);

@@ -33,6 +33,12 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
 
     const { error: settingsError } = await supabaseAdmin.from('company_settings').insert({
       company_id: company.id,
+      logo_data_url: '',
+      app_theme: 'caramelo',
+      dark_mode: false,
+      default_notes_delivery: '',
+      default_notes_general: '',
+      default_notes_payment: '',
       overhead_method: 'PERCENT_DIRECT',
       overhead_percent: 12,
       overhead_per_unit: 0,
@@ -42,7 +48,19 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
       default_profit_percent: 30
     });
     if (settingsError) {
-      return reply.status(400).send({ message: 'Erro ao criar configuracoes', detail: settingsError.message });
+      const { error: legacySettingsError } = await supabaseAdmin.from('company_settings').insert({
+        company_id: company.id,
+        overhead_method: 'PERCENT_DIRECT',
+        overhead_percent: 12,
+        overhead_per_unit: 0,
+        labor_cost_per_hour: 0,
+        fixed_cost_per_hour: 0,
+        taxes_percent: 4,
+        default_profit_percent: 30
+      });
+      if (legacySettingsError) {
+        return reply.status(400).send({ message: 'Erro ao criar configuracoes', detail: legacySettingsError.message });
+      }
     }
 
     const { error: channelsError } = await supabaseAdmin.from('sales_channels').insert([

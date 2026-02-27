@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import type { CSSProperties } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
@@ -9,6 +10,8 @@ import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
+import { fetchWithCache, invalidateQueryCache, prefetchWithCache, useCachedQuery } from '../shared/queryCache.ts';
+import { queryKeys } from '../shared/queryKeys.ts';
 
 type CustomerItem = {
   id: string;
@@ -56,6 +59,32 @@ type OrderItem = {
   alerts: { label: string; enabled: boolean }[];
 };
 
+type OrderListItem = {
+  id: string;
+  number: string;
+  type: 'PEDIDO' | 'ORCAMENTO';
+  orderDateTime: string;
+  deliveryDate?: string;
+  status: 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO';
+  customerSnapshot?: { name: string };
+  total?: number;
+};
+
+type CompanySettings = {
+  defaultNotesDelivery?: string;
+  defaultNotesGeneral?: string;
+  defaultNotesPayment?: string;
+};
+
+const orderTabs: Array<{ key: 'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'; label: string; icon: string }> = [
+  { key: 'pessoa', label: 'Pessoa', icon: 'person' },
+  { key: 'produtos', label: 'Produtos', icon: 'shopping_bag' },
+  { key: 'observacoes', label: 'Observacoes', icon: 'description' },
+  { key: 'pagamentos', label: 'Pagamentos', icon: 'payments' },
+  { key: 'imagens', label: 'Imagens', icon: 'image' },
+  { key: 'alertas', label: 'Alertas', icon: 'notifications' }
+];
+
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
@@ -76,7 +105,7 @@ const toDateTimeLocal = (iso?: string) => {
 
 const currentDateTimeLocal = () => toDateTimeLocal(new Date().toISOString());
 
-const newOrderForm = () => ({
+const newOrderForm = (defaults?: CompanySettings) => ({
   type: 'PEDIDO' as 'PEDIDO' | 'ORCAMENTO',
   orderDateTime: currentDateTimeLocal(),
   customerId: '',
@@ -88,9 +117,9 @@ const newOrderForm = () => ({
   discountMode: 'FIXED' as 'PERCENT' | 'FIXED',
   discountValue: 0,
   shippingValue: 0,
-  notesDelivery: '',
-  notesGeneral: '',
-  notesPayment: '',
+  notesDelivery: defaults?.defaultNotesDelivery ?? '',
+  notesGeneral: defaults?.defaultNotesGeneral ?? '',
+  notesPayment: defaults?.defaultNotesPayment ?? '',
   pix: '',
   terms: '',
   payments: [] as { date: string; amount: number; note?: string }[],
@@ -105,20 +134,23 @@ export const OrdersPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { orderId } = useParams<{ orderId?: string }>();
   const isCreateView = pathname === '/app/pedidos/novo';
-  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const isDetailView = Boolean(orderId);
+  const isFormRoute = isCreateView || isDetailView;
+  const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [orderDefaults, setOrderDefaults] = useState<CompanySettings>({});
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [tab, setTab] = useState<'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'>('pessoa');
-  const [form, setForm] = useState(newOrderForm());
+  const [form, setForm] = useState(newOrderForm(orderDefaults));
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerForm, setCustomerForm] = useState({
     name: '',
@@ -133,32 +165,72 @@ export const OrdersPage = () => {
     notes: ''
   });
 
-  const load = async () => {
-    try {
-      const [ordersData, customersData, productsData] = await Promise.all([
-        apiFetch<OrderItem[]>('/orders', { token: user?.token }),
-        apiFetch<CustomerItem[]>('/customers', { token: user?.token }),
-        apiFetch<ProductItem[]>('/products', { token: user?.token })
-      ]);
-      setOrders(ordersData);
-      setCustomers(customersData);
-      setProducts(productsData);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const ordersQuery = useCachedQuery(
+    queryKeys.orders,
+    () => apiFetch<OrderListItem[]>('/orders?view=list', { token: user?.token }),
+    { staleTime: 60_000, enabled: Boolean(user?.token), refetchInterval: 90_000 }
+  );
+  const detailQuery = useCachedQuery(
+    `order-detail:${orderId ?? ''}`,
+    () => apiFetch<OrderItem>(`/orders/${orderId}`, { token: user?.token }),
+    { staleTime: 60_000, enabled: Boolean(user?.token && isDetailView && orderId) }
+  );
+  const customersQuery = useCachedQuery(
+    queryKeys.customers,
+    () => apiFetch<CustomerItem[]>('/customers', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const productsQuery = useCachedQuery(
+    queryKeys.products,
+    () => apiFetch<ProductItem[]>('/products', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const settingsQuery = useCachedQuery(
+    queryKeys.companySettings,
+    () => apiFetch<CompanySettings>('/company/settings', { token: user?.token }),
+    { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    if (ordersQuery.data) setOrders(ordersQuery.data);
+  }, [ordersQuery.data]);
+
+  useEffect(() => {
+    if (customersQuery.data) setCustomers(customersQuery.data);
+  }, [customersQuery.data]);
+
+  useEffect(() => {
+    if (productsQuery.data) setProducts(productsQuery.data);
+  }, [productsQuery.data]);
+
+  useEffect(() => {
+    if (settingsQuery.data) setOrderDefaults(settingsQuery.data);
+  }, [settingsQuery.data]);
 
   const resetForm = () => {
-    setForm(newOrderForm());
+    setForm(newOrderForm(orderDefaults));
     setEditingId(null);
     setTab('pessoa');
   };
 
   const handleNew = () => {
+    if (user?.token) {
+      prefetchWithCache(
+        queryKeys.customers,
+        () => apiFetch('/customers', { token: user.token }),
+        { staleTime: 3 * 60_000 }
+      );
+      prefetchWithCache(
+        queryKeys.products,
+        () => apiFetch('/products', { token: user.token }),
+        { staleTime: 3 * 60_000 }
+      );
+      prefetchWithCache(
+        queryKeys.companySettings,
+        () => apiFetch('/company/settings', { token: user.token }),
+        { staleTime: 5 * 60_000 }
+      );
+    }
     navigate('/app/pedidos/novo');
   };
 
@@ -168,8 +240,26 @@ export const OrdersPage = () => {
       setShowForm(true);
       return;
     }
-    setShowForm(false);
-  }, [isCreateView]);
+    if (!isDetailView) {
+      setShowForm(false);
+    }
+  }, [isCreateView, isDetailView, orderDefaults]);
+
+  useEffect(() => {
+    if (!isDetailView) return;
+    const selectedOrder = detailQuery.data;
+    if (!selectedOrder) {
+      return;
+    }
+    setEditingId(selectedOrder.id);
+    setForm({
+      ...newOrderForm(orderDefaults),
+      ...selectedOrder,
+      orderDateTime: toDateTimeLocal(selectedOrder.orderDateTime),
+      customerId: selectedOrder.customerId ?? ''
+    });
+    setShowForm(true);
+  }, [isDetailView, detailQuery.data, navigate, orderDefaults]);
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
@@ -179,10 +269,11 @@ export const OrdersPage = () => {
   );
 
   const filtered = orders.filter((order) => {
-    const customerName = order.customerSnapshot?.name ?? customerMap.get(order.customerId ?? '')?.name ?? '';
+    const customerName = order.customerSnapshot?.name ?? '';
     const haystack = `${order.number} ${order.type} ${customerName} ${order.status}`.toLowerCase();
     return haystack.includes(search.toLowerCase());
   });
+  const activeTabIndex = orderTabs.findIndex((item) => item.key === tab);
 
   const totals = useMemo(() => {
     const productsTotal = form.products.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
@@ -241,8 +332,10 @@ export const OrdersPage = () => {
 
       resetForm();
       setShowForm(false);
-      if (isCreateView) navigate('/app/pedidos');
-      await load();
+      if (isFormRoute) navigate('/app/pedidos');
+      invalidateQueryCache(queryKeys.orders);
+      invalidateQueryCache(`order-detail:${editingId ?? ''}`);
+      await ordersQuery.refetch();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar pedido';
       setSubmitError(message);
@@ -293,6 +386,8 @@ export const OrdersPage = () => {
     });
     setCustomers((prev) => [created, ...prev]);
     setForm((prev) => ({ ...prev, customerId: created.id }));
+    invalidateQueryCache(queryKeys.customers);
+    customersQuery.refetch().catch(() => undefined);
     setShowCustomerModal(false);
     setCustomerForm({
       name: '',
@@ -364,9 +459,18 @@ export const OrdersPage = () => {
     popup.print();
   };
 
+  const handleGeneratePdf = async (orderIdToPrint: string) => {
+    const order = await fetchWithCache<OrderItem>(
+      `order-detail:${orderIdToPrint}`,
+      () => apiFetch<OrderItem>(`/orders/${orderIdToPrint}`, { token: user?.token }),
+      { staleTime: 60_000 }
+    );
+    generatePdf(order);
+  };
+
   return (
     <div className="page">
-      {!isCreateView && (
+      {!isFormRoute && (
       <div className="panel">
         <ListToolbar
           title="Pedidos e orcamentos"
@@ -375,7 +479,8 @@ export const OrdersPage = () => {
           actionLabel="Novo pedido"
           onAction={handleNew}
         />
-        {loading ? (
+        {ordersQuery.isFetching && !(ordersQuery.loading && orders.length === 0) ? <p className="muted">Atualizando pedidos...</p> : null}
+        {ordersQuery.loading && orders.length === 0 ? (
           <ListSkeleton />
         ) : (
           <div className="table">
@@ -388,25 +493,16 @@ export const OrdersPage = () => {
                   </span>
                 </div>
                 <div className="inline-right">
-                  <button type="button" className="icon-button small" onClick={() => generatePdf(order)} aria-label="PDF">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l5 5v13H6zM15 3v5h5M8 14h8M8 18h8" /></svg>
+                  <button type="button" className="icon-button small" onClick={() => handleGeneratePdf(order.id)} aria-label="PDF">
+                    <span className="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
                   </button>
                   <button
                     type="button"
                     className="icon-button"
                     aria-label="Editar"
-                    onClick={() => {
-                      setEditingId(order.id);
-                      setForm({
-                        ...newOrderForm(),
-                        ...order,
-                        orderDateTime: toDateTimeLocal(order.orderDateTime),
-                        customerId: order.customerId ?? ''
-                      });
-                      setShowForm(true);
-                    }}
+                    onClick={() => navigate(`/app/pedidos/${order.id}`)}
                   >
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" /></svg>
+                    <span className="material-symbols-outlined" aria-hidden="true">edit</span>
                   </button>
                 </div>
               </div>
@@ -419,22 +515,17 @@ export const OrdersPage = () => {
       {showForm && (
         <div className="panel order-editor">
           <h3>{editingId ? 'Editar pedido/orcamento' : 'Novo pedido/orcamento'}</h3>
-          <div className="tabs">
-            {[
-              ['pessoa', 'Pessoa'],
-              ['produtos', 'Produtos'],
-              ['observacoes', 'Observacoes'],
-              ['pagamentos', 'Pagamentos'],
-              ['imagens', 'Imagens'],
-              ['alertas', 'Alertas']
-            ].map(([key, label]) => (
-              <button key={key} type="button" title={label} className={tab === key ? 'tab-icon active' : 'tab-icon'} onClick={() => setTab(key as any)}>
-                {key === 'pessoa' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-7 8a7 7 0 0 1 14 0"/></svg>}
-                {key === 'produtos' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7l6-3 6 3v10l-6 3-6-3V7z"/></svg>}
-                {key === 'observacoes' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16H6zM9 9h6M9 13h6"/></svg>}
-                {key === 'pagamentos' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4zM4 10h16"/></svg>}
-                {key === 'imagens' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM8 10h.01M6 16l4-4 3 3 3-2 2 3"/></svg>}
-                {key === 'alertas' && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a6 6 0 0 0-6 6v4l-2 2h16l-2-2v-4a6 6 0 0 0-6-6zM10 20h4"/></svg>}
+          <div className="tabs order-tabs" style={{ '--order-tab-index': Math.max(activeTabIndex, 0) } as CSSProperties}>
+            <span className="order-tabs-indicator" aria-hidden="true" />
+            {orderTabs.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                title={item.label}
+                className={tab === item.key ? 'tab-icon active' : 'tab-icon'}
+                onClick={() => setTab(item.key)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">{item.icon}</span>
               </button>
             ))}
           </div>
@@ -477,7 +568,7 @@ export const OrdersPage = () => {
                       placeholder="Selecione o cliente"
                     />
                     <button type="button" className="icon-button" aria-label="Novo cliente" onClick={() => setShowCustomerModal(true)}>
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                      <span className="material-symbols-outlined" aria-hidden="true">person_add</span>
                     </button>
                   </div>
                 </div>
@@ -560,7 +651,7 @@ export const OrdersPage = () => {
                               aria-label="Remover"
                               onClick={() => setForm({ ...form, products: form.products.filter((_, i) => i !== index) })}
                             >
-                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" /></svg>
+                              <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                             </button>
                           </div>
                         </div>
@@ -656,7 +747,7 @@ export const OrdersPage = () => {
                             aria-label="Remover valor"
                             onClick={() => setForm({ ...form, additions: form.additions.filter((_, i) => i !== index) })}
                           >
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" /></svg>
+                            <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                           </button>
                         </div>
                       </div>
@@ -790,7 +881,7 @@ export const OrdersPage = () => {
             )}
 
             <div className="actions">
-              <button type="button" className="ghost" onClick={() => (isCreateView ? navigate('/app/pedidos') : setShowForm(false))}>Cancelar</button>
+              <button type="button" className="ghost" onClick={() => (isFormRoute ? navigate('/app/pedidos') : setShowForm(false))}>Cancelar</button>
               <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar pedido'}</button>
             </div>
             {submitError && <div className="error">{submitError}</div>}

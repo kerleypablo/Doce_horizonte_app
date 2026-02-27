@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthContext.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
+import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
+import { queryKeys } from '../shared/queryKeys.ts';
 
 type SalesChannel = {
   id?: string;
@@ -29,15 +31,17 @@ export const CompanySettingsPage = () => {
   const { user } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const load = async () => {
-    const data = await apiFetch<Settings>('/company/settings', { token: user?.token });
-    setSettings(data);
-  };
+  const settingsQuery = useCachedQuery(
+    queryKeys.companySettings,
+    () => apiFetch<Settings>('/company/settings', { token: user?.token }),
+    { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    if (settingsQuery.data) {
+      setSettings(settingsQuery.data);
+    }
+  }, [settingsQuery.data]);
 
   const updateChannel = (index: number, field: keyof SalesChannel, value: string | number | boolean) => {
     if (!settings) return;
@@ -65,6 +69,8 @@ export const CompanySettingsPage = () => {
       token: user?.token,
       body: JSON.stringify(settings)
     });
+    invalidateQueryCache(queryKeys.companySettings);
+    await settingsQuery.refetch();
     setSaving(false);
   };
 
@@ -77,12 +83,16 @@ export const CompanySettingsPage = () => {
     );
   }
 
+  if (settingsQuery.loading && !settings) {
+    return <div className="panel">Carregando...</div>;
+  }
+
   if (!settings) {
     return <div className="panel">Carregando...</div>;
   }
 
   return (
-    <div className="page">
+    <div className="page company-settings-page">
       <div className="panel">
         <h3>Custos e taxas</h3>
         <div className="form">
@@ -158,7 +168,7 @@ export const CompanySettingsPage = () => {
 
       <div className="panel">
         <h3>Canais de venda</h3>
-        <div className="table">
+        <div className="table sales-channels-table">
           <div className="table-head">
             <span>Canal</span>
             <span>Taxa canal (%)</span>

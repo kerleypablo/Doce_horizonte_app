@@ -9,6 +9,8 @@ import { SearchableSelect } from '../shared/SearchableSelect.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
+import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
+import { queryKeys } from '../shared/queryKeys.ts';
 
 export type RecipeItem = {
   id: string;
@@ -68,7 +70,6 @@ export const RecipesPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -81,24 +82,33 @@ export const RecipesPage = () => {
     tags: [] as string[]
   });
 
-  const load = async () => {
-    try {
-      const [inputsData, recipesData, settingsData] = await Promise.all([
-        apiFetch<InputItem[]>('/inputs', { token: user?.token }),
-        apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
-        apiFetch<Settings>('/company/settings', { token: user?.token })
-      ]);
-      setInputs(inputsData);
-      setRecipes(recipesData);
-      setSettings(settingsData);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const inputsQuery = useCachedQuery(
+    queryKeys.inputs,
+    () => apiFetch<InputItem[]>('/inputs', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const recipesQuery = useCachedQuery(
+    queryKeys.recipes,
+    () => apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const settingsQuery = useCachedQuery(
+    queryKeys.companySettings,
+    () => apiFetch<Settings>('/company/settings', { token: user?.token }),
+    { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    if (inputsQuery.data) setInputs(inputsQuery.data);
+  }, [inputsQuery.data]);
+
+  useEffect(() => {
+    if (recipesQuery.data) setRecipes(recipesQuery.data);
+  }, [recipesQuery.data]);
+
+  useEffect(() => {
+    if (settingsQuery.data) setSettings(settingsQuery.data);
+  }, [settingsQuery.data]);
 
   const resetForm = () => {
     setForm({
@@ -195,7 +205,8 @@ export const RecipesPage = () => {
 
       resetForm();
       setShowForm(false);
-      await load();
+      invalidateQueryCache(queryKeys.recipes);
+      await recipesQuery.refetch();
     } finally {
       setSaving(false);
     }
@@ -309,7 +320,7 @@ export const RecipesPage = () => {
           actionLabel="Nova receita"
           onAction={handleNew}
         />
-        {loading ? (
+        {recipesQuery.loading && recipes.length === 0 ? (
           <ListSkeleton />
         ) : (
           <div className="table">

@@ -6,6 +6,8 @@ import { SelectField } from '../shared/SelectField.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
+import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
+import { queryKeys } from '../shared/queryKeys.ts';
 
 type CustomerItem = {
   id: string;
@@ -45,7 +47,6 @@ export const CustomersPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
@@ -61,18 +62,15 @@ export const CustomersPage = () => {
     notes: ''
   });
 
-  const load = async () => {
-    try {
-      const data = await apiFetch<CustomerItem[]>('/customers', { token: user?.token });
-      setCustomers(data);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const customersQuery = useCachedQuery(
+    queryKeys.customers,
+    () => apiFetch<CustomerItem[]>('/customers', { token: user?.token }),
+    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    if (customersQuery.data) setCustomers(customersQuery.data);
+  }, [customersQuery.data]);
 
   const resetForm = () => {
     setForm({
@@ -122,7 +120,8 @@ export const CustomersPage = () => {
       }
       resetForm();
       setShowForm(false);
-      await load();
+      invalidateQueryCache(queryKeys.customers);
+      await customersQuery.refetch();
     } finally {
       setSaving(false);
     }
@@ -143,7 +142,7 @@ export const CustomersPage = () => {
           actionLabel="Novo cliente"
           onAction={handleNew}
         />
-        {loading ? (
+        {customersQuery.loading && customers.length === 0 ? (
           <ListSkeleton />
         ) : (
           <div className="table">

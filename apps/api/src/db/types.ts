@@ -1,6 +1,13 @@
 export type Role = 'admin' | 'common';
 
 export type CompanySettings = {
+  companyName?: string;
+  logoDataUrl?: string;
+  appTheme?: 'caramelo' | 'oceano' | 'floresta';
+  darkMode?: boolean;
+  defaultNotesDelivery?: string;
+  defaultNotesGeneral?: string;
+  defaultNotesPayment?: string;
   overheadMethod: 'PERCENT_DIRECT' | 'PER_UNIT';
   overheadPercent: number;
   overheadPerUnit: number;

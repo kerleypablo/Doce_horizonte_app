@@ -89,6 +89,34 @@ const parseSeqFromNumber = (value?: string | null) => {
 };
 
 export const orderRoutes = async (app: FastifyInstance) => {
+  const listQuerySchema = z.object({
+    view: z.enum(['full', 'list']).optional()
+  });
+
+  const summaryQuerySchema = z.object({
+    from: z.string().optional(),
+    to: z.string().optional()
+  });
+
+  const calcOrderTotal = (row: any) => {
+    const products = Array.isArray(row.products) ? row.products : [];
+    const additions = Array.isArray(row.additions) ? row.additions : [];
+    const productsTotal = products.reduce(
+      (sum: number, item: any) => sum + Number(item?.unitPrice ?? 0) * Number(item?.quantity ?? 0),
+      0
+    );
+    const additionsTotal = additions.reduce((sum: number, item: any) => {
+      if (item?.mode === 'FIXED') return sum + Number(item?.value ?? 0);
+      return sum + (productsTotal * Number(item?.value ?? 0)) / 100;
+    }, 0);
+    const discountMode = row.discount_mode ?? 'FIXED';
+    const discountValue = Number(row.discount_value ?? 0);
+    const discountTotal = discountMode === 'PERCENT'
+      ? ((productsTotal + additionsTotal) * discountValue) / 100
+      : discountValue;
+    return productsTotal + additionsTotal - discountTotal + Number(row.shipping_value ?? 0);
+  };
+
   const mapOrder = (row: any) => ({
     id: row.id,
     number: row.number,
@@ -114,8 +142,47 @@ export const orderRoutes = async (app: FastifyInstance) => {
     alerts: row.alerts ?? []
   });
 
+  const mapOrderList = (row: any) => ({
+    id: row.id,
+    number: row.number,
+    type: row.type,
+    orderDateTime: row.order_datetime,
+    deliveryDate: row.delivery_date ?? undefined,
+    status: row.status,
+    customerSnapshot: row.customer_snapshot ?? undefined,
+    total: calcOrderTotal(row)
+  });
+
+  const mapOrderSummary = (row: any) => ({
+    id: row.id,
+    number: row.number,
+    status: row.status,
+    orderDateTime: row.order_datetime,
+    deliveryDate: row.delivery_date ?? undefined,
+    customerSnapshot: row.customer_snapshot
+      ? { name: row.customer_snapshot.name ?? 'Sem cliente' }
+      : { name: 'Sem cliente' },
+    products: (row.products ?? []).map((item: any) => ({
+      name: item.name,
+      quantity: Number(item.quantity ?? 0)
+    })),
+    total: calcOrderTotal(row)
+  });
+
   app.get('/orders', { preHandler: app.authenticate }, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const query = listQuerySchema.parse(request.query ?? {});
+
+    if (query.view === 'list') {
+      const { data } = await supabaseAdmin
+        .from('orders')
+        .select('id, number, type, order_datetime, delivery_date, status, customer_snapshot, products, additions, discount_mode, discount_value, shipping_value')
+        .eq('company_id', auth.companyId)
+        .order('created_at', { ascending: false });
+
+      return (data ?? []).map(mapOrderList);
+    }
+
     const { data } = await supabaseAdmin
       .from('orders')
       .select('*')
@@ -123,6 +190,38 @@ export const orderRoutes = async (app: FastifyInstance) => {
       .order('created_at', { ascending: false });
 
     return (data ?? []).map(mapOrder);
+  });
+
+  app.get('/orders/summary-calendar', { preHandler: app.authenticate }, async (request) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const query = summaryQuerySchema.parse(request.query ?? {});
+
+    let q = supabaseAdmin
+      .from('orders')
+      .select('id, number, status, order_datetime, delivery_date, customer_snapshot, products, additions, discount_mode, discount_value, shipping_value')
+      .eq('company_id', auth.companyId)
+      .order('created_at', { ascending: false });
+
+    if (query.from) q = q.gte('order_datetime', query.from);
+    if (query.to) q = q.lte('order_datetime', query.to);
+
+    const { data } = await q;
+    return (data ?? []).map(mapOrderSummary);
+  });
+
+  app.get('/orders/:id', { preHandler: app.authenticate }, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const id = request.params as { id: string };
+
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .select('*')
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId)
+      .single();
+
+    if (error || !data) return reply.status(404).send({ message: 'Pedido nao encontrado' });
+    return reply.send(mapOrder(data));
   });
 
   app.post('/orders', { preHandler: app.authenticate }, async (request, reply) => {
