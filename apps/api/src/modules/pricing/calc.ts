@@ -11,6 +11,16 @@ export type PricePreview = {
   profitPercent: number;
 };
 
+export type ProfitFromPrice = {
+  directCost: number;
+  overheadCost: number;
+  variablePercent: number;
+  feeFixed: number;
+  salePrice: number;
+  profitValue: number;
+  profitPercent: number;
+};
+
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
 export const calcRecipeDirectCost = (
@@ -18,11 +28,11 @@ export const calcRecipeDirectCost = (
   inputs: Input[],
   recipes: Recipe[],
   visited: Set<string> = new Set()
-) => {
+): number => {
   if (visited.has(recipe.id)) return 0;
   visited.add(recipe.id);
 
-  const inputsCost = recipe.ingredients.reduce((sum, ingredient) => {
+  const inputsCost = recipe.ingredients.reduce((sum: number, ingredient): number => {
     const input = inputs.find((item) => item.id === ingredient.inputId);
     if (!input) return sum;
 
@@ -31,11 +41,11 @@ export const calcRecipeDirectCost = (
     return sum + unitCost * normalizedQty;
   }, 0);
 
-  const subRecipesCost = recipe.subRecipes.reduce((sum, item) => {
+  const subRecipesCost = recipe.subRecipes.reduce((sum: number, item): number => {
     const sub = recipes.find((r) => r.id === item.recipeId);
     if (!sub || sub.yield <= 0) return sum;
-    const subTotal = calcRecipeDirectCost(sub, inputs, recipes, visited);
-    const unitCost = subTotal / sub.yield;
+    const subTotal: number = calcRecipeDirectCost(sub, inputs, recipes, visited);
+    const unitCost: number = subTotal / sub.yield;
     return sum + unitCost * item.quantity;
   }, 0);
 
@@ -105,7 +115,7 @@ export const calcProfitFromPrice = ({
   feePercent: number;
   paymentFeePercent: number;
   feeFixed: number;
-}) => {
+}): ProfitFromPrice => {
   const directCost = calcRecipeDirectCost(recipe, inputs, recipes);
   const baseOverhead = settings.overheadMethod === 'PERCENT_DIRECT'
     ? (directCost * settings.overheadPercent) / 100
