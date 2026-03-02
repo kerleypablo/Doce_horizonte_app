@@ -29,6 +29,14 @@ const settingsSchema = z.object({
   salesChannels: z.array(salesChannelSchema)
 });
 
+const userRoleSchema = z.object({
+  role: z.enum(['admin', 'common'])
+});
+
+const userParamsSchema = z.object({
+  authUserId: z.string().uuid()
+});
+
 export const companyRoutes = async (app: FastifyInstance) => {
   app.get('/company/settings', { preHandler: app.authenticate }, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
@@ -160,5 +168,67 @@ export const companyRoutes = async (app: FastifyInstance) => {
       ...data,
       companyName: data.companyName ?? undefined
     });
+  });
+
+  app.get('/company/users', { preHandler: app.authenticate }, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
+    if (auth.role !== 'admin') return reply.status(403).send({ message: 'Apenas admin' });
+
+    const { data: appUsers, error } = await supabaseAdmin
+      .from('app_users')
+      .select('auth_user_id, role, created_at')
+      .eq('company_id', auth.companyId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      return reply.status(400).send({ message: 'Erro ao carregar usuarios', detail: error.message });
+    }
+
+    const users = await Promise.all(
+      (appUsers ?? []).map(async (item) => {
+        const authResult = await supabaseAdmin.auth.admin.getUserById(item.auth_user_id);
+        const authUser = authResult.data.user;
+        return {
+          authUserId: item.auth_user_id,
+          role: item.role,
+          createdAt: item.created_at,
+          email: authUser?.email ?? '',
+          name: (authUser?.user_metadata?.full_name as string | undefined) ?? '',
+          avatarUrl: (authUser?.user_metadata?.avatar_url as string | undefined) ?? ''
+        };
+      })
+    );
+
+    return reply.send(users);
+  });
+
+  app.put('/company/users/:authUserId/role', { preHandler: app.authenticate }, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { userId: string; companyId: string; role: string } }).auth;
+    if (auth.role !== 'admin') return reply.status(403).send({ message: 'Apenas admin' });
+
+    const params = userParamsSchema.parse(request.params);
+    const data = userRoleSchema.parse(request.body);
+
+    if (params.authUserId === auth.userId && data.role !== 'admin') {
+      return reply.status(400).send({ message: 'Voce nao pode remover seu proprio acesso de admin' });
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('app_users')
+      .update({ role: data.role })
+      .eq('auth_user_id', params.authUserId)
+      .eq('company_id', auth.companyId)
+      .select('auth_user_id')
+      .maybeSingle();
+
+    if (error) {
+      return reply.status(400).send({ message: 'Erro ao atualizar permissao', detail: error.message });
+    }
+
+    if (!updated) {
+      return reply.status(404).send({ message: 'Usuario nao encontrado nesta empresa' });
+    }
+
+    return reply.send({ ok: true });
   });
 };

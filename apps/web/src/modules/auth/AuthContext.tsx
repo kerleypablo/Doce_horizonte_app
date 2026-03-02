@@ -1,14 +1,22 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { clearQueryCache } from '../shared/queryCache.ts';
+import { supabase } from '../shared/supabase.ts';
 
 export type AuthUser = {
   token: string;
   role: 'admin' | 'common';
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
-  login: (token: string, role: 'admin' | 'common') => void;
+  login: (
+    token: string,
+    role: 'admin' | 'common',
+    profile?: { email?: string; name?: string; avatarUrl?: string }
+  ) => void;
   logout: () => void;
 };
 
@@ -29,12 +37,43 @@ const loadUser = (): AuthUser | null => {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(() => loadUser());
 
-  const login = (token: string, role: 'admin' | 'common') => {
-    const next = { token, role };
+  const login = (
+    token: string,
+    role: 'admin' | 'common',
+    profile?: { email?: string; name?: string; avatarUrl?: string }
+  ) => {
+    const next = { token, role, ...profile };
     setUser(next);
     localStorage.setItem(storageKey, JSON.stringify(next));
     clearQueryCache();
   };
+
+  useEffect(() => {
+    if (!user?.token || user.avatarUrl) return;
+    const loadProfile = async () => {
+      const { data } = await supabase.auth.getUser(user.token);
+      const authUser = data.user;
+      if (!authUser) return;
+      const fetchedName = (authUser.user_metadata?.full_name as string | undefined) ?? user.name;
+      const fetchedAvatar = (authUser.user_metadata?.avatar_url as string | undefined) ?? user.avatarUrl;
+      const fetchedEmail = authUser.email ?? user.email;
+      if (!fetchedName && !fetchedAvatar && !fetchedEmail) return;
+      const next: AuthUser = {
+        ...user,
+        email: fetchedEmail,
+        name: fetchedName,
+        avatarUrl: fetchedAvatar
+      };
+      if (
+        next.email === user.email &&
+        next.name === user.name &&
+        next.avatarUrl === user.avatarUrl
+      ) return;
+      setUser(next);
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    };
+    loadProfile();
+  }, [user]);
 
   const logout = () => {
     setUser(null);

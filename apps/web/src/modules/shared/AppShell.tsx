@@ -94,8 +94,14 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
     );
   }, [user?.token]);
 
+  const avatarContent = user?.avatarUrl ? (
+    <img src={user.avatarUrl} alt={user.name ?? 'Usuario'} />
+  ) : (
+    <span className="material-symbols-outlined" aria-hidden="true">person</span>
+  );
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${drawerOpen ? 'drawer-open' : ''}`}>
       <aside className={`sidebar ${drawerOpen ? 'open' : ''}`}>
         <div className="brand">
           <span>Confeitaria</span>
@@ -130,7 +136,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             <strong>Precificacao</strong>
           </div>
           <div className="mobile-user" aria-label="Usuario logado">
-            <span className="material-symbols-outlined" aria-hidden="true">person</span>
+            {avatarContent}
           </div>
         </header>
         <header className="app-header">
@@ -140,6 +146,9 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
           </div>
           <div className="header-actions">
             <span>{user?.role === 'admin' ? 'Administrador' : 'Operacional'}</span>
+            <div className="mobile-user" aria-label="Usuario logado">
+              {avatarContent}
+            </div>
           </div>
         </header>
         <section className="content">{children}</section>

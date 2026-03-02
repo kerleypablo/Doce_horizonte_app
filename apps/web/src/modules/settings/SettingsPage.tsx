@@ -33,6 +33,15 @@ type Settings = {
   salesChannels: SalesChannel[];
 };
 
+type CompanyUser = {
+  authUserId: string;
+  email: string;
+  name: string;
+  avatarUrl: string;
+  role: 'admin' | 'common';
+  createdAt?: string;
+};
+
 const themeOptions: Array<{ value: Settings['appTheme']; label: string }> = [
   { value: 'caramelo', label: 'Caramelo' },
   { value: 'oceano', label: 'Oceano' },
@@ -42,12 +51,18 @@ const themeOptions: Array<{ value: Settings['appTheme']; label: string }> = [
 export const SettingsPage = () => {
   const { user } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [roleSavingUserId, setRoleSavingUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const settingsQuery = useCachedQuery(
     queryKeys.companySettings,
     () => apiFetch<Settings>('/company/settings', { token: user?.token }),
     { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const usersQuery = useCachedQuery(
+    queryKeys.companyUsers,
+    () => apiFetch<CompanyUser[]>('/company/users', { token: user?.token }),
+    { staleTime: 60_000, enabled: Boolean(user?.token && user?.role === 'admin') }
   );
 
   useEffect(() => {
@@ -116,6 +131,25 @@ export const SettingsPage = () => {
     }
   };
 
+  const handleRoleChange = async (authUserId: string, role: 'admin' | 'common') => {
+    setRoleSavingUserId(authUserId);
+    setSubmitError(null);
+    try {
+      await apiFetch(`/company/users/${authUserId}/role`, {
+        method: 'PUT',
+        token: user?.token,
+        body: JSON.stringify({ role })
+      });
+      invalidateQueryCache(queryKeys.companyUsers);
+      await usersQuery.refetch();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao atualizar permissao';
+      setSubmitError(message);
+    } finally {
+      setRoleSavingUserId(null);
+    }
+  };
+
   if (user?.role !== 'admin') {
     return (
       <div className="panel">
@@ -178,6 +212,37 @@ export const SettingsPage = () => {
             onChange={(e) => setSettings({ ...settings, darkMode: e.target.checked })}
           />
         </label>
+      </div>
+
+      <div className="panel">
+        <h3>Usuarios da empresa</h3>
+        {usersQuery.loading && !usersQuery.data ? <p>Carregando usuarios...</p> : null}
+        {!usersQuery.loading && (usersQuery.data?.length ?? 0) === 0 ? <p>Nenhum usuario vinculado.</p> : null}
+        <div className="table">
+          <div className="table-head">
+            <span>Usuario</span>
+            <span>Email</span>
+            <span>Permissao</span>
+          </div>
+          {(usersQuery.data ?? []).map((companyUser) => (
+            <div key={companyUser.authUserId} className="table-row">
+              <span>
+                {companyUser.name || 'Sem nome'}
+              </span>
+              <span>{companyUser.email || '-'}</span>
+              <span>
+                <select
+                  value={companyUser.role}
+                  onChange={(event) => handleRoleChange(companyUser.authUserId, event.target.value as 'admin' | 'common')}
+                  disabled={roleSavingUserId === companyUser.authUserId}
+                >
+                  <option value="common">Comum</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="panel">

@@ -5,5 +5,6 @@ export const queryKeys = {
   inputs: 'inputs',
   customers: 'customers',
   products: 'products',
-  companySettings: 'company-settings'
+  companySettings: 'company-settings',
+  companyUsers: 'company-users'
 };
