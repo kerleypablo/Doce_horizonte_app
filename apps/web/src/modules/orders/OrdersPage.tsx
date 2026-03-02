@@ -72,6 +72,9 @@ type OrderListItem = {
 
 type CompanySettings = {
   companyName?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  pixKey?: string;
   logoDataUrl?: string;
   defaultNotesDelivery?: string;
   defaultNotesGeneral?: string;
@@ -446,6 +449,9 @@ export const OrdersPage = () => {
   const generatePdf = (order: OrderItem) => {
     const customer = order.customerSnapshot;
     const companyName = settingsQuery.data?.companyName ?? 'Controle Precificacao';
+    const companyPhone = settingsQuery.data?.companyPhone ?? '';
+    const companyEmail = settingsQuery.data?.companyEmail ?? '';
+    const pixKey = settingsQuery.data?.pixKey ?? '';
     const logoDataUrl = settingsQuery.data?.logoDataUrl ?? '';
     const productsHtml = (order.products ?? [])
       .map(
@@ -500,10 +506,18 @@ export const OrdersPage = () => {
         .total-row{margin-top:8px;display:flex;align-items:stretch;width:320px}
         .total-row .label{background:#1f2328;color:#fff;padding:12px 16px;font-weight:700;letter-spacing:.08em}
         .total-row .value{border:1px solid #1f2328;border-left:none;padding:12px 16px;font-weight:800;font-size:24px;flex:1;text-align:right}
-        .footer{margin-top:24px;border-top:1px solid #d7dce2;padding-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
-        .box{border:1px solid #d7dce2;padding:12px;min-height:116px}
+        .section-grid{margin-top:24px;display:grid;gap:12px}
+        .box-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .box{border:1px solid #d7dce2;padding:12px;min-height:110px}
         .box h4{margin:0 0 8px;font-size:14px;color:#5a6068;text-transform:uppercase;letter-spacing:.06em}
         .box p{margin:0;font-size:13px;line-height:1.45;white-space:pre-wrap}
+        .contact-line{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.45;margin:0 0 6px}
+        .pix{font-weight:800;margin-top:8px}
+        .page-break{break-before:page;page-break-before:always}
+        .photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+        .photo{border:1px solid #d7dce2;border-radius:10px;padding:8px}
+        .photo img{width:100%;height:280px;object-fit:contain;background:#fff}
+        .photo span{display:block;margin-top:6px;font-size:12px;color:#5a6068;word-break:break-word}
       </style></head><body>
       <div class="wrap">
         <div class="top">
@@ -531,18 +545,38 @@ export const OrdersPage = () => {
           <div class="summary-line"><span>Frete</span><strong>${formatCurrency(order.shippingValue ?? 0)}</strong></div>
           <div class="total-row"><div class="label">TOTAL</div><div class="value">${formatCurrency(total)}</div></div>
         </div>
-        <div class="footer">
+        <div class="section-grid">
           <div class="box">
-            <h4>Pagamento</h4>
-            <p>${escapeHtml(note(order.notesPayment))}</p>
+            <h4>Observacoes gerais</h4>
+            <p>${escapeHtml(note(order.notesGeneral))}</p>
+          </div>
+          <div class="box-row">
+            <div class="box">
+              <h4>Pagamento</h4>
+              <p>${escapeHtml(note(order.notesPayment))}</p>
+              <p class="pix">PIX: ${escapeHtml(pixKey || order.pix || '-')}</p>
+            </div>
+            <div class="box">
+              <h4>Entrega</h4>
+              <p>${escapeHtml(note(order.notesDelivery))}</p>
+            </div>
           </div>
           <div class="box">
-            <h4>Observacoes</h4>
-            <p>Entrega/Retirada: ${escapeHtml(note(order.notesDelivery))}</p>
-            <p>${escapeHtml(note(order.notesGeneral))}</p>
+            <h4>Contato</h4>
+            <p class="contact-line">☎ ${escapeHtml(companyPhone || '-')}</p>
+            <p class="contact-line">✉ ${escapeHtml(companyEmail || '-')}</p>
           </div>
         </div>
       </div>
+      ${(order.images?.length ?? 0) > 0 ? `
+      <div class="wrap page-break">
+        <h2 style="font-family:'Space Grotesk',Arial,sans-serif;margin:0 0 12px;font-size:30px">Fotos referencia</h2>
+        <div class="photo-grid">
+          ${(order.images ?? [])
+            .map((image) => `<div class="photo"><img src="${image.dataUrl}" alt="Foto de referencia" /><span>${escapeHtml(image.name || 'Imagem')}</span></div>`)
+            .join('')}
+        </div>
+      </div>` : ''}
       </body></html>`;
 
     const frame = document.createElement('iframe');

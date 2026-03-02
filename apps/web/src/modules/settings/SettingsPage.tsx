@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
-import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
@@ -18,6 +17,9 @@ type SalesChannel = {
 type Settings = {
   companyName: string;
   companyCode?: string;
+  companyPhone: string;
+  companyEmail: string;
+  pixKey: string;
   logoDataUrl: string;
   appTheme: 'caramelo' | 'oceano' | 'floresta';
   darkMode: boolean;
@@ -34,15 +36,6 @@ type Settings = {
   salesChannels: SalesChannel[];
 };
 
-type CompanyUser = {
-  authUserId: string;
-  email: string;
-  name: string;
-  avatarUrl: string;
-  role: 'admin' | 'common';
-  createdAt?: string;
-};
-
 const themeOptions: Array<{ value: Settings['appTheme']; label: string }> = [
   { value: 'caramelo', label: 'Caramelo' },
   { value: 'oceano', label: 'Oceano' },
@@ -52,8 +45,6 @@ const themeOptions: Array<{ value: Settings['appTheme']; label: string }> = [
 export const SettingsPage = () => {
   const { user } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [roleSavingUserId, setRoleSavingUserId] = useState<string | null>(null);
-  const [userToDelete, setUserToDelete] = useState<CompanyUser | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const settingsQuery = useCachedQuery(
@@ -61,23 +52,6 @@ export const SettingsPage = () => {
     () => apiFetch<Settings>('/company/settings', { token: user?.token }),
     { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
   );
-  const usersQuery = useCachedQuery(
-    queryKeys.companyUsers,
-    () => apiFetch<CompanyUser[]>('/company/users', { token: user?.token }),
-    { staleTime: 60_000, enabled: Boolean(user?.token && user?.role === 'admin') }
-  );
-  const currentAuthUserId = (() => {
-    if (!user?.token) return '';
-    try {
-      const payloadPart = user.token.split('.')[1];
-      if (!payloadPart) return '';
-      const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(atob(normalized)) as { sub?: string };
-      return payload.sub ?? '';
-    } catch {
-      return '';
-    }
-  })();
 
   useEffect(() => {
     if (settingsQuery.data) {
@@ -90,38 +64,6 @@ export const SettingsPage = () => {
     document.documentElement.setAttribute('data-theme', settings.appTheme);
     document.documentElement.setAttribute('data-dark', settings.darkMode ? 'true' : 'false');
   }, [settings?.appTheme, settings?.darkMode]);
-
-  const handleLogoUpload = async (files: FileList | null) => {
-    if (!files?.length || !settings) return;
-    const file = files[0];
-    const sourceDataUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.readAsDataURL(file);
-    });
-
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Nao foi possivel processar a imagem.'));
-      img.src = sourceDataUrl;
-    });
-
-    const maxSize = 420;
-    const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-    const width = Math.max(1, Math.round(image.width * scale));
-    const height = Math.max(1, Math.round(image.height * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) return;
-    context.drawImage(image, 0, 0, width, height);
-
-    const logoDataUrl = canvas.toDataURL('image/png');
-    setSettings({ ...settings, logoDataUrl });
-  };
 
   const handleSave = async () => {
     if (!settings) return;
@@ -145,45 +87,6 @@ export const SettingsPage = () => {
     }
   };
 
-  const handleRoleChange = async (authUserId: string, role: 'admin' | 'common') => {
-    setRoleSavingUserId(authUserId);
-    setSubmitError(null);
-    try {
-      await apiFetch(`/company/users/${authUserId}/role`, {
-        method: 'PUT',
-        token: user?.token,
-        body: JSON.stringify({ role })
-      });
-      invalidateQueryCache(queryKeys.companyUsers);
-      await usersQuery.refetch();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro ao atualizar permissao';
-      setSubmitError(message);
-    } finally {
-      setRoleSavingUserId(null);
-    }
-  };
-
-  const handleDeleteAccess = async () => {
-    if (!userToDelete) return;
-    setRoleSavingUserId(userToDelete.authUserId);
-    setSubmitError(null);
-    try {
-      await apiFetch(`/company/users/${userToDelete.authUserId}`, {
-        method: 'DELETE',
-        token: user?.token
-      });
-      setUserToDelete(null);
-      invalidateQueryCache(queryKeys.companyUsers);
-      await usersQuery.refetch();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro ao remover acesso';
-      setSubmitError(message);
-    } finally {
-      setRoleSavingUserId(null);
-    }
-  };
-
   if (user?.role !== 'admin') {
     return (
       <div className="panel">
@@ -198,32 +101,6 @@ export const SettingsPage = () => {
 
   return (
     <div className="page">
-      <div className="panel">
-        <h3>Configuracoes gerais</h3>
-        <div className="form">
-          <label>
-            Nome da empresa
-            <input
-              value={settings.companyName}
-              onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
-            />
-          </label>
-          <label>
-            Codigo da empresa
-            <input value={settings.companyCode ?? ''} readOnly />
-          </label>
-          <label>
-            Logo da empresa
-            <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files)} />
-          </label>
-          {settings.logoDataUrl ? (
-            <div className="settings-logo-preview">
-              <img src={settings.logoDataUrl} alt="Logo da empresa" />
-            </div>
-          ) : null}
-        </div>
-      </div>
-
       <div className="panel">
         <h3>Aparencia do app</h3>
         <div className="settings-theme-grid">
@@ -246,45 +123,6 @@ export const SettingsPage = () => {
             onChange={(e) => setSettings({ ...settings, darkMode: e.target.checked })}
           />
         </label>
-      </div>
-
-      <div className="panel">
-        <h3>Usuarios da empresa</h3>
-        {usersQuery.loading && !usersQuery.data ? <p>Carregando usuarios...</p> : null}
-        {!usersQuery.loading && (usersQuery.data?.length ?? 0) === 0 ? <p>Nenhum usuario vinculado.</p> : null}
-        <div className="company-users-list">
-          {(usersQuery.data ?? []).map((companyUser) => (
-            <div key={companyUser.authUserId} className="company-user-row">
-              <div className="company-user-main">
-                {companyUser.avatarUrl ? (
-                  <img src={companyUser.avatarUrl} alt={companyUser.name || companyUser.email || 'Usuario'} />
-                ) : (
-                  <span className="material-symbols-outlined" aria-hidden="true">person</span>
-                )}
-                <span>{companyUser.name || companyUser.email || 'Sem nome'}</span>
-              </div>
-              <div className="company-user-actions">
-                <label className="settings-switch compact">
-                  <span>Admin</span>
-                  <input
-                    type="checkbox"
-                    checked={companyUser.role === 'admin'}
-                    onChange={(event) => handleRoleChange(companyUser.authUserId, event.target.checked ? 'admin' : 'common')}
-                    disabled={roleSavingUserId === companyUser.authUserId || companyUser.authUserId === currentAuthUserId}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => setUserToDelete(companyUser)}
-                  disabled={roleSavingUserId === companyUser.authUserId || companyUser.authUserId === currentAuthUserId}
-                >
-                  Remover
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="panel">
@@ -323,16 +161,8 @@ export const SettingsPage = () => {
         </button>
       </div>
       {submitError ? <div className="panel"><p className="error">{submitError}</p></div> : null}
-      <ConfirmDialog
-        open={Boolean(userToDelete)}
-        title="Remover acesso"
-        message={`Deseja remover o acesso de ${userToDelete?.name || userToDelete?.email || 'este usuario'}?`}
-        confirmLabel="Remover"
-        cancelLabel="Cancelar"
-        onCancel={() => setUserToDelete(null)}
-        onConfirm={handleDeleteAccess}
-      />
       <LoadingOverlay open={saving} label="Salvando configuracoes..." />
     </div>
   );
 };
+

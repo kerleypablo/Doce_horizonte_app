@@ -17,6 +17,9 @@ create table if not exists app_users (
 
 create table if not exists company_settings (
   company_id uuid primary key references companies(id) on delete cascade,
+  company_phone text not null default '',
+  company_email text not null default '',
+  pix_key text not null default '',
   logo_data_url text not null default '',
   app_theme text not null default 'caramelo',
   dark_mode boolean not null default false,
@@ -35,6 +38,9 @@ create table if not exists company_settings (
 alter table company_settings add column if not exists logo_data_url text not null default '';
 alter table company_settings add column if not exists app_theme text not null default 'caramelo';
 alter table company_settings add column if not exists dark_mode boolean not null default false;
+alter table company_settings add column if not exists company_phone text not null default '';
+alter table company_settings add column if not exists company_email text not null default '';
+alter table company_settings add column if not exists pix_key text not null default '';
 alter table company_settings add column if not exists default_notes_delivery text not null default '';
 alter table company_settings add column if not exists default_notes_general text not null default '';
 alter table company_settings add column if not exists default_notes_payment text not null default '';

@@ -40,6 +40,9 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
 
     const { error: settingsError } = await supabaseAdmin.from('company_settings').insert({
       company_id: company.id,
+      company_phone: '',
+      company_email: '',
+      pix_key: '',
       logo_data_url: '',
       app_theme: 'caramelo',
       dark_mode: false,

@@ -13,6 +13,9 @@ const salesChannelSchema = z.object({
 
 const settingsSchema = z.object({
   companyName: z.string().min(2).optional(),
+  companyPhone: z.string().optional(),
+  companyEmail: z.string().optional(),
+  pixKey: z.string().optional(),
   logoDataUrl: z.string().optional(),
   appTheme: z.enum(['caramelo', 'oceano', 'floresta']).optional(),
   darkMode: z.boolean().optional(),
@@ -64,6 +67,9 @@ export const companyRoutes = async (app: FastifyInstance) => {
     return {
       companyName: company?.name ?? 'Minha empresa',
       companyCode: company?.id ? company.id.replace(/-/g, '').slice(0, 8).toUpperCase() : '',
+      companyPhone: settings.company_phone ?? '',
+      companyEmail: settings.company_email ?? '',
+      pixKey: settings.pix_key ?? '',
       logoDataUrl: settings.logo_data_url ?? '',
       appTheme: settings.app_theme ?? 'caramelo',
       darkMode: settings.dark_mode ?? false,
@@ -107,6 +113,9 @@ export const companyRoutes = async (app: FastifyInstance) => {
       .from('company_settings')
       .upsert({
         company_id: auth.companyId,
+        company_phone: data.companyPhone ?? '',
+        company_email: data.companyEmail ?? '',
+        pix_key: data.pixKey ?? '',
         logo_data_url: data.logoDataUrl ?? '',
         app_theme: data.appTheme ?? 'caramelo',
         dark_mode: data.darkMode ?? false,
