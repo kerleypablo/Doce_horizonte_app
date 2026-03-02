@@ -64,12 +64,8 @@ const normalizeDateKey = (value?: string) => {
 };
 
 const getOrderDateKeys = (order: OrderItem) => {
-  const keys = new Set<string>();
   const deliveryKey = normalizeDateKey(order.deliveryDate);
-  const orderKey = normalizeDateKey(order.orderDateTime);
-  if (deliveryKey) keys.add(deliveryKey);
-  if (orderKey) keys.add(orderKey);
-  return [...keys];
+  return deliveryKey ? [deliveryKey] : [];
 };
 
 const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
