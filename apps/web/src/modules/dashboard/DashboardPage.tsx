@@ -34,9 +34,13 @@ type OrderItem = {
   orderDateTime: string;
   deliveryDate?: string;
   status: 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO';
-  products?: { name: string; quantity: number }[];
+  products?: { name: string; quantity: number; unitPrice?: number }[];
   customerSnapshot?: { name: string };
-  total: number;
+  additions?: { mode: 'PERCENT' | 'FIXED'; value: number }[];
+  discountMode?: 'PERCENT' | 'FIXED';
+  discountValue?: number;
+  shippingValue?: number;
+  total?: number;
 };
 
 type CompanySettings = {
@@ -80,7 +84,7 @@ export const DashboardPage = () => {
   const [showRevenue, setShowRevenue] = useState(true);
   const ordersQuery = useCachedQuery(
     queryKeys.ordersSummaryCalendar,
-    () => apiFetch<OrderItem[]>('/orders/summary-calendar', { token: user?.token }),
+    () => apiFetch<OrderItem[]>('/orders', { token: user?.token }),
     { staleTime: 60_000, enabled: Boolean(user?.token), refetchInterval: 90_000 }
   );
   const settingsQuery = useCachedQuery(
@@ -138,9 +142,25 @@ export const DashboardPage = () => {
 
   const selectedOrders = ordersByDate.get(selectedDate) ?? [];
   const confirmedRevenue = useMemo(() => {
+    const calcTotal = (order: OrderItem) => {
+      if (typeof order.total === 'number') return Number(order.total ?? 0);
+      const productsTotal = (order.products ?? []).reduce(
+        (sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0),
+        0
+      );
+      const additionsTotal = (order.additions ?? []).reduce((sum, item) => {
+        if (item.mode === 'FIXED') return sum + Number(item.value ?? 0);
+        return sum + (productsTotal * Number(item.value ?? 0)) / 100;
+      }, 0);
+      const discountValue = Number(order.discountValue ?? 0);
+      const discountTotal = order.discountMode === 'PERCENT'
+        ? ((productsTotal + additionsTotal) * discountValue) / 100
+        : discountValue;
+      return productsTotal + additionsTotal - discountTotal + Number(order.shippingValue ?? 0);
+    };
     return orders
       .filter((order) => order.status === 'CONFIRMADO' || order.status === 'CONCLUIDO')
-      .reduce((sum, order) => sum + Number(order.total ?? 0), 0);
+      .reduce((sum, order) => sum + calcTotal(order), 0);
   }, [orders]);
 
   const revenueLabel = showRevenue
