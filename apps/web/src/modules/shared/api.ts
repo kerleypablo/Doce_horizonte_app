@@ -6,10 +6,11 @@ export const apiFetch = async <T>(
   options: RequestInit & { token?: string } = {}
 ): Promise<T> => {
   const { token, headers, ...rest } = options;
+  const hasJsonBody = typeof rest.body === 'string' && rest.body.length > 0;
   const response = await fetch(`${API_BASE}${path}`, {
     ...rest,
     headers: {
-      'Content-Type': 'application/json',
+      ...(hasJsonBody ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(headers || {})
     }

@@ -464,13 +464,6 @@ export const OrdersPage = () => {
       ? order.discountValue
       : ((productsTotal + additionsTotal) * order.discountValue) / 100;
     const total = productsTotal + additionsTotal - discountTotal + (order.shippingValue ?? 0);
-    const additionsLines = (order.additions ?? [])
-      .map((item) => {
-        const value = item.mode === 'FIXED' ? item.value : (productsTotal * item.value) / 100;
-        const suffix = item.mode === 'PERCENT' ? ` (${item.value}%)` : '';
-        return `<tr><td>${item.label}${suffix}</td><td>${formatCurrency(value)}</td></tr>`;
-      })
-      .join('');
     const note = (value?: string) => (value && value.trim().length ? value : '-');
     const additionsSummaryHtml = (order.additions ?? [])
       .map((item) => {
@@ -489,7 +482,8 @@ export const OrdersPage = () => {
         h1{font-family:"Space Grotesk",Arial,sans-serif;font-size:54px;line-height:1;margin:0 0 8px;color:#1f2328}
         .subtitle{font-size:22px;color:#4c5158}
         .logo{width:130px;height:90px;object-fit:contain}
-        .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:20px}
+        .order-meta{margin-top:8px;font-size:18px;font-weight:700;color:#1f2328;display:flex;gap:18px;flex-wrap:wrap}
+        .cards{display:grid;grid-template-columns:minmax(220px,320px);gap:12px;margin-top:20px}
         .card{border:1px solid #1f2328;padding:12px;position:relative;background:#f8f9fb;min-height:86px}
         .card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:9px;background:#1f2328}
         .card span{display:block;font-size:13px;color:#5a6068;margin-left:10px}
@@ -516,12 +510,14 @@ export const OrdersPage = () => {
           <div>
             <h1>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}</h1>
             <div class="subtitle">${escapeHtml(companyName)}</div>
+            <div class="order-meta">
+              <span>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}: #${escapeHtml(order.number)}</span>
+              <span>Data: ${formatDateBr(order.orderDateTime)}</span>
+            </div>
           </div>
           ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="Logo" />` : ''}
         </div>
         <div class="cards">
-          <div class="card"><span>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}:</span><strong>#${escapeHtml(order.number)}</strong></div>
-          <div class="card"><span>Data:</span><strong>${formatDateBr(order.orderDateTime)}</strong></div>
           <div class="card"><span>Entrega:</span><strong>${order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'}</strong></div>
         </div>
         <div class="meta"><strong>Cliente:</strong> ${escapeHtml(customer?.name ?? '-')} | <strong>Telefone:</strong> ${escapeHtml(customer?.phone ?? '-')} | <strong>Tipo:</strong> ${order.deliveryType}</div>
