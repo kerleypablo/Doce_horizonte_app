@@ -1382,6 +1382,25 @@ button:disabled {
   font-size: 11px;
 }
 
+.order-product-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-product-qty {
+  max-width: 68px;
+  text-align: center;
+}
+
+.order-product-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .table {
   display: flex;
   flex-direction: column;
@@ -1617,14 +1636,18 @@ button:disabled {
   border-radius: 12px;
   padding: 8px;
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-button.small {
   padding: 6px;
   width: 32px;
   height: 32px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
 }
 
@@ -1632,10 +1655,15 @@ button:disabled {
   padding: 6px;
   width: 28px;
   height: 28px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   color: var(--accent-strong);
+}
+
+.icon-button .material-symbols-outlined {
+  display: block;
 }
 
 .icon-button.pdf-action {
@@ -2092,6 +2120,17 @@ button:disabled {
   .order-editor .grid-2,
   .order-editor .grid-3 {
     grid-template-columns: 1fr;
+  }
+
+  .order-editor .order-product-row {
+    grid-template-columns: minmax(0, 1fr) 56px auto;
+    gap: 6px;
+  }
+
+  .order-editor .order-product-qty {
+    max-width: 56px;
+    padding: 8px 6px;
+    font-size: 12px;
   }
 
   .order-editor .values-row {

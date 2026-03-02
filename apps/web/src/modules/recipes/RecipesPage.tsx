@@ -468,9 +468,7 @@ export const RecipesPage = () => {
                           }))
                         }
                       >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" />
-                        </svg>
+                        <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                       </button>
                     </div>
                   </div>
@@ -514,9 +512,7 @@ export const RecipesPage = () => {
                           }))
                         }
                       >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M6 7h12M9 7v10m6-10v10M10 4h4l1 2H9l1-2z" />
-                        </svg>
+                        <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                       </button>
                     </div>
                   </div>

@@ -152,6 +152,9 @@ export const OrdersPage = () => {
   const [tab, setTab] = useState<'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'>('pessoa');
   const [form, setForm] = useState(newOrderForm(orderDefaults));
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [editProductIndex, setEditProductIndex] = useState<number | null>(null);
+  const [editProductName, setEditProductName] = useState('');
+  const [editProductUnitPrice, setEditProductUnitPrice] = useState(0);
   const [customerForm, setCustomerForm] = useState({
     name: '',
     phone: '',
@@ -351,6 +354,26 @@ export const OrdersPage = () => {
       ...prev,
       products: [...prev.products, { productId: '', name: '', unitPrice: 0, quantity: 1, notes: '' }]
     }));
+  };
+
+  const openProductEditModal = (index: number) => {
+    const item = form.products[index];
+    if (!item) return;
+    setEditProductIndex(index);
+    setEditProductName(item.name);
+    setEditProductUnitPrice(item.unitPrice);
+  };
+
+  const applyProductEditModal = () => {
+    if (editProductIndex === null) return;
+    const next = [...form.products];
+    next[editProductIndex] = {
+      ...next[editProductIndex],
+      name: editProductName,
+      unitPrice: editProductUnitPrice
+    };
+    setForm({ ...form, products: next });
+    setEditProductIndex(null);
   };
 
   const addAddition = () => {
@@ -632,7 +655,7 @@ export const OrdersPage = () => {
                   <h4>Produtos</h4>
                   <div className="ingredients">
                     {form.products.map((item, index) => (
-                      <div key={index} className="ingredients-row ingredients-row-3">
+                      <div key={index} className="order-product-row">
                         <SearchableSelect
                           value={item.productId}
                           onChange={(value) => {
@@ -649,51 +672,34 @@ export const OrdersPage = () => {
                           options={productOptions}
                           placeholder="Selecione o produto"
                         />
-                        <div className="inline-field">
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const next = [...form.products];
-                              next[index] = { ...next[index], quantity: Number(e.target.value || 1) };
-                              setForm({ ...form, products: next });
-                            }}
-                          />
-                          <div className="inline-right">
-                            <button
-                              type="button"
-                              className="icon-button tiny"
-                              aria-label="Remover"
-                              onClick={() => setForm({ ...form, products: form.products.filter((_, i) => i !== index) })}
-                            >
-                              <span className="material-symbols-outlined" aria-hidden="true">delete</span>
-                            </button>
-                          </div>
-                        </div>
-                        <div className="grid-2">
-                          <label>
-                            Nome no pedido
-                            <input
-                              value={item.name}
-                              onChange={(e) => {
-                                const next = [...form.products];
-                                next[index] = { ...next[index], name: e.target.value };
-                                setForm({ ...form, products: next });
-                              }}
-                            />
-                          </label>
-                          <label>
-                            Valor unitario no pedido
-                            <MoneyInput
-                              value={item.unitPrice}
-                              onChange={(value) => {
-                                const next = [...form.products];
-                                next[index] = { ...next[index], unitPrice: value };
-                                setForm({ ...form, products: next });
-                              }}
-                            />
-                          </label>
+                        <input
+                          className="order-product-qty"
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const next = [...form.products];
+                            next[index] = { ...next[index], quantity: Number(e.target.value || 1) };
+                            setForm({ ...form, products: next });
+                          }}
+                        />
+                        <div className="order-product-actions">
+                          <button
+                            type="button"
+                            className="icon-button tiny"
+                            aria-label="Editar item do pedido"
+                            onClick={() => openProductEditModal(index)}
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button tiny"
+                            aria-label="Remover"
+                            onClick={() => setForm({ ...form, products: form.products.filter((_, i) => i !== index) })}
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -763,7 +769,7 @@ export const OrdersPage = () => {
                             aria-label="Remover valor"
                             onClick={() => setForm({ ...form, additions: form.additions.filter((_, i) => i !== index) })}
                           >
-                            <span className="material-symbols-outlined" aria-hidden="true">delete</span>
+                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                           </button>
                         </div>
                       </div>
@@ -831,9 +837,8 @@ export const OrdersPage = () => {
                 <h4>Pagamentos</h4>
                 <div className="summary">
                   <div><span>Total pedido</span><strong>{formatCurrency(totals.total)}</strong></div>
-                  <div><span>Total pago</span><strong>{formatCurrency(totals.paid)}</strong></div>
-                  <div className="summary-total"><span>Falta receber</span><strong>{formatCurrency(totals.pending)}</strong></div>
                 </div>
+                <button type="button" className="ghost" onClick={addPayment}>+ Adicionar pagamento</button>
                 <div className="ingredients">
                   {form.payments.map((payment, index) => (
                     <div key={index} className="grid-3">
@@ -854,7 +859,10 @@ export const OrdersPage = () => {
                       }} /></label>
                     </div>
                   ))}
-                  <button type="button" className="ghost" onClick={addPayment}>+ Adicionar pagamento</button>
+                </div>
+                <div className="summary">
+                  <div><span>Total pago</span><strong>{formatCurrency(totals.paid)}</strong></div>
+                  <div className="summary-total"><span>Falta receber</span><strong>{formatCurrency(totals.pending)}</strong></div>
                 </div>
               </div>
             )}
@@ -902,6 +910,31 @@ export const OrdersPage = () => {
             </div>
             {submitError && <div className="error">{submitError}</div>}
           </form>
+        </div>
+      )}
+
+      {editProductIndex !== null && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <h4>Editar item do pedido</h4>
+              <p>Essa alteracao vale apenas para este pedido.</p>
+            </div>
+            <div className="form">
+              <label>
+                Nome no pedido
+                <input value={editProductName} onChange={(e) => setEditProductName(e.target.value)} />
+              </label>
+              <label>
+                Valor unitario no pedido
+                <MoneyInput value={editProductUnitPrice} onChange={setEditProductUnitPrice} />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => setEditProductIndex(null)}>Cancelar</button>
+              <button type="button" onClick={applyProductEditModal}>Salvar item</button>
+            </div>
+          </div>
         </div>
       )}
 

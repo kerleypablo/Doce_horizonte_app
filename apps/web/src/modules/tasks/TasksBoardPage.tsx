@@ -265,10 +265,24 @@ export const TasksBoardPage = () => {
                             <span>{order.customerSnapshot?.name ?? 'Sem cliente'} • {order.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</span>
                           </div>
                           <div className="tasks-card-actions">
-                            <button type="button" className="ghost" onClick={() => toggleCardExpanded(order)}>
-                              {isExpanded ? 'Retrair' : 'Expandir'}
+                            <button
+                              type="button"
+                              className="icon-button tiny"
+                              aria-label={isExpanded ? 'Retrair' : 'Expandir'}
+                              onClick={() => toggleCardExpanded(order)}
+                            >
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                {isExpanded ? 'unfold_less' : 'unfold_more'}
+                              </span>
                             </button>
-                            <button type="button" className="ghost" onClick={() => setExpandedOrderId(order.id)}>Tela cheia</button>
+                            <button
+                              type="button"
+                              className="icon-button tiny"
+                              aria-label="Tela cheia"
+                              onClick={() => setExpandedOrderId(order.id)}
+                            >
+                              <span className="material-symbols-outlined" aria-hidden="true">open_in_full</span>
+                            </button>
                           </div>
                         </div>
                         {isExpanded ? (
