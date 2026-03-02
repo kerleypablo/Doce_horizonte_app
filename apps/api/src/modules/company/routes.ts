@@ -231,4 +231,32 @@ export const companyRoutes = async (app: FastifyInstance) => {
 
     return reply.send({ ok: true });
   });
+
+  app.delete('/company/users/:authUserId', { preHandler: app.authenticate }, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { userId: string; companyId: string; role: string } }).auth;
+    if (auth.role !== 'admin') return reply.status(403).send({ message: 'Apenas admin' });
+
+    const params = userParamsSchema.parse(request.params);
+    if (params.authUserId === auth.userId) {
+      return reply.status(400).send({ message: 'Voce nao pode remover seu proprio acesso' });
+    }
+
+    const { data: removed, error } = await supabaseAdmin
+      .from('app_users')
+      .delete()
+      .eq('auth_user_id', params.authUserId)
+      .eq('company_id', auth.companyId)
+      .select('auth_user_id')
+      .maybeSingle();
+
+    if (error) {
+      return reply.status(400).send({ message: 'Erro ao remover acesso', detail: error.message });
+    }
+
+    if (!removed) {
+      return reply.status(404).send({ message: 'Usuario nao encontrado nesta empresa' });
+    }
+
+    return reply.status(204).send();
+  });
 };

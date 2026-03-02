@@ -152,6 +152,7 @@ export const DashboardPage = () => {
               </span>
             </button>
           </div>
+          <div className="home-revenue-divider" aria-hidden="true" />
         </div>
       </div>
 

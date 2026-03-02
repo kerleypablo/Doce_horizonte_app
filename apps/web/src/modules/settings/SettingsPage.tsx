@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
+import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
@@ -52,6 +53,7 @@ export const SettingsPage = () => {
   const { user } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [roleSavingUserId, setRoleSavingUserId] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<CompanyUser | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const settingsQuery = useCachedQuery(
@@ -150,6 +152,26 @@ export const SettingsPage = () => {
     }
   };
 
+  const handleDeleteAccess = async () => {
+    if (!userToDelete) return;
+    setRoleSavingUserId(userToDelete.authUserId);
+    setSubmitError(null);
+    try {
+      await apiFetch(`/company/users/${userToDelete.authUserId}`, {
+        method: 'DELETE',
+        token: user?.token
+      });
+      setUserToDelete(null);
+      invalidateQueryCache(queryKeys.companyUsers);
+      await usersQuery.refetch();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao remover acesso';
+      setSubmitError(message);
+    } finally {
+      setRoleSavingUserId(null);
+    }
+  };
+
   if (user?.role !== 'admin') {
     return (
       <div className="panel">
@@ -218,28 +240,36 @@ export const SettingsPage = () => {
         <h3>Usuarios da empresa</h3>
         {usersQuery.loading && !usersQuery.data ? <p>Carregando usuarios...</p> : null}
         {!usersQuery.loading && (usersQuery.data?.length ?? 0) === 0 ? <p>Nenhum usuario vinculado.</p> : null}
-        <div className="table">
-          <div className="table-head">
-            <span>Usuario</span>
-            <span>Email</span>
-            <span>Permissao</span>
-          </div>
+        <div className="company-users-list">
           {(usersQuery.data ?? []).map((companyUser) => (
-            <div key={companyUser.authUserId} className="table-row">
-              <span>
-                {companyUser.name || 'Sem nome'}
-              </span>
-              <span>{companyUser.email || '-'}</span>
-              <span>
-                <select
-                  value={companyUser.role}
-                  onChange={(event) => handleRoleChange(companyUser.authUserId, event.target.value as 'admin' | 'common')}
+            <div key={companyUser.authUserId} className="company-user-row">
+              <div className="company-user-main">
+                {companyUser.avatarUrl ? (
+                  <img src={companyUser.avatarUrl} alt={companyUser.name || companyUser.email || 'Usuario'} />
+                ) : (
+                  <span className="material-symbols-outlined" aria-hidden="true">person</span>
+                )}
+                <span>{companyUser.name || companyUser.email || 'Sem nome'}</span>
+              </div>
+              <div className="company-user-actions">
+                <label className="settings-switch compact">
+                  <span>Admin</span>
+                  <input
+                    type="checkbox"
+                    checked={companyUser.role === 'admin'}
+                    onChange={(event) => handleRoleChange(companyUser.authUserId, event.target.checked ? 'admin' : 'common')}
+                    disabled={roleSavingUserId === companyUser.authUserId}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setUserToDelete(companyUser)}
                   disabled={roleSavingUserId === companyUser.authUserId}
                 >
-                  <option value="common">Comum</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </span>
+                  Remover
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -281,6 +311,15 @@ export const SettingsPage = () => {
         </button>
       </div>
       {submitError ? <div className="panel"><p className="error">{submitError}</p></div> : null}
+      <ConfirmDialog
+        open={Boolean(userToDelete)}
+        title="Remover acesso"
+        message={`Deseja remover o acesso de ${userToDelete?.name || userToDelete?.email || 'este usuario'}?`}
+        confirmLabel="Remover"
+        cancelLabel="Cancelar"
+        onCancel={() => setUserToDelete(null)}
+        onConfirm={handleDeleteAccess}
+      />
       <LoadingOverlay open={saving} label="Salvando configuracoes..." />
     </div>
   );

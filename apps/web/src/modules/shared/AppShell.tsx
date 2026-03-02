@@ -58,10 +58,19 @@ const isPathActive = (pathname: string, path: string) => {
   return pathname === path || pathname.startsWith(`${path}/`);
 };
 
+const getHeaderTitle = (pathname: string) => {
+  if (pathname === '/app') return 'Controle de Precificacao';
+  const matched = navItems.find((item) => isPathActive(pathname, item.path));
+  if (!matched) return 'Controle de Precificacao';
+  if (matched.path === '/app/pedidos' && pathname !== '/app/pedidos') return 'Pedido';
+  return matched.label;
+};
+
 export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const headerTitle = getHeaderTitle(pathname);
   const activeBottomIndex = bottomNavItems.findIndex((item) => isPathActive(pathname, item.path));
   const settingsQuery = useCachedQuery(
     queryKeys.companySettings,
@@ -132,8 +141,8 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             <span className="material-symbols-outlined" aria-hidden="true">menu</span>
           </button>
           <div className="mobile-title">
-            <span>Controle</span>
-            <strong>Precificacao</strong>
+            <span>{pathname === '/app' ? 'Controle' : 'Tela'}</span>
+            <strong>{headerTitle}</strong>
           </div>
           <div className="mobile-user" aria-label="Usuario logado">
             {avatarContent}
@@ -141,8 +150,8 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
         </header>
         <header className="app-header">
           <div>
-            <h2>Controle de Precificacao</h2>
-            <p>Custos, receitas e margens sempre atualizados.</p>
+            <h2>{headerTitle}</h2>
+            {pathname === '/app' ? <p>Custos, receitas e margens sempre atualizados.</p> : null}
           </div>
           <div className="header-actions">
             <span>{user?.role === 'admin' ? 'Administrador' : 'Operacional'}</span>

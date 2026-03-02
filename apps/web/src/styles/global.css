@@ -789,11 +789,11 @@ button:disabled {
 }
 
 .home-company-title img {
-  width: 54px;
-  height: 54px;
-  object-fit: cover;
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  width: 156px;
+  height: 78px;
+  object-fit: contain;
+  border-radius: 0;
+  border: none;
 }
 
 .home-company-title h3 {
@@ -822,6 +822,14 @@ button:disabled {
 .home-revenue-value-row strong {
   font-size: 20px;
   letter-spacing: 0.01em;
+}
+
+.home-revenue-divider {
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 38%, var(--border));
+  margin-top: 4px;
 }
 
 .home-shortcut-card {
@@ -992,6 +1000,11 @@ button:disabled {
   justify-content: space-between;
 }
 
+.settings-switch.compact {
+  font-size: 12px;
+  gap: 8px;
+}
+
 .settings-switch input[type='checkbox'] {
   appearance: none;
   width: 44px;
@@ -1023,6 +1036,59 @@ button:disabled {
 
 .settings-switch input[type='checkbox']:checked::after {
   transform: translateX(20px);
+}
+
+.company-users-list {
+  display: grid;
+  gap: 8px;
+}
+
+.company-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fffdfb;
+  min-width: 0;
+}
+
+.company-user-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.company-user-main img,
+.company-user-main .material-symbols-outlined {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--surface-alt);
+}
+
+.company-user-main span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.company-user-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.company-user-actions .ghost {
+  padding: 8px 10px;
+  border-style: solid;
 }
 
 .table {
@@ -1599,6 +1665,14 @@ button:disabled {
 
   .home-shortcut-card {
     min-height: 132px;
+  }
+
+  .company-users-list {
+    overflow-x: auto;
+  }
+
+  .company-user-row {
+    min-width: 520px;
   }
 
   .home-calendar-nav strong {
