@@ -5,9 +5,11 @@ import { useAuth } from './AuthContext.tsx';
 import { GoogleButton } from './GoogleButton.tsx';
 
 export const RegisterPage = () => {
+  const [mode, setMode] = useState<'create' | 'join'>('create');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [companyCode, setCompanyCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -24,14 +26,23 @@ export const RegisterPage = () => {
         body: JSON.stringify({ email, password })
       });
 
-      await apiFetch('/onboarding/company', {
-        method: 'POST',
-        token: signup.token,
-        body: JSON.stringify({ companyName })
-      });
+      if (mode === 'create') {
+        await apiFetch('/onboarding/company', {
+          method: 'POST',
+          token: signup.token,
+          body: JSON.stringify({ companyName })
+        });
+      } else {
+        await apiFetch('/onboarding/join-company', {
+          method: 'POST',
+          token: signup.token,
+          body: JSON.stringify({ companyCode })
+        });
+      }
 
-      login(signup.token, 'admin');
-      navigate('/app/empresa');
+      const me = await apiFetch<{ role: 'admin' | 'common' }>('/auth/me', { token: signup.token });
+      login(signup.token, me.role);
+      navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar conta');
     } finally {
@@ -47,16 +58,46 @@ export const RegisterPage = () => {
           <strong>Precificacao</strong>
         </div>
         <h1>Criar conta</h1>
-        <p>Crie sua empresa e comece a precificar.</p>
+        <p>Crie uma empresa nova ou use o codigo de uma empresa existente.</p>
+        <div className="tabs">
+          <button
+            type="button"
+            className={mode === 'create' ? 'tab-icon active' : 'tab-icon'}
+            onClick={() => setMode('create')}
+            aria-label="Criar empresa"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">add_business</span>
+          </button>
+          <button
+            type="button"
+            className={mode === 'join' ? 'tab-icon active' : 'tab-icon'}
+            onClick={() => setMode('join')}
+            aria-label="Entrar com codigo"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">group_add</span>
+          </button>
+        </div>
         <form onSubmit={handleSubmit}>
-          <label>
-            Nome da empresa
-            <input
-              value={companyName}
-              onChange={(event) => setCompanyName(event.target.value)}
-              required
-            />
-          </label>
+          {mode === 'create' ? (
+            <label>
+              Nome da empresa
+              <input
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                required
+              />
+            </label>
+          ) : (
+            <label>
+              Codigo da empresa
+              <input
+                value={companyCode}
+                onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
+                placeholder="Ex.: A1B2C3D4"
+                required
+              />
+            </label>
+          )}
           <label>
             Email
             <input
