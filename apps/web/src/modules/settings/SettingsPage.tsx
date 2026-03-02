@@ -66,6 +66,18 @@ export const SettingsPage = () => {
     () => apiFetch<CompanyUser[]>('/company/users', { token: user?.token }),
     { staleTime: 60_000, enabled: Boolean(user?.token && user?.role === 'admin') }
   );
+  const currentAuthUserId = (() => {
+    if (!user?.token) return '';
+    try {
+      const payloadPart = user.token.split('.')[1];
+      if (!payloadPart) return '';
+      const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(normalized)) as { sub?: string };
+      return payload.sub ?? '';
+    } catch {
+      return '';
+    }
+  })();
 
   useEffect(() => {
     if (settingsQuery.data) {
@@ -258,14 +270,14 @@ export const SettingsPage = () => {
                     type="checkbox"
                     checked={companyUser.role === 'admin'}
                     onChange={(event) => handleRoleChange(companyUser.authUserId, event.target.checked ? 'admin' : 'common')}
-                    disabled={roleSavingUserId === companyUser.authUserId}
+                    disabled={roleSavingUserId === companyUser.authUserId || companyUser.authUserId === currentAuthUserId}
                   />
                 </label>
                 <button
                   type="button"
                   className="ghost"
                   onClick={() => setUserToDelete(companyUser)}
-                  disabled={roleSavingUserId === companyUser.authUserId}
+                  disabled={roleSavingUserId === companyUser.authUserId || companyUser.authUserId === currentAuthUserId}
                 >
                   Remover
                 </button>

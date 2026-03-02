@@ -34,7 +34,7 @@ const userRoleSchema = z.object({
 });
 
 const userParamsSchema = z.object({
-  authUserId: z.string().uuid()
+  authUserId: z.string().min(1)
 });
 
 export const companyRoutes = async (app: FastifyInstance) => {
@@ -213,19 +213,18 @@ export const companyRoutes = async (app: FastifyInstance) => {
       return reply.status(400).send({ message: 'Voce nao pode remover seu proprio acesso de admin' });
     }
 
-    const { data: updated, error } = await supabaseAdmin
+    const { data: updatedRows, error } = await supabaseAdmin
       .from('app_users')
       .update({ role: data.role })
       .eq('auth_user_id', params.authUserId)
       .eq('company_id', auth.companyId)
-      .select('auth_user_id')
-      .maybeSingle();
+      .select('auth_user_id');
 
     if (error) {
       return reply.status(400).send({ message: 'Erro ao atualizar permissao', detail: error.message });
     }
 
-    if (!updated) {
+    if (!updatedRows || updatedRows.length === 0) {
       return reply.status(404).send({ message: 'Usuario nao encontrado nesta empresa' });
     }
 
@@ -241,19 +240,18 @@ export const companyRoutes = async (app: FastifyInstance) => {
       return reply.status(400).send({ message: 'Voce nao pode remover seu proprio acesso' });
     }
 
-    const { data: removed, error } = await supabaseAdmin
+    const { data: removedRows, error } = await supabaseAdmin
       .from('app_users')
       .delete()
       .eq('auth_user_id', params.authUserId)
       .eq('company_id', auth.companyId)
-      .select('auth_user_id')
-      .maybeSingle();
+      .select('auth_user_id');
 
     if (error) {
       return reply.status(400).send({ message: 'Erro ao remover acesso', detail: error.message });
     }
 
-    if (!removed) {
+    if (!removedRows || removedRows.length === 0) {
       return reply.status(404).send({ message: 'Usuario nao encontrado nesta empresa' });
     }
 

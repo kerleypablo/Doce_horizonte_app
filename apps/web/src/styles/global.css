@@ -193,6 +193,7 @@ select {
 
 main {
   padding: 36px 40px 80px;
+  min-width: 0;
 }
 
 .app-header {
@@ -227,11 +228,13 @@ main {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-width: 0;
 }
 
 .page {
   display: grid;
   gap: 24px;
+  min-width: 0;
 }
 
 .panel {
@@ -240,6 +243,7 @@ main {
   border-radius: 20px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
+  min-width: 0;
 }
 
 .panel h3 {
@@ -1412,26 +1416,27 @@ button:disabled {
 
 .add-item-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px;
+  grid-template-columns: minmax(0, 1fr) 84px auto;
   gap: 8px;
-  align-items: end;
-}
-
-.add-item-select-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
   align-items: center;
 }
 
-.add-item-qty {
-  font-size: 11px;
-  gap: 4px;
-}
-
-.add-item-qty input {
+.add-item-qty-input {
+  width: 100%;
   text-align: center;
   padding: 8px 6px;
+}
+
+.add-item-unit-select {
+  width: 74px;
+}
+
+.recipe-add-item-row {
+  grid-template-columns: minmax(0, 1fr) 84px 74px auto;
+}
+
+.recipe-sub-item-row {
+  grid-template-columns: minmax(0, 1fr) 84px auto;
 }
 
 .table {
@@ -2045,7 +2050,8 @@ button:disabled {
     min-width: 0;
     gap: 6px;
     padding: 7px 8px;
-    font-size: 11px;
+    font-size: 10px;
+    overflow: hidden;
   }
 
   .company-user-main img,
@@ -2055,17 +2061,24 @@ button:disabled {
   }
 
   .company-user-actions {
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
   }
 
   .company-user-actions .ghost {
-    padding: 5px 7px;
-    font-size: 10px;
+    padding: 4px 6px;
+    font-size: 9px;
+    line-height: 1.1;
   }
 
   .settings-switch.compact {
-    font-size: 10px;
-    gap: 4px;
+    font-size: 9px;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .settings-switch.compact span {
+    display: none;
   }
 
   .settings-switch.compact input[type='checkbox'] {
@@ -2179,12 +2192,25 @@ button:disabled {
   }
 
   .add-item-row {
-    grid-template-columns: 1fr 88px;
+    grid-template-columns: minmax(0, 1fr) 72px auto;
     gap: 6px;
   }
 
-  .add-item-qty {
-    font-size: 10px;
+  .add-item-qty-input {
+    padding: 7px 4px;
+    font-size: 12px;
+  }
+
+  .add-item-unit-select {
+    width: 62px;
+  }
+
+  .recipe-add-item-row {
+    grid-template-columns: minmax(0, 1fr) 66px 62px auto;
+  }
+
+  .recipe-sub-item-row {
+    grid-template-columns: minmax(0, 1fr) 66px auto;
   }
 
   .order-editor .values-row {

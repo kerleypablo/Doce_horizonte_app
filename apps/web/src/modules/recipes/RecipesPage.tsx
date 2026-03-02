@@ -253,7 +253,7 @@ export const RecipesPage = () => {
         .filter((recipe) => recipe.id !== editingId)
         .map((recipe) => ({
           value: recipe.id,
-          label: `${recipe.name} • rendimento ${recipe.yield} ${recipe.yieldUnit}`
+          label: `${recipe.name} • ${recipe.yield} ${recipe.yieldUnit}`
         })),
     [recipes, editingId]
   );
@@ -311,7 +311,7 @@ export const RecipesPage = () => {
   }, [form, inputs, recipes, settings, editingId]);
 
   return (
-    <div className="page">
+    <div className="page recipes-page">
       <div className="panel">
         <ListToolbar
           title="Receitas cadastradas"
@@ -424,7 +424,7 @@ export const RecipesPage = () => {
             <h3>Insumos</h3>
             <div className="ingredients">
               {form.ingredients.map((ingredient, index) => (
-                <div key={`${ingredient.inputId}-${index}`} className="ingredients-row ingredients-row-3">
+                <div key={`${ingredient.inputId}-${index}`} className="add-item-row recipe-add-item-row">
                   <SearchableSelect
                     value={ingredient.inputId}
                     onChange={(value) => {
@@ -442,36 +442,34 @@ export const RecipesPage = () => {
                     options={inputOptions}
                     placeholder="Selecione o insumo"
                   />
-                  <div className="inline-field">
-                    <input
-                      type="number"
-                      value={ingredient.quantity === 0 ? '' : ingredient.quantity}
-                      onChange={(e) => handleIngredientChange(index, 'quantity', Number(e.target.value || 0))}
-                      min={0}
-                      step="0.01"
-                    />
-                    <div className="inline-right">
-                      <SelectField
-                        className="unit-select"
-                        value={ingredient.unit}
-                        onChange={(value) => handleIngredientChange(index, 'unit', value)}
-                        options={unitOptionsForInput(ingredient.inputId)}
-                      />
-                      <button
-                        type="button"
-                        className="icon-button tiny"
-                        aria-label="Remover"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            ingredients: prev.ingredients.filter((_, itemIndex) => itemIndex !== index)
-                          }))
-                        }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                      </button>
-                    </div>
-                  </div>
+                  <input
+                    className="add-item-qty-input"
+                    type="number"
+                    value={ingredient.quantity === 0 ? '' : ingredient.quantity}
+                    onChange={(e) => handleIngredientChange(index, 'quantity', Number(e.target.value || 0))}
+                    min={0}
+                    step="0.01"
+                    aria-label="Quantidade"
+                  />
+                  <SelectField
+                    className="add-item-unit-select"
+                    value={ingredient.unit}
+                    onChange={(value) => handleIngredientChange(index, 'unit', value)}
+                    options={unitOptionsForInput(ingredient.inputId)}
+                  />
+                  <button
+                    type="button"
+                    className="icon-button tiny"
+                    aria-label="Remover"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        ingredients: prev.ingredients.filter((_, itemIndex) => itemIndex !== index)
+                      }))
+                    }
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addIngredient}>
@@ -484,38 +482,35 @@ export const RecipesPage = () => {
             <h3>Outras receitas</h3>
             <div className="ingredients">
               {form.subRecipes.map((item, index) => (
-                <div key={`${item.recipeId}-${index}`} className="ingredients-row ingredients-row-3">
+                <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-sub-item-row">
                   <SearchableSelect
                     value={item.recipeId}
                     onChange={(value) => handleSubRecipeChange(index, 'recipeId', value)}
                     options={recipeOptions}
                     placeholder="Selecione a receita"
                   />
-                  <div className="inline-field">
-                    <input
-                      type="number"
-                      value={item.quantity === 0 ? '' : item.quantity}
-                      onChange={(e) => handleSubRecipeChange(index, 'quantity', Number(e.target.value || 0))}
-                      min={0}
-                      step="0.01"
-                    />
-                    <div className="inline-right">
-                      <div className="unit-tag">{form.yieldUnit}</div>
-                      <button
-                        type="button"
-                        className="icon-button tiny"
-                        aria-label="Remover"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            subRecipes: prev.subRecipes.filter((_, itemIndex) => itemIndex !== index)
-                          }))
-                        }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                      </button>
-                    </div>
-                  </div>
+                  <input
+                    className="add-item-qty-input"
+                    type="number"
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={(e) => handleSubRecipeChange(index, 'quantity', Number(e.target.value || 0))}
+                    min={0}
+                    step="0.01"
+                    aria-label="Quantidade"
+                  />
+                  <button
+                    type="button"
+                    className="icon-button tiny"
+                    aria-label="Remover"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        subRecipes: prev.subRecipes.filter((_, itemIndex) => itemIndex !== index)
+                      }))
+                    }
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addSubRecipe}>

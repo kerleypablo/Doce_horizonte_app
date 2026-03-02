@@ -71,6 +71,8 @@ type OrderListItem = {
 };
 
 type CompanySettings = {
+  companyName?: string;
+  logoDataUrl?: string;
   defaultNotesDelivery?: string;
   defaultNotesGeneral?: string;
   defaultNotesPayment?: string;
@@ -87,6 +89,19 @@ const orderTabs: Array<{ key: 'pessoa' | 'produtos' | 'observacoes' | 'pagamento
 
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
+const formatDateBr = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString('pt-BR');
+};
+const escapeHtml = (value?: string) =>
+  (value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 const formatPhoneBR = (value: string) => {
   const digits = onlyDigits(value).slice(0, 11);
@@ -430,10 +445,12 @@ export const OrdersPage = () => {
 
   const generatePdf = (order: OrderItem) => {
     const customer = order.customerSnapshot;
+    const companyName = settingsQuery.data?.companyName ?? 'Controle Precificacao';
+    const logoDataUrl = settingsQuery.data?.logoDataUrl ?? '';
     const productsHtml = (order.products ?? [])
       .map(
         (item, index) =>
-          `<tr><td>${index + 1}</td><td>${item.name}</td><td>${item.quantity}</td><td>${formatCurrency(item.unitPrice)}</td><td>${formatCurrency(
+          `<tr><td>${index + 1}</td><td>${escapeHtml(item.name)}</td><td>${item.quantity}</td><td>${formatCurrency(item.unitPrice)}</td><td>${formatCurrency(
             item.unitPrice * item.quantity
           )}</td></tr>`
       )
@@ -455,25 +472,81 @@ export const OrdersPage = () => {
       })
       .join('');
     const note = (value?: string) => (value && value.trim().length ? value : '-');
+    const additionsSummaryHtml = (order.additions ?? [])
+      .map((item) => {
+        const value = item.mode === 'FIXED' ? item.value : (productsTotal * item.value) / 100;
+        const suffix = item.mode === 'PERCENT' ? ` (${item.value}%)` : '';
+        return `<div class="summary-line"><span>${escapeHtml(item.label)}${suffix}</span><strong>${formatCurrency(value)}</strong></div>`;
+      })
+      .join('');
 
     const html = `<!doctype html><html><head><meta charset="utf-8"/><title>${order.type} ${order.number}</title>
-      <style>body{font-family:Arial,sans-serif;padding:24px;color:#222}h1{margin:0 0 8px}table{width:100%;border-collapse:collapse;margin-top:12px}
-      th,td{border:1px solid #ddd;padding:8px;text-align:left} .meta{margin:8px 0} .total{margin-top:16px;font-size:18px;font-weight:700;text-align:right}
-      .totals-table{width:420px;margin-left:auto}.note-box{border:1px solid #ddd;padding:10px;border-radius:8px;white-space:pre-wrap;margin-top:8px}</style></head><body>
-      <h1>${order.type} ${order.number}</h1>
-      <div class="meta">Cliente: ${customer?.name ?? '-'} | Telefone: ${customer?.phone ?? '-'}</div>
-      <div class="meta">Entrega/Retirada: ${order.deliveryType}</div>
-      <div class="meta">Data entrega: ${order.deliveryDate ?? '-'}</div>
-      <table><thead><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Valor unit.</th><th>Total</th></tr></thead><tbody>${productsHtml}</tbody></table>
-      <table class="totals-table"><tbody>
-      ${additionsLines}
-      <tr><td>Desconto${order.discountMode === 'PERCENT' ? ` (${order.discountValue}%)` : ''}</td><td>- ${formatCurrency(discountTotal)}</td></tr>
-      <tr><td>Frete</td><td>${formatCurrency(order.shippingValue ?? 0)}</td></tr>
-      </tbody></table>
-      <div class="total">Total do pedido: ${formatCurrency(total)}</div>
-      <div class="meta">Obs entrega/retirada:</div><div class="note-box">${note(order.notesDelivery)}</div>
-      <div class="meta">Obs gerais:</div><div class="note-box">${note(order.notesGeneral)}</div>
-      <div class="meta">Obs pagamento:</div><div class="note-box">${note(order.notesPayment)}</div>
+      <style>
+        *{box-sizing:border-box}
+        body{font-family:Manrope,Arial,sans-serif;margin:0;padding:28px;color:#1f2328;background:#fff}
+        .wrap{max-width:860px;margin:0 auto}
+        .top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+        h1{font-family:"Space Grotesk",Arial,sans-serif;font-size:54px;line-height:1;margin:0 0 8px;color:#1f2328}
+        .subtitle{font-size:22px;color:#4c5158}
+        .logo{width:130px;height:90px;object-fit:contain}
+        .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:20px}
+        .card{border:1px solid #1f2328;padding:12px;position:relative;background:#f8f9fb;min-height:86px}
+        .card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:9px;background:#1f2328}
+        .card span{display:block;font-size:13px;color:#5a6068;margin-left:10px}
+        .card strong{display:block;font-size:30px;color:#1f2328;line-height:1.1;margin-left:10px}
+        .meta{margin-top:12px;font-size:14px;color:#2e3338}
+        table{width:100%;border-collapse:collapse;margin-top:18px}
+        th{background:#1f2328;color:#fff;padding:10px 8px;text-align:left;font-weight:600;font-size:13px}
+        td{padding:10px 8px;border-bottom:1px solid #dde1e6;font-size:14px}
+        td:nth-child(1),td:nth-child(3){text-align:center}
+        td:nth-child(4),td:nth-child(5){text-align:right}
+        .summary{margin-top:14px;display:grid;gap:6px;justify-items:end}
+        .summary-line{display:flex;justify-content:space-between;gap:14px;width:320px;font-size:14px}
+        .summary-line strong{font-weight:700}
+        .total-row{margin-top:8px;display:flex;align-items:stretch;width:320px}
+        .total-row .label{background:#1f2328;color:#fff;padding:12px 16px;font-weight:700;letter-spacing:.08em}
+        .total-row .value{border:1px solid #1f2328;border-left:none;padding:12px 16px;font-weight:800;font-size:24px;flex:1;text-align:right}
+        .footer{margin-top:24px;border-top:1px solid #d7dce2;padding-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+        .box{border:1px solid #d7dce2;padding:12px;min-height:116px}
+        .box h4{margin:0 0 8px;font-size:14px;color:#5a6068;text-transform:uppercase;letter-spacing:.06em}
+        .box p{margin:0;font-size:13px;line-height:1.45;white-space:pre-wrap}
+      </style></head><body>
+      <div class="wrap">
+        <div class="top">
+          <div>
+            <h1>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}</h1>
+            <div class="subtitle">${escapeHtml(companyName)}</div>
+          </div>
+          ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="Logo" />` : ''}
+        </div>
+        <div class="cards">
+          <div class="card"><span>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}:</span><strong>#${escapeHtml(order.number)}</strong></div>
+          <div class="card"><span>Data:</span><strong>${formatDateBr(order.orderDateTime)}</strong></div>
+          <div class="card"><span>Entrega:</span><strong>${order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'}</strong></div>
+        </div>
+        <div class="meta"><strong>Cliente:</strong> ${escapeHtml(customer?.name ?? '-')} | <strong>Telefone:</strong> ${escapeHtml(customer?.phone ?? '-')} | <strong>Tipo:</strong> ${order.deliveryType}</div>
+        <table>
+          <thead><tr><th>Nº</th><th>Descricao do Produto</th><th>Qt.</th><th>Preco</th><th>Total</th></tr></thead>
+          <tbody>${productsHtml || '<tr><td colspan="5" style="text-align:center">Sem produtos</td></tr>'}</tbody>
+        </table>
+        <div class="summary">
+          ${additionsSummaryHtml}
+          <div class="summary-line"><span>Desconto${order.discountMode === 'PERCENT' ? ` (${order.discountValue}%)` : ''}</span><strong>- ${formatCurrency(discountTotal)}</strong></div>
+          <div class="summary-line"><span>Frete</span><strong>${formatCurrency(order.shippingValue ?? 0)}</strong></div>
+          <div class="total-row"><div class="label">TOTAL</div><div class="value">${formatCurrency(total)}</div></div>
+        </div>
+        <div class="footer">
+          <div class="box">
+            <h4>Pagamento</h4>
+            <p>${escapeHtml(note(order.notesPayment))}</p>
+          </div>
+          <div class="box">
+            <h4>Observacoes</h4>
+            <p>Entrega/Retirada: ${escapeHtml(note(order.notesDelivery))}</p>
+            <p>${escapeHtml(note(order.notesGeneral))}</p>
+          </div>
+        </div>
+      </div>
       </body></html>`;
 
     const frame = document.createElement('iframe');

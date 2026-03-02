@@ -223,7 +223,7 @@ export const ProductsPage = () => {
     () =>
       recipes.map((recipe) => ({
         value: recipe.id,
-        label: `${recipe.name} • rendimento ${recipe.yield} ${recipe.yieldUnit}`
+        label: `${recipe.name} • ${recipe.yield} ${recipe.yieldUnit}`
       })),
     [recipes]
   );
@@ -513,45 +513,42 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.extraRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row">
-                  <div className="add-item-select-row">
-                    <SearchableSelect
-                      value={item.recipeId}
-                      onChange={(value) => {
-                        const next = [...form.extraRecipes];
-                        next[index] = { ...next[index], recipeId: value };
-                        setForm({ ...form, extraRecipes: next });
-                      }}
-                      options={recipeOptions}
-                      placeholder="Selecione a receita"
-                    />
-                    <button
-                      type="button"
-                      className="icon-button tiny"
-                      aria-label="Remover"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          extraRecipes: prev.extraRecipes.filter((_, itemIndex) => itemIndex !== index)
-                        }))
-                      }
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                    </button>
-                  </div>
-                  <label className="add-item-qty">
-                    <span>Qtd</span>
-                    <input
-                      type="number"
-                      value={item.quantity === 0 ? '' : item.quantity}
-                      onChange={(e) => {
-                        const next = [...form.extraRecipes];
-                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
-                        setForm({ ...form, extraRecipes: next });
-                      }}
-                      min={0}
-                      step="0.01"
-                    />
-                  </label>
+                  <SearchableSelect
+                    value={item.recipeId}
+                    onChange={(value) => {
+                      const next = [...form.extraRecipes];
+                      next[index] = { ...next[index], recipeId: value };
+                      setForm({ ...form, extraRecipes: next });
+                    }}
+                    options={recipeOptions}
+                    placeholder="Selecione a receita"
+                  />
+                  <input
+                    className="add-item-qty-input"
+                    type="number"
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={(e) => {
+                      const next = [...form.extraRecipes];
+                      next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
+                      setForm({ ...form, extraRecipes: next });
+                    }}
+                    min={0}
+                    step="0.01"
+                    aria-label="Quantidade"
+                  />
+                  <button
+                    type="button"
+                    className="icon-button tiny"
+                    aria-label="Remover"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        extraRecipes: prev.extraRecipes.filter((_, itemIndex) => itemIndex !== index)
+                      }))
+                    }
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addExtraRecipe}>
@@ -565,45 +562,42 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.extraProducts.map((item, index) => (
                 <div key={`${item.productId}-${index}`} className="add-item-row">
-                  <div className="add-item-select-row">
-                    <SearchableSelect
-                      value={item.productId}
-                      onChange={(value) => {
-                        const next = [...form.extraProducts];
-                        next[index] = { ...next[index], productId: value };
-                        setForm({ ...form, extraProducts: next });
-                      }}
-                      options={productOptions}
-                      placeholder="Selecione o produto"
-                    />
-                    <button
-                      type="button"
-                      className="icon-button tiny"
-                      aria-label="Remover"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          extraProducts: prev.extraProducts.filter((_, itemIndex) => itemIndex !== index)
-                        }))
-                      }
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                    </button>
-                  </div>
-                  <label className="add-item-qty">
-                    <span>Qtd</span>
-                    <input
-                      type="number"
-                      value={item.quantity === 0 ? '' : item.quantity}
-                      onChange={(e) => {
-                        const next = [...form.extraProducts];
-                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
-                        setForm({ ...form, extraProducts: next });
-                      }}
-                      min={0}
-                      step="0.01"
-                    />
-                  </label>
+                  <SearchableSelect
+                    value={item.productId}
+                    onChange={(value) => {
+                      const next = [...form.extraProducts];
+                      next[index] = { ...next[index], productId: value };
+                      setForm({ ...form, extraProducts: next });
+                    }}
+                    options={productOptions}
+                    placeholder="Selecione o produto"
+                  />
+                  <input
+                    className="add-item-qty-input"
+                    type="number"
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={(e) => {
+                      const next = [...form.extraProducts];
+                      next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
+                      setForm({ ...form, extraProducts: next });
+                    }}
+                    min={0}
+                    step="0.01"
+                    aria-label="Quantidade"
+                  />
+                  <button
+                    type="button"
+                    className="icon-button tiny"
+                    aria-label="Remover"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        extraProducts: prev.extraProducts.filter((_, itemIndex) => itemIndex !== index)
+                      }))
+                    }
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addExtraProduct}>
@@ -617,46 +611,43 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.packagingInputs.map((item, index) => (
                 <div key={`${item.inputId}-${index}`} className="add-item-row">
-                  <div className="add-item-select-row">
-                    <SearchableSelect
-                      value={item.inputId}
-                      onChange={(value) => {
-                        const next = [...form.packagingInputs];
-                        const input = inputsById.get(value);
-                        next[index] = { ...next[index], inputId: value, unit: (input?.unit as 'kg' | 'g' | 'l' | 'ml' | 'un') ?? 'un' };
-                        setForm({ ...form, packagingInputs: next });
-                      }}
-                      options={packagingOptions}
-                      placeholder="Selecione embalagem"
-                    />
-                    <button
-                      type="button"
-                      className="icon-button tiny"
-                      aria-label="Remover"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          packagingInputs: prev.packagingInputs.filter((_, itemIndex) => itemIndex !== index)
-                        }))
-                      }
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                    </button>
-                  </div>
-                  <label className="add-item-qty">
-                    <span>Qtd</span>
-                    <input
-                      type="number"
-                      value={item.quantity === 0 ? '' : item.quantity}
-                      onChange={(e) => {
-                        const next = [...form.packagingInputs];
-                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
-                        setForm({ ...form, packagingInputs: next });
-                      }}
-                      min={0}
-                      step="0.01"
-                    />
-                  </label>
+                  <SearchableSelect
+                    value={item.inputId}
+                    onChange={(value) => {
+                      const next = [...form.packagingInputs];
+                      const input = inputsById.get(value);
+                      next[index] = { ...next[index], inputId: value, unit: (input?.unit as 'kg' | 'g' | 'l' | 'ml' | 'un') ?? 'un' };
+                      setForm({ ...form, packagingInputs: next });
+                    }}
+                    options={packagingOptions}
+                    placeholder="Selecione embalagem"
+                  />
+                  <input
+                    className="add-item-qty-input"
+                    type="number"
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={(e) => {
+                      const next = [...form.packagingInputs];
+                      next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
+                      setForm({ ...form, packagingInputs: next });
+                    }}
+                    min={0}
+                    step="0.01"
+                    aria-label="Quantidade"
+                  />
+                  <button
+                    type="button"
+                    className="icon-button tiny"
+                    aria-label="Remover"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        packagingInputs: prev.packagingInputs.filter((_, itemIndex) => itemIndex !== index)
+                      }))
+                    }
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addPackaging}>
