@@ -48,7 +48,6 @@ type Settings = {
   }[];
 };
 
-const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
 export const ProductsPage = () => {
@@ -229,9 +228,10 @@ export const ProductsPage = () => {
     [recipes]
   );
   const recipesById = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
+  const inputsById = useMemo(() => new Map(inputs.map((input) => [input.id, input])), [inputs]);
 
   const productOptions = useMemo(
-    () => products.filter((p) => p.id !== editingId).map((p) => ({ value: p.id, label: p.name })),
+    () => products.filter((p) => p.id !== editingId).map((p) => ({ value: p.id, label: `${p.name} • un` })),
     [products, editingId]
   );
 
@@ -448,6 +448,19 @@ export const ProductsPage = () => {
             <h3>Calculo por unidade</h3>
             <div className="grid-2">
               <label>
+                Canal de venda
+                <SelectField
+                  value={form.channelId}
+                  onChange={(value) => setForm({ ...form, channelId: value })}
+                  options={(settings?.salesChannels ?? []).map((channel) => ({
+                    value: channel.id,
+                    label: channel.name
+                  }))}
+                />
+              </label>
+            </div>
+            <div className="grid-2 compact-grid">
+              <label>
                 Unidades produzidas
                 <input
                   type="number"
@@ -460,19 +473,6 @@ export const ProductsPage = () => {
                 />
               </label>
               <label>
-                Canal de venda
-                <SelectField
-                  value={form.channelId}
-                  onChange={(value) => setForm({ ...form, channelId: value })}
-                  options={(settings?.salesChannels ?? []).map((channel) => ({
-                    value: channel.id,
-                    label: channel.name
-                  }))}
-                />
-              </label>
-            </div>
-            <div className="grid-2">
-              <label>
                 Valor por unidade (calculado)
                 <MoneyInput
                   value={unitPriceInput}
@@ -480,7 +480,7 @@ export const ProductsPage = () => {
                 />
               </label>
             </div>
-            <div className="grid-2">
+            <div className="grid-2 compact-grid">
               <label>
                 % de lucro
                 <input
@@ -512,18 +512,34 @@ export const ProductsPage = () => {
             <h3>Adicionar receitas</h3>
             <div className="ingredients">
               {form.extraRecipes.map((item, index) => (
-                <div key={`${item.recipeId}-${index}`} className="ingredients-row ingredients-row-3">
-                  <SearchableSelect
-                    value={item.recipeId}
-                    onChange={(value) => {
-                      const next = [...form.extraRecipes];
-                      next[index] = { ...next[index], recipeId: value };
-                      setForm({ ...form, extraRecipes: next });
-                    }}
-                    options={recipeOptions}
-                    placeholder="Selecione a receita"
-                  />
-                  <div className="inline-field">
+                <div key={`${item.recipeId}-${index}`} className="add-item-row">
+                  <div className="add-item-select-row">
+                    <SearchableSelect
+                      value={item.recipeId}
+                      onChange={(value) => {
+                        const next = [...form.extraRecipes];
+                        next[index] = { ...next[index], recipeId: value };
+                        setForm({ ...form, extraRecipes: next });
+                      }}
+                      options={recipeOptions}
+                      placeholder="Selecione a receita"
+                    />
+                    <button
+                      type="button"
+                      className="icon-button tiny"
+                      aria-label="Remover"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          extraRecipes: prev.extraRecipes.filter((_, itemIndex) => itemIndex !== index)
+                        }))
+                      }
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                    </button>
+                  </div>
+                  <label className="add-item-qty">
+                    <span>Qtd</span>
                     <input
                       type="number"
                       value={item.quantity === 0 ? '' : item.quantity}
@@ -535,23 +551,7 @@ export const ProductsPage = () => {
                       min={0}
                       step="0.01"
                     />
-                    <div className="inline-right">
-                      <div className="unit-tag">{recipesById.get(item.recipeId)?.yieldUnit ?? 'un'}</div>
-                      <button
-                        type="button"
-                        className="icon-button tiny"
-                        aria-label="Remover"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            extraRecipes: prev.extraRecipes.filter((_, itemIndex) => itemIndex !== index)
-                          }))
-                        }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                      </button>
-                    </div>
-                  </div>
+                  </label>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addExtraRecipe}>
@@ -564,18 +564,34 @@ export const ProductsPage = () => {
             <h3>Adicionar produtos</h3>
             <div className="ingredients">
               {form.extraProducts.map((item, index) => (
-                <div key={`${item.productId}-${index}`} className="ingredients-row ingredients-row-3">
-                  <SearchableSelect
-                    value={item.productId}
-                    onChange={(value) => {
-                      const next = [...form.extraProducts];
-                      next[index] = { ...next[index], productId: value };
-                      setForm({ ...form, extraProducts: next });
-                    }}
-                    options={productOptions}
-                    placeholder="Selecione o produto"
-                  />
-                  <div className="inline-field">
+                <div key={`${item.productId}-${index}`} className="add-item-row">
+                  <div className="add-item-select-row">
+                    <SearchableSelect
+                      value={item.productId}
+                      onChange={(value) => {
+                        const next = [...form.extraProducts];
+                        next[index] = { ...next[index], productId: value };
+                        setForm({ ...form, extraProducts: next });
+                      }}
+                      options={productOptions}
+                      placeholder="Selecione o produto"
+                    />
+                    <button
+                      type="button"
+                      className="icon-button tiny"
+                      aria-label="Remover"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          extraProducts: prev.extraProducts.filter((_, itemIndex) => itemIndex !== index)
+                        }))
+                      }
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                    </button>
+                  </div>
+                  <label className="add-item-qty">
+                    <span>Qtd</span>
                     <input
                       type="number"
                       value={item.quantity === 0 ? '' : item.quantity}
@@ -587,23 +603,7 @@ export const ProductsPage = () => {
                       min={0}
                       step="0.01"
                     />
-                    <div className="inline-right">
-                      <div className="unit-tag">un</div>
-                      <button
-                        type="button"
-                        className="icon-button tiny"
-                        aria-label="Remover"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            extraProducts: prev.extraProducts.filter((_, itemIndex) => itemIndex !== index)
-                          }))
-                        }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                      </button>
-                    </div>
-                  </div>
+                  </label>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addExtraProduct}>
@@ -616,18 +616,35 @@ export const ProductsPage = () => {
             <h3>Embalagens</h3>
             <div className="ingredients">
               {form.packagingInputs.map((item, index) => (
-                <div key={`${item.inputId}-${index}`} className="ingredients-row ingredients-row-3">
-                  <SearchableSelect
-                    value={item.inputId}
-                    onChange={(value) => {
-                      const next = [...form.packagingInputs];
-                      next[index] = { ...next[index], inputId: value };
-                      setForm({ ...form, packagingInputs: next });
-                    }}
-                    options={packagingOptions}
-                    placeholder="Selecione embalagem"
-                  />
-                  <div className="inline-field">
+                <div key={`${item.inputId}-${index}`} className="add-item-row">
+                  <div className="add-item-select-row">
+                    <SearchableSelect
+                      value={item.inputId}
+                      onChange={(value) => {
+                        const next = [...form.packagingInputs];
+                        const input = inputsById.get(value);
+                        next[index] = { ...next[index], inputId: value, unit: (input?.unit as 'kg' | 'g' | 'l' | 'ml' | 'un') ?? 'un' };
+                        setForm({ ...form, packagingInputs: next });
+                      }}
+                      options={packagingOptions}
+                      placeholder="Selecione embalagem"
+                    />
+                    <button
+                      type="button"
+                      className="icon-button tiny"
+                      aria-label="Remover"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          packagingInputs: prev.packagingInputs.filter((_, itemIndex) => itemIndex !== index)
+                        }))
+                      }
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                    </button>
+                  </div>
+                  <label className="add-item-qty">
+                    <span>Qtd</span>
                     <input
                       type="number"
                       value={item.quantity === 0 ? '' : item.quantity}
@@ -639,32 +656,7 @@ export const ProductsPage = () => {
                       min={0}
                       step="0.01"
                     />
-                    <div className="inline-right">
-                      <SelectField
-                        className="unit-select"
-                        value={item.unit}
-                        onChange={(value) => {
-                          const next = [...form.packagingInputs];
-                          next[index] = { ...next[index], unit: value as 'kg' | 'g' | 'l' | 'ml' | 'un' };
-                          setForm({ ...form, packagingInputs: next });
-                        }}
-                        options={units.map((unit) => ({ value: unit, label: unit }))}
-                      />
-                      <button
-                        type="button"
-                        className="icon-button tiny"
-                        aria-label="Remover"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            packagingInputs: prev.packagingInputs.filter((_, itemIndex) => itemIndex !== index)
-                          }))
-                        }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                      </button>
-                    </div>
-                  </div>
+                  </label>
                 </div>
               ))}
               <button type="button" className="ghost" onClick={addPackaging}>

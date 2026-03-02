@@ -543,6 +543,9 @@ textarea {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .image-card {
@@ -565,7 +568,9 @@ textarea {
 .image-card span {
   font-size: 12px;
   color: var(--muted);
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag-input {
@@ -1401,6 +1406,34 @@ button:disabled {
   gap: 6px;
 }
 
+.compact-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.add-item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 8px;
+  align-items: end;
+}
+
+.add-item-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.add-item-qty {
+  font-size: 11px;
+  gap: 4px;
+}
+
+.add-item-qty input {
+  text-align: center;
+  padding: 8px 6px;
+}
+
 .table {
   display: flex;
   flex-direction: column;
@@ -2139,6 +2172,19 @@ button:disabled {
     max-width: 56px;
     padding: 8px 6px;
     font-size: 12px;
+  }
+
+  .compact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .add-item-row {
+    grid-template-columns: 1fr 88px;
+    gap: 6px;
+  }
+
+  .add-item-qty {
+    font-size: 10px;
   }
 
   .order-editor .values-row {
