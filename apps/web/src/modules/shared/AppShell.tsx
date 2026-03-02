@@ -38,6 +38,11 @@ const navItems = [
     icon: 'receipt_long'
   },
   {
+    path: '/app/tasks',
+    label: 'Tasks',
+    icon: 'checklist'
+  },
+  {
     path: '/app/empresa',
     label: 'Empresa',
     icon: 'domain'

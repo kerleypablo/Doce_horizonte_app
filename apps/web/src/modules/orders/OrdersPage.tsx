@@ -451,12 +451,26 @@ export const OrdersPage = () => {
       <div class="meta">Obs pagamento:</div><div class="note-box">${note(order.notesPayment)}</div>
       </body></html>`;
 
-    const popup = window.open('', '_blank');
-    if (!popup) return;
-    popup.document.write(html);
-    popup.document.close();
-    popup.focus();
-    popup.print();
+    const frame = document.createElement('iframe');
+    frame.style.position = 'fixed';
+    frame.style.right = '0';
+    frame.style.bottom = '0';
+    frame.style.width = '0';
+    frame.style.height = '0';
+    frame.style.border = '0';
+    frame.style.opacity = '0';
+    frame.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(frame);
+    frame.srcdoc = html;
+    frame.onload = () => {
+      setTimeout(() => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+        setTimeout(() => {
+          if (frame.parentNode) frame.parentNode.removeChild(frame);
+        }, 1200);
+      }, 80);
+    };
   };
 
   const handleGeneratePdf = async (orderIdToPrint: string) => {
@@ -493,7 +507,7 @@ export const OrdersPage = () => {
                   </span>
                 </div>
                 <div className="inline-right">
-                  <button type="button" className="icon-button small" onClick={() => handleGeneratePdf(order.id)} aria-label="PDF">
+                  <button type="button" className="icon-button small pdf-action" onClick={() => handleGeneratePdf(order.id)} aria-label="PDF">
                     <span className="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
                   </button>
                   <button

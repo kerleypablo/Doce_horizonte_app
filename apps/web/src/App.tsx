@@ -12,6 +12,7 @@ import { CompanySettingsPage } from './modules/company/CompanySettingsPage.tsx';
 import { CustomersPage } from './modules/customers/CustomersPage.tsx';
 import { OrdersPage } from './modules/orders/OrdersPage.tsx';
 import { SettingsPage } from './modules/settings/SettingsPage.tsx';
+import { TasksBoardPage } from './modules/tasks/TasksBoardPage.tsx';
 
 const App = () => {
   return (
@@ -30,6 +31,7 @@ const App = () => {
         <Route path="/app/pedidos" element={<OrdersPage />} />
         <Route path="/app/pedidos/novo" element={<OrdersPage />} />
         <Route path="/app/pedidos/:orderId" element={<OrdersPage />} />
+        <Route path="/app/tasks" element={<TasksBoardPage />} />
         <Route path="/app/empresa" element={<CompanySettingsPage />} />
         <Route path="/app/configuracoes" element={<SettingsPage />} />
       </Route>

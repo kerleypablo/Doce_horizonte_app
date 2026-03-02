@@ -158,7 +158,10 @@ export const DashboardPage = () => {
 
       <div className="panel home-calendar">
         <div className="home-calendar-header">
-          <h3>Calendario de pedidos</h3>
+          <div className="home-calendar-title-row">
+            <h3>Calendario de pedidos</h3>
+            <Link to="/app/tasks" className="ghost home-tasks-link">Modo Tasks</Link>
+          </div>
           <div className="home-calendar-nav">
             <button
               type="button"

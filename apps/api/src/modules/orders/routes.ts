@@ -159,6 +159,8 @@ export const orderRoutes = async (app: FastifyInstance) => {
     status: row.status,
     orderDateTime: row.order_datetime,
     deliveryDate: row.delivery_date ?? undefined,
+    deliveryType: row.delivery_type ?? 'ENTREGA',
+    notesGeneral: row.notes_general ?? '',
     customerSnapshot: row.customer_snapshot
       ? { name: row.customer_snapshot.name ?? 'Sem cliente' }
       : { name: 'Sem cliente' },
@@ -198,7 +200,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
 
     let q = supabaseAdmin
       .from('orders')
-      .select('id, number, status, order_datetime, delivery_date, customer_snapshot, products, additions, discount_mode, discount_value, shipping_value')
+      .select('id, number, status, order_datetime, delivery_date, delivery_type, notes_general, customer_snapshot, products, additions, discount_mode, discount_value, shipping_value')
       .eq('company_id', auth.companyId)
       .order('created_at', { ascending: false });
 
