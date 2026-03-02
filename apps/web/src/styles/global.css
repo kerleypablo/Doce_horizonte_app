@@ -884,6 +884,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -1053,6 +1054,7 @@ button:disabled {
   gap: 8px;
   overflow-y: auto;
   min-height: 0;
+  height: 100vw;
 }
 
 .tasks-order-card {
@@ -1076,6 +1078,23 @@ button:disabled {
   font-size: 12px;
   margin-top: 2px;
   display: block;
+}
+
+.tasks-order-head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-done-icon {
+  font-size: 16px;
+  color: #2f9c4b;
+}
+
+.tasks-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .tasks-products {

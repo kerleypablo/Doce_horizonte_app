@@ -101,6 +101,7 @@ export const TasksBoardPage = () => {
   const [stateMap, setStateMap] = useState<TaskStateMap>(() => loadTaskState());
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [newStepText, setNewStepText] = useState('');
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const todayKey = parseDateKey(new Date());
 
   const range = useMemo(() => getPeriodRange(baseDate, mode), [baseDate, mode]);
@@ -151,6 +152,28 @@ export const TasksBoardPage = () => {
       saveTaskState(next);
       return next;
     });
+  };
+
+  const getOrderState = (orderId: string): TaskOrderState => stateMap[orderId] ?? { productChecks: {}, extraSteps: [] };
+
+  const isOrderCompleted = (order: TaskOrder) => {
+    const state = getOrderState(order.id);
+    const allProductsChecked = (order.products ?? []).every((item, index) => {
+      const key = productKey(index, item);
+      return Boolean(state.productChecks[key]);
+    });
+    const allExtraStepsChecked = (state.extraSteps ?? []).every((step) => step.done);
+    return allProductsChecked && allExtraStepsChecked;
+  };
+
+  const isCardExpanded = (order: TaskOrder) => {
+    const explicit = expandedCards[order.id];
+    if (explicit !== undefined) return explicit;
+    return !isOrderCompleted(order);
+  };
+
+  const toggleCardExpanded = (order: TaskOrder) => {
+    setExpandedCards((prev) => ({ ...prev, [order.id]: !isCardExpanded(order) }));
   };
 
   const toggleProductCheck = (orderId: string, key: string) => {
@@ -227,41 +250,57 @@ export const TasksBoardPage = () => {
                   {dayOrders.length === 0 ? <p className="muted">Sem pedidos</p> : null}
                   {dayOrders.map((order) => {
                     const orderState = stateMap[order.id] ?? { productChecks: {}, extraSteps: [] };
+                    const isExpanded = isCardExpanded(order);
+                    const isCompleted = isOrderCompleted(order);
                     return (
                       <div key={order.id} className="tasks-order-card">
                         <div className="tasks-order-head">
                           <div>
-                            <strong>{order.number}</strong>
+                            <strong>
+                              {order.number}
+                              {isCompleted ? (
+                                <span className="material-symbols-outlined tasks-done-icon" aria-hidden="true">check_circle</span>
+                              ) : null}
+                            </strong>
                             <span>{order.customerSnapshot?.name ?? 'Sem cliente'} • {order.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</span>
                           </div>
-                          <button type="button" className="ghost" onClick={() => setExpandedOrderId(order.id)}>Expandir</button>
-                        </div>
-                        <div className="tasks-products">
-                          {order.products.map((item, index) => {
-                            const itemKey = productKey(index, item);
-                            return (
-                              <label key={itemKey} className="tasks-check">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(orderState.productChecks[itemKey])}
-                                  onChange={() => toggleProductCheck(order.id, itemKey)}
-                                />
-                                <span>{item.quantity}x {item.name}</span>
-                              </label>
-                            );
-                          })}
-                          {orderState.extraSteps.map((step) => (
-                            <label key={step.id} className="tasks-check extra">
-                              <input type="checkbox" checked={step.done} onChange={() => toggleExtraStep(order.id, step.id)} />
-                              <span>{step.text}</span>
-                            </label>
-                          ))}
-                        </div>
-                        {order.notesGeneral ? (
-                          <div className="tasks-notes">
-                            <span>Obs:</span>
-                            <p>{order.notesGeneral}</p>
+                          <div className="tasks-card-actions">
+                            <button type="button" className="ghost" onClick={() => toggleCardExpanded(order)}>
+                              {isExpanded ? 'Retrair' : 'Expandir'}
+                            </button>
+                            <button type="button" className="ghost" onClick={() => setExpandedOrderId(order.id)}>Tela cheia</button>
                           </div>
+                        </div>
+                        {isExpanded ? (
+                          <>
+                            <div className="tasks-products">
+                              {order.products.map((item, index) => {
+                                const itemKey = productKey(index, item);
+                                return (
+                                  <label key={itemKey} className="tasks-check">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(orderState.productChecks[itemKey])}
+                                      onChange={() => toggleProductCheck(order.id, itemKey)}
+                                    />
+                                    <span>{item.quantity}x {item.name}</span>
+                                  </label>
+                                );
+                              })}
+                              {orderState.extraSteps.map((step) => (
+                                <label key={step.id} className="tasks-check extra">
+                                  <input type="checkbox" checked={step.done} onChange={() => toggleExtraStep(order.id, step.id)} />
+                                  <span>{step.text}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {order.notesGeneral ? (
+                              <div className="tasks-notes">
+                                <span>Obs:</span>
+                                <p>{order.notesGeneral}</p>
+                              </div>
+                            ) : null}
+                          </>
                         ) : null}
                       </div>
                     );

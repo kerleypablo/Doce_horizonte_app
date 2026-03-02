@@ -197,7 +197,10 @@ export const DashboardPage = () => {
         <div className="home-calendar-header">
           <div className="home-calendar-title-row">
             <h3>Calendario de pedidos</h3>
-            <Link to="/app/tasks" className="ghost home-tasks-link">Modo Tasks</Link>
+            <Link to="/app/tasks" className="ghost home-tasks-link">
+              <span className="material-symbols-outlined" aria-hidden="true">view_kanban</span>
+              <span>Modo Tasks</span>
+            </Link>
           </div>
           <div className="home-calendar-nav">
             <button
