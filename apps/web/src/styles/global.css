@@ -81,6 +81,10 @@ body {
   overflow-x: hidden;
 }
 
+#root {
+  min-height: 100dvh;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -1491,8 +1495,8 @@ button:disabled {
   }
 
   .bottom-nav {
-    position: fixed;
-    bottom: 16px;
+    position: fixed !important;
+    bottom: calc(16px + env(safe-area-inset-bottom));
     left: 16px;
     right: 16px;
     display: grid;
@@ -1506,6 +1510,9 @@ button:disabled {
     box-shadow: var(--shadow);
     overflow: hidden;
     isolation: isolate;
+    z-index: 60;
+    transform: translateZ(0);
+    will-change: transform;
   }
 
   .bottom-nav-indicator {

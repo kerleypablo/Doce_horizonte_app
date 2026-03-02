@@ -16,6 +16,7 @@ type SalesChannel = {
 
 type Settings = {
   companyName: string;
+  companyCode?: string;
   logoDataUrl: string;
   appTheme: 'caramelo' | 'oceano' | 'floresta';
   darkMode: boolean;
@@ -89,7 +90,7 @@ export const SettingsPage = () => {
     if (!context) return;
     context.drawImage(image, 0, 0, width, height);
 
-    const logoDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+    const logoDataUrl = canvas.toDataURL('image/png');
     setSettings({ ...settings, logoDataUrl });
   };
 
@@ -138,6 +139,10 @@ export const SettingsPage = () => {
               value={settings.companyName}
               onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
             />
+          </label>
+          <label>
+            Codigo da empresa
+            <input value={settings.companyCode ?? ''} readOnly />
           </label>
           <label>
             Logo da empresa

@@ -41,7 +41,7 @@ export const companyRoutes = async (app: FastifyInstance) => {
 
     const { data: company } = await supabaseAdmin
       .from('companies')
-      .select('name')
+      .select('id, name')
       .eq('id', auth.companyId)
       .single();
 
@@ -55,6 +55,7 @@ export const companyRoutes = async (app: FastifyInstance) => {
 
     return {
       companyName: company?.name ?? 'Minha empresa',
+      companyCode: company?.id ? company.id.replace(/-/g, '').slice(0, 8).toUpperCase() : '',
       logoDataUrl: settings.logo_data_url ?? '',
       appTheme: settings.app_theme ?? 'caramelo',
       darkMode: settings.dark_mode ?? false,

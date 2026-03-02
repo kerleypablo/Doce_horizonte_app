@@ -6,6 +6,13 @@ const schema = z.object({
   companyName: z.string().min(2)
 });
 
+const joinSchema = z.object({
+  companyCode: z.string().min(4)
+});
+
+const getCompanyCodeFromId = (companyId: string) => companyId.replace(/-/g, '').slice(0, 8).toUpperCase();
+const normalizeCompanyCode = (value: string) => value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
 export const onboardingRoutes = async (app: FastifyInstance) => {
   app.post('/onboarding/company', { preHandler: app.authenticateSupabase }, async (request, reply) => {
     const data = schema.parse(request.body);
@@ -80,6 +87,59 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
       return reply.status(400).send({ message: 'Erro ao vincular usuario', detail: userError.message });
     }
 
-    return reply.send({ companyId: company.id, alreadyLinked: false });
+    return reply.send({
+      companyId: company.id,
+      companyCode: getCompanyCodeFromId(company.id),
+      alreadyLinked: false
+    });
+  });
+
+  app.post('/onboarding/join-company', { preHandler: app.authenticateSupabase }, async (request, reply) => {
+    const data = joinSchema.parse(request.body);
+    const authUserId = (request as typeof request & { authUserId: string }).authUserId;
+
+    const { data: existing } = await supabaseAdmin
+      .from('app_users')
+      .select('company_id')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (existing?.company_id) {
+      return reply.send({
+        companyId: existing.company_id,
+        companyCode: getCompanyCodeFromId(existing.company_id),
+        alreadyLinked: true
+      });
+    }
+
+    const normalizedCode = normalizeCompanyCode(data.companyCode);
+    const { data: companies, error: companyError } = await supabaseAdmin
+      .from('companies')
+      .select('id');
+
+    if (companyError) {
+      return reply.status(400).send({ message: 'Erro ao buscar empresa', detail: companyError.message });
+    }
+
+    const matchedCompany = (companies ?? []).find((company) => getCompanyCodeFromId(company.id) === normalizedCode);
+    if (!matchedCompany) {
+      return reply.status(404).send({ message: 'Codigo de empresa invalido' });
+    }
+
+    const { error: userError } = await supabaseAdmin.from('app_users').insert({
+      auth_user_id: authUserId,
+      company_id: matchedCompany.id,
+      role: 'common'
+    });
+
+    if (userError) {
+      return reply.status(400).send({ message: 'Erro ao vincular usuario', detail: userError.message });
+    }
+
+    return reply.send({
+      companyId: matchedCompany.id,
+      companyCode: getCompanyCodeFromId(matchedCompany.id),
+      alreadyLinked: false
+    });
   });
 };

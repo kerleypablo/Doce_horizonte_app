@@ -4,7 +4,9 @@ import { apiFetch } from '../shared/api.ts';
 import { useAuth } from './AuthContext.tsx';
 
 export const OnboardingPage = () => {
+  const [mode, setMode] = useState<'create' | 'join'>('create');
   const [companyName, setCompanyName] = useState('');
+  const [companyCode, setCompanyCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -24,18 +26,26 @@ export const OnboardingPage = () => {
     setError(null);
 
     try {
-      await apiFetch('/onboarding/company', {
-        method: 'POST',
-        token,
-        body: JSON.stringify({ companyName })
-      });
+      if (mode === 'create') {
+        await apiFetch('/onboarding/company', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ companyName })
+        });
+      } else {
+        await apiFetch('/onboarding/join-company', {
+          method: 'POST',
+          token,
+          body: JSON.stringify({ companyCode })
+        });
+      }
 
       const me = await apiFetch<{ role: 'admin' | 'common' }>('/auth/me', { token });
       login(token, me.role);
       sessionStorage.removeItem('pending_token');
       navigate('/app/empresa');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar empresa');
+      setError(err instanceof Error ? err.message : 'Erro ao concluir onboarding');
     } finally {
       setLoading(false);
     }
@@ -48,20 +58,50 @@ export const OnboardingPage = () => {
           <span>Confeitaria</span>
           <strong>Precificacao</strong>
         </div>
-        <h1>Crie sua empresa</h1>
-        <p>Antes de continuar, informe o nome da sua empresa.</p>
+        <h1>Primeiro acesso</h1>
+        <p>Crie uma empresa nova ou entre com o codigo de uma empresa existente.</p>
+        <div className="tabs">
+          <button
+            type="button"
+            className={mode === 'create' ? 'tab-icon active' : 'tab-icon'}
+            onClick={() => setMode('create')}
+            aria-label="Criar empresa"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">add_business</span>
+          </button>
+          <button
+            type="button"
+            className={mode === 'join' ? 'tab-icon active' : 'tab-icon'}
+            onClick={() => setMode('join')}
+            aria-label="Entrar com codigo"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">group_add</span>
+          </button>
+        </div>
         <form onSubmit={handleSubmit}>
-          <label>
-            Nome da empresa
-            <input
-              value={companyName}
-              onChange={(event) => setCompanyName(event.target.value)}
-              required
-            />
-          </label>
+          {mode === 'create' ? (
+            <label>
+              Nome da empresa
+              <input
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                required
+              />
+            </label>
+          ) : (
+            <label>
+              Codigo da empresa
+              <input
+                value={companyCode}
+                onChange={(event) => setCompanyCode(event.target.value.toUpperCase())}
+                placeholder="Ex.: A1B2C3D4"
+                required
+              />
+            </label>
+          )}
           {error && <div className="error">{error}</div>}
           <button type="submit" disabled={loading}>
-            {loading ? 'Criando...' : 'Criar empresa'}
+            {loading ? 'Processando...' : mode === 'create' ? 'Criar empresa' : 'Entrar na empresa'}
           </button>
         </form>
       </div>
