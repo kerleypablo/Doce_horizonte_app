@@ -42,12 +42,8 @@ const normalizeDateKey = (value?: string) => {
 };
 
 const toOrderDateKeys = (order: TaskOrder) => {
-  const keys = new Set<string>();
   const deliveryKey = normalizeDateKey(order.deliveryDate);
-  const orderKey = normalizeDateKey(order.orderDateTime);
-  if (deliveryKey) keys.add(deliveryKey);
-  if (orderKey) keys.add(orderKey);
-  return [...keys];
+  return deliveryKey ? [deliveryKey] : [];
 };
 
 const startOfWeek = (date: Date) => {
