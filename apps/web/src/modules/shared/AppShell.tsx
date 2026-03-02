@@ -74,6 +74,7 @@ const getHeaderTitle = (pathname: string) => {
 export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
+  const isTasksMode = pathname.startsWith('/app/tasks');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const headerTitle = getHeaderTitle(pathname);
   const activeBottomIndex = bottomNavItems.findIndex((item) => isPathActive(pathname, item.path));
@@ -113,6 +114,20 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   ) : (
     <span className="material-symbols-outlined" aria-hidden="true">person</span>
   );
+
+  if (isTasksMode) {
+    return (
+      <div className="app-shell tasks-shell">
+        <main>
+          <header className="tasks-mode-header">
+            <h2>Modo Tasks</h2>
+            <Link to="/app" className="ghost">Sair do modo Tasks</Link>
+          </header>
+          <section className="content">{children}</section>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className={`app-shell ${drawerOpen ? 'drawer-open' : ''}`}>

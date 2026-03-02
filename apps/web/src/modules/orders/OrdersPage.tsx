@@ -334,6 +334,8 @@ export const OrdersPage = () => {
       setShowForm(false);
       if (isFormRoute) navigate('/app/pedidos');
       invalidateQueryCache(queryKeys.orders);
+      invalidateQueryCache(queryKeys.ordersSummaryCalendar);
+      invalidateQueryCache('tasks-board');
       invalidateQueryCache(`order-detail:${editingId ?? ''}`);
       await ordersQuery.refetch();
     } catch (error) {

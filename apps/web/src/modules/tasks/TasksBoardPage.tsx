@@ -33,6 +33,10 @@ type PeriodMode = 'week' | 'month';
 const STORAGE_KEY = 'confeitaria.tasks.progress.v1';
 
 const parseDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const toOrderDateKey = (order: TaskOrder) => {
+  if (order.deliveryDate) return order.deliveryDate;
+  return parseDateKey(new Date(order.orderDateTime));
+};
 
 const startOfWeek = (date: Date) => {
   const day = date.getDay();
@@ -74,6 +78,7 @@ const saveTaskState = (state: TaskStateMap) => {
 
 const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
 const dateLabel = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
+const dayLabel = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' });
 
 const productKey = (index: number, item: { name: string; quantity: number }) => `p:${index}:${item.name}:${item.quantity}`;
 
@@ -99,6 +104,26 @@ export const TasksBoardPage = () => {
 
   const orders = tasksQuery.data ?? [];
   const expandedOrder = orders.find((order) => order.id === expandedOrderId) ?? null;
+
+  const dateColumns = useMemo(() => {
+    const cols: Date[] = [];
+    const cursor = new Date(range.start);
+    while (cursor <= range.end) {
+      cols.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return cols;
+  }, [range.start, range.end]);
+
+  const ordersByDate = useMemo(() => {
+    const map = new Map<string, TaskOrder[]>();
+    for (const order of orders) {
+      const key = toOrderDateKey(order);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)?.push(order);
+    }
+    return map;
+  }, [orders]);
 
   const updateOrderState = (orderId: string, updater: (current: TaskOrderState) => TaskOrderState) => {
     setStateMap((prev) => {
@@ -152,15 +177,6 @@ export const TasksBoardPage = () => {
     ? `${dateLabel.format(range.start)} - ${dateLabel.format(range.end)}`
     : monthLabel.format(baseDate);
 
-  if (window.innerWidth < 900) {
-    return (
-      <div className="panel">
-        <h3>Modo Tasks</h3>
-        <p>Esta tela foi otimizada para tablet e telas maiores.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="page tasks-page">
       <div className="panel tasks-toolbar">
@@ -178,45 +194,60 @@ export const TasksBoardPage = () => {
       <div className="panel">
         {tasksQuery.loading ? <p>Carregando pedidos...</p> : null}
         {!tasksQuery.loading && orders.length === 0 ? <p>Nenhum pedido no periodo.</p> : null}
-        <div className="tasks-order-list">
-          {orders.map((order) => {
-            const orderState = stateMap[order.id] ?? { productChecks: {}, extraSteps: [] };
+        <div className="tasks-kanban">
+          {dateColumns.map((date) => {
+            const key = parseDateKey(date);
+            const dayOrders = ordersByDate.get(key) ?? [];
             return (
-              <div key={order.id} className="tasks-order-card">
-                <div className="tasks-order-head">
-                  <div>
-                    <strong>{order.number}</strong>
-                    <span>{order.customerSnapshot?.name ?? 'Sem cliente'} • {order.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</span>
-                  </div>
-                  <button type="button" className="ghost" onClick={() => setExpandedOrderId(order.id)}>Expandir</button>
+              <div key={key} className="tasks-column">
+                <div className="tasks-column-head">
+                  <strong>{dayLabel.format(date)}</strong>
+                  <span>{dateLabel.format(date)}</span>
                 </div>
-                <div className="tasks-products">
-                  {order.products.map((item, index) => {
-                    const key = productKey(index, item);
+                <div className="tasks-column-body">
+                  {dayOrders.length === 0 ? <p className="muted">Sem pedidos</p> : null}
+                  {dayOrders.map((order) => {
+                    const orderState = stateMap[order.id] ?? { productChecks: {}, extraSteps: [] };
                     return (
-                      <label key={key} className="tasks-check">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(orderState.productChecks[key])}
-                          onChange={() => toggleProductCheck(order.id, key)}
-                        />
-                        <span>{item.quantity}x {item.name}</span>
-                      </label>
+                      <div key={order.id} className="tasks-order-card">
+                        <div className="tasks-order-head">
+                          <div>
+                            <strong>{order.number}</strong>
+                            <span>{order.customerSnapshot?.name ?? 'Sem cliente'} • {order.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</span>
+                          </div>
+                          <button type="button" className="ghost" onClick={() => setExpandedOrderId(order.id)}>Expandir</button>
+                        </div>
+                        <div className="tasks-products">
+                          {order.products.map((item, index) => {
+                            const itemKey = productKey(index, item);
+                            return (
+                              <label key={itemKey} className="tasks-check">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(orderState.productChecks[itemKey])}
+                                  onChange={() => toggleProductCheck(order.id, itemKey)}
+                                />
+                                <span>{item.quantity}x {item.name}</span>
+                              </label>
+                            );
+                          })}
+                          {orderState.extraSteps.map((step) => (
+                            <label key={step.id} className="tasks-check extra">
+                              <input type="checkbox" checked={step.done} onChange={() => toggleExtraStep(order.id, step.id)} />
+                              <span>{step.text}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {order.notesGeneral ? (
+                          <div className="tasks-notes">
+                            <span>Obs:</span>
+                            <p>{order.notesGeneral}</p>
+                          </div>
+                        ) : null}
+                      </div>
                     );
                   })}
-                  {orderState.extraSteps.map((step) => (
-                    <label key={step.id} className="tasks-check extra">
-                      <input type="checkbox" checked={step.done} onChange={() => toggleExtraStep(order.id, step.id)} />
-                      <span>{step.text}</span>
-                    </label>
-                  ))}
                 </div>
-                {order.notesGeneral ? (
-                  <div className="tasks-notes">
-                    <span>Obs:</span>
-                    <p>{order.notesGeneral}</p>
-                  </div>
-                ) : null}
               </div>
             );
           })}
