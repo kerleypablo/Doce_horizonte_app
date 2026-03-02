@@ -961,6 +961,10 @@ button:disabled {
 
 .tasks-page {
   gap: 14px;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
 }
 
 .tasks-toolbar {
@@ -1001,19 +1005,27 @@ button:disabled {
 .tasks-kanban {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 1fr);
+  grid-auto-columns: 320px;
   gap: 10px;
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 4px;
+  flex: 1;
+  min-height: 0;
 }
 
 .tasks-column {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface-alt);
-  min-height: 260px;
+  min-height: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
+}
+
+.tasks-column.today {
+  border-color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-strong) 45%, transparent);
 }
 
 .tasks-column-head {
@@ -1035,6 +1047,8 @@ button:disabled {
   display: grid;
   align-content: start;
   gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .tasks-order-card {
@@ -1066,8 +1080,8 @@ button:disabled {
 }
 
 .tasks-check {
-  display: flex;
-  flex-direction: row;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -1174,6 +1188,20 @@ button:disabled {
 
 .tasks-shell main {
   padding: 18px 20px 26px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.tasks-shell .content {
+  flex: 1;
+  min-height: 0;
+}
+
+.tasks-board-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .home-order-item {
@@ -1968,7 +1996,7 @@ button:disabled {
   }
 
   .tasks-kanban {
-    grid-auto-columns: minmax(240px, 82vw);
+    grid-auto-columns: minmax(250px, 82vw);
   }
 
   .settings-theme-grid {

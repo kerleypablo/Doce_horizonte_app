@@ -51,10 +51,21 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const toOrderDateKey = (order: OrderItem) => {
-  if (order.deliveryDate) return order.deliveryDate;
-  const date = new Date(order.orderDateTime);
-  return toDateKey(date);
+const normalizeDateKey = (value?: string) => {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return toDateKey(parsed);
+};
+
+const getOrderDateKeys = (order: OrderItem) => {
+  const keys = new Set<string>();
+  const deliveryKey = normalizeDateKey(order.deliveryDate);
+  const orderKey = normalizeDateKey(order.orderDateTime);
+  if (deliveryKey) keys.add(deliveryKey);
+  if (orderKey) keys.add(orderKey);
+  return [...keys];
 };
 
 const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
@@ -95,13 +106,19 @@ export const DashboardPage = () => {
   }, [user?.token]);
 
   const ordersByDate = useMemo(() => {
-    const map = new Map<string, OrderItem[]>();
+    const map = new Map<string, Map<string, OrderItem>>();
     for (const order of orders) {
-      const key = toOrderDateKey(order);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)?.push(order);
+      const dateKeys = getOrderDateKeys(order);
+      for (const key of dateKeys) {
+        if (!map.has(key)) map.set(key, new Map());
+        map.get(key)?.set(order.id, order);
+      }
     }
-    return map;
+    const normalized = new Map<string, OrderItem[]>();
+    for (const [key, value] of map.entries()) {
+      normalized.set(key, [...value.values()]);
+    }
+    return normalized;
   }, [orders]);
 
   const calendarCells = useMemo(() => {

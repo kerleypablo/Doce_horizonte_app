@@ -33,9 +33,21 @@ type PeriodMode = 'week' | 'month';
 const STORAGE_KEY = 'confeitaria.tasks.progress.v1';
 
 const parseDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-const toOrderDateKey = (order: TaskOrder) => {
-  if (order.deliveryDate) return order.deliveryDate;
-  return parseDateKey(new Date(order.orderDateTime));
+const normalizeDateKey = (value?: string) => {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parseDateKey(parsed);
+};
+
+const toOrderDateKeys = (order: TaskOrder) => {
+  const keys = new Set<string>();
+  const deliveryKey = normalizeDateKey(order.deliveryDate);
+  const orderKey = normalizeDateKey(order.orderDateTime);
+  if (deliveryKey) keys.add(deliveryKey);
+  if (orderKey) keys.add(orderKey);
+  return [...keys];
 };
 
 const startOfWeek = (date: Date) => {
@@ -89,6 +101,7 @@ export const TasksBoardPage = () => {
   const [stateMap, setStateMap] = useState<TaskStateMap>(() => loadTaskState());
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [newStepText, setNewStepText] = useState('');
+  const todayKey = parseDateKey(new Date());
 
   const range = useMemo(() => getPeriodRange(baseDate, mode), [baseDate, mode]);
 
@@ -116,13 +129,19 @@ export const TasksBoardPage = () => {
   }, [range.start, range.end]);
 
   const ordersByDate = useMemo(() => {
-    const map = new Map<string, TaskOrder[]>();
+    const map = new Map<string, Map<string, TaskOrder>>();
     for (const order of orders) {
-      const key = toOrderDateKey(order);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)?.push(order);
+      const keys = toOrderDateKeys(order);
+      for (const key of keys) {
+        if (!map.has(key)) map.set(key, new Map());
+        map.get(key)?.set(order.id, order);
+      }
     }
-    return map;
+    const normalized = new Map<string, TaskOrder[]>();
+    for (const [key, value] of map.entries()) {
+      normalized.set(key, [...value.values()]);
+    }
+    return normalized;
   }, [orders]);
 
   const updateOrderState = (orderId: string, updater: (current: TaskOrderState) => TaskOrderState) => {
@@ -191,7 +210,7 @@ export const TasksBoardPage = () => {
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel tasks-board-panel">
         {tasksQuery.loading ? <p>Carregando pedidos...</p> : null}
         {!tasksQuery.loading && orders.length === 0 ? <p>Nenhum pedido no periodo.</p> : null}
         <div className="tasks-kanban">
@@ -199,7 +218,7 @@ export const TasksBoardPage = () => {
             const key = parseDateKey(date);
             const dayOrders = ordersByDate.get(key) ?? [];
             return (
-              <div key={key} className="tasks-column">
+              <div key={key} className={`tasks-column ${key === todayKey ? 'today' : ''}`}>
                 <div className="tasks-column-head">
                   <strong>{dayLabel.format(date)}</strong>
                   <span>{dateLabel.format(date)}</span>
