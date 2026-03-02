@@ -1001,8 +1001,8 @@ button:disabled {
 }
 
 .settings-switch.compact {
-  font-size: 12px;
-  gap: 8px;
+  font-size: 11px;
+  gap: 6px;
 }
 
 .settings-switch input[type='checkbox'] {
@@ -1047,26 +1047,28 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: #fffdfb;
   min-width: 0;
+  font-size: 12px;
 }
 
 .company-user-main {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   white-space: nowrap;
+  flex: 1;
 }
 
 .company-user-main img,
 .company-user-main .material-symbols-outlined {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   object-fit: cover;
   display: grid;
@@ -1082,13 +1084,15 @@ button:disabled {
 .company-user-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .company-user-actions .ghost {
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-style: solid;
+  font-size: 11px;
 }
 
 .table {
@@ -1668,11 +1672,48 @@ button:disabled {
   }
 
   .company-users-list {
-    overflow-x: auto;
+    overflow-x: hidden;
   }
 
   .company-user-row {
-    min-width: 520px;
+    min-width: 0;
+    gap: 6px;
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+
+  .company-user-main img,
+  .company-user-main .material-symbols-outlined {
+    width: 20px;
+    height: 20px;
+  }
+
+  .company-user-actions {
+    gap: 4px;
+  }
+
+  .company-user-actions .ghost {
+    padding: 5px 7px;
+    font-size: 10px;
+  }
+
+  .settings-switch.compact {
+    font-size: 10px;
+    gap: 4px;
+  }
+
+  .settings-switch.compact input[type='checkbox'] {
+    width: 36px;
+    height: 20px;
+  }
+
+  .settings-switch.compact input[type='checkbox']::after {
+    width: 14px;
+    height: 14px;
+  }
+
+  .settings-switch.compact input[type='checkbox']:checked::after {
+    transform: translateX(16px);
   }
 
   .home-calendar-nav strong {

@@ -141,7 +141,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             <span className="material-symbols-outlined" aria-hidden="true">menu</span>
           </button>
           <div className="mobile-title">
-            <span>{pathname === '/app' ? 'Controle' : 'Tela'}</span>
+            {pathname === '/app' ? <span>Controle</span> : null}
             <strong>{headerTitle}</strong>
           </div>
           <div className="mobile-user" aria-label="Usuario logado">
