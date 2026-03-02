@@ -24,8 +24,18 @@ export const OAuthCallbackPage = () => {
         login(token, me.role);
         navigate('/app');
       } catch (err) {
-        sessionStorage.setItem('pending_token', token);
-        navigate('/onboarding');
+        const message = err instanceof Error ? err.message : '';
+        const shouldOnboard =
+          message.includes('Usuario sem empresa vinculada') ||
+          message.includes('"statusCode":403');
+
+        if (shouldOnboard) {
+          sessionStorage.setItem('pending_token', token);
+          navigate('/onboarding');
+          return;
+        }
+
+        setError('Nao foi possivel validar o usuario na API. Tente novamente em instantes.');
       }
     };
 
