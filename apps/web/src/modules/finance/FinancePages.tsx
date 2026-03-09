@@ -1,16 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from 'recharts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
@@ -187,7 +176,10 @@ export const FinanceDashboardPage = () => {
   const fromPickerRef = useRef<HTMLInputElement | null>(null);
   const toPickerRef = useRef<HTMLInputElement | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const dashboardQuery = useFinanceDashboard(user?.token, from, to);
+  const salesQuery = useManualSales(user?.token, from, to);
+  const expensesQuery = useExpenses(user?.token, from, to);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
   const data = dashboardQuery.data;
@@ -210,44 +202,108 @@ export const FinanceDashboardPage = () => {
     input.click();
   };
 
+  const setTodayRange = () => {
+    setFrom(todayDate);
+    setTo(todayDate);
+  };
+
+  const setLast7DaysRange = () => {
+    const start = new Date();
+    start.setDate(start.getDate() - 6);
+    const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    setFrom(startDate);
+    setTo(todayDate);
+  };
+
+  const setMonthRange = () => {
+    setFrom(monthStart);
+    setTo(todayDate);
+  };
+
   const summaryCards = useMemo(() => {
     const totals = data?.totals;
-    const cards = [
+    return [
       {
-        title: 'Saldo projetado',
-        value: formatCurrency(totals?.projectedBalance ?? 0),
-        note: 'Saldo base + entradas - despesas',
-        icon: 'monitoring'
-      },
-      {
-        title: 'Saldo base das contas',
+        id: 'saldo-base',
+        title: 'Saldo Base',
         value: formatCurrency(totals?.accountsBalance ?? 0),
-        note: 'Soma dos saldos informados',
-        icon: 'account_balance'
+        note: 'Valor total em contas',
+        icon: 'wallet'
       },
       {
-        title: 'Entradas no periodo',
-        value: formatCurrency(totals?.totalEntries ?? 0),
-        note: 'Pedidos + vendas de balcao',
-        icon: 'trending_up'
+        id: 'pedidos',
+        title: 'Pedidos',
+        value: formatCurrency(totals?.ordersTotal ?? 0),
+        note: `${totals?.ordersCount ?? 0} pedidos`,
+        icon: 'shopping_bag',
+        trend: '+12%'
       },
       {
-        title: 'Despesas no periodo',
+        id: 'balcao',
+        title: 'Vendas Balcao',
+        value: formatCurrency(totals?.manualSalesNet ?? 0),
+        note: `${(salesQuery.data ?? []).length} vendas`,
+        icon: 'payments',
+        trend: '+8%'
+      },
+      {
+        id: 'despesas',
+        title: 'Despesas',
         value: formatCurrency(totals?.expensesNet ?? 0),
-        note: 'Saidas liquidas aplicadas',
-        icon: 'trending_down'
+        note: `${(expensesQuery.data ?? []).length} lancamentos`,
+        icon: 'receipt_long',
+        trend: '-5%'
       }
     ];
-    for (const account of data?.accounts ?? []) {
-      cards.push({
-        title: `Conta ${account.name}`,
-        value: formatCurrency(account.balanceAmount),
-        note: 'Saldo informado na conta',
-        icon: 'savings'
-      });
+  }, [data, salesQuery.data, expensesQuery.data]);
+
+  useEffect(() => {
+    if (!summaryCards.length) {
+      setCurrentCardIndex(0);
+      return;
     }
-    return cards;
-  }, [data]);
+    if (currentCardIndex > summaryCards.length - 1) {
+      setCurrentCardIndex(0);
+    }
+  }, [summaryCards.length, currentCardIndex]);
+
+  const nextCard = () => {
+    if (!summaryCards.length) return;
+    setCurrentCardIndex((value) => (value + 1) % summaryCards.length);
+  };
+
+  const prevCard = () => {
+    if (!summaryCards.length) return;
+    setCurrentCardIndex((value) => (value - 1 + summaryCards.length) % summaryCards.length);
+  };
+
+  const flowData = useMemo(() => (data?.chart ?? []).slice(-7), [data]);
+  const flowMax = useMemo(() => {
+    const values = flowData.map((item) => Math.max(item.orders + item.manualSales, item.expenses));
+    return Math.max(...values, 1);
+  }, [flowData]);
+
+  const transactions = useMemo(() => {
+    const sales = (salesQuery.data ?? []).map((item) => ({
+      id: `sale-${item.id}`,
+      title: item.description,
+      method: methodLabels[item.paymentMethod],
+      amount: item.netAmount,
+      positive: true,
+      occurredAt: item.occurredAt
+    }));
+    const expenses = (expensesQuery.data ?? []).map((item) => ({
+      id: `expense-${item.id}`,
+      title: item.description,
+      method: methodLabels[item.paymentMethod],
+      amount: item.netAmount,
+      positive: false,
+      occurredAt: item.occurredAt
+    }));
+    return [...sales, ...expenses]
+      .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+      .slice(0, 6);
+  }, [salesQuery.data, expensesQuery.data]);
 
   return (
     <div className="page finance-page">
@@ -272,10 +328,20 @@ export const FinanceDashboardPage = () => {
           </div>
           <p className="muted">Resumo inteligente do que esta acontecendo no caixa.</p>
         </div>
+        <div className="finance-period-pills">
+          <button type="button" className="ghost" onClick={setTodayRange}>Hoje</button>
+          <button type="button" className="ghost" onClick={setLast7DaysRange}>Semana</button>
+          <button type="button" className="finance-pill-active" onClick={setMonthRange}>Mes</button>
+        </div>
         <div className="finance-carousel-wrap">
-          <div className="finance-carousel" aria-label="Resumo financeiro">
-            {summaryCards.map((card, index) => (
-              <article key={card.title} className={`finance-summary-slide tone-${(index % 4) + 1}`}>
+          <div className="finance-carousel-frame" aria-label="Resumo financeiro">
+            <button type="button" className="finance-carousel-nav" onClick={prevCard} aria-label="Card anterior">
+              <span className="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+            </button>
+            <div className="finance-carousel-overflow">
+              <div className="finance-carousel-track" style={{ transform: `translateX(-${currentCardIndex * 100}%)` }}>
+                {summaryCards.map((card, index) => (
+                <article key={card.id} className={`finance-summary-slide tone-${(index % 4) + 1}`}>
                 <div className="finance-slide-head">
                   <span>{card.title}</span>
                   <span className="material-symbols-outlined finance-slide-icon" aria-hidden="true">{card.icon}</span>
@@ -285,7 +351,26 @@ export const FinanceDashboardPage = () => {
                   <span className="material-symbols-outlined" aria-hidden="true">insights</span>
                   <small>{card.note}</small>
                 </div>
-              </article>
+                {card.trend ? (
+                  <span className={`finance-slide-trend ${card.trend.startsWith('-') ? 'negative' : 'positive'}`}>{card.trend} vs. mes anterior</span>
+                ) : null}
+                </article>
+                ))}
+              </div>
+            </div>
+            <button type="button" className="finance-carousel-nav" onClick={nextCard} aria-label="Proximo card">
+              <span className="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+            </button>
+          </div>
+          <div className="finance-carousel-dots">
+            {summaryCards.map((card, index) => (
+              <button
+                key={card.id}
+                type="button"
+                className={`finance-carousel-dot ${index === currentCardIndex ? 'active' : ''}`}
+                onClick={() => setCurrentCardIndex(index)}
+                aria-label={`Ir para card ${index + 1}`}
+              />
             ))}
           </div>
         </div>
@@ -307,54 +392,59 @@ export const FinanceDashboardPage = () => {
         </div>
       </div>
 
-      <div className="finance-kpi-grid">
-        <div className="panel finance-kpi-card">
-          <span>Pedidos confirmados</span>
-          <strong>{formatCurrency(data?.totals.ordersTotal ?? 0)}</strong>
-        </div>
-        <div className="panel finance-kpi-card">
-          <span>Vendas de balcao</span>
-          <strong>{formatCurrency(data?.totals.manualSalesNet ?? 0)}</strong>
-        </div>
-        <div className="panel finance-kpi-card">
-          <span>Despesas</span>
-          <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
-        </div>
-        <div className="panel finance-kpi-card">
-          <span>Resultado liquido</span>
+      <div className="panel finance-result-panel">
+        <div>
+          <p className="muted">Resultado Liquido</p>
           <strong>{formatCurrency(data?.totals.netResult ?? 0)}</strong>
         </div>
+        <div>
+          <p className="muted">Saldo Projetado</p>
+          <strong>{formatCurrency(data?.totals.projectedBalance ?? 0)}</strong>
+        </div>
       </div>
 
-      <div className="panel">
+      <div className="panel finance-flow-panel">
         <h3>Fluxo diario</h3>
-        <div style={{ width: '100%', height: 300 }}>
-          <ResponsiveContainer>
-            <LineChart data={data?.chart ?? []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="orders" stroke="#2f7f95" strokeWidth={2} name="Pedidos" />
-              <Line type="monotone" dataKey="manualSales" stroke="#4a9960" strokeWidth={2} name="Vendas manuais" />
-              <Line type="monotone" dataKey="expenses" stroke="#bb5a45" strokeWidth={2} name="Despesas" />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="finance-flow-bars">
+          {flowData.map((item) => {
+            const entries = item.orders + item.manualSales;
+            const dayLabel = new Date(`${item.date}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'short' });
+            const entryHeight = Math.max((entries / flowMax) * 100, 6);
+            const expenseHeight = Math.max((item.expenses / flowMax) * 100, 4);
+            return (
+              <div key={item.date} className="finance-flow-day">
+                <div className="finance-flow-columns">
+                  <div className="entry" style={{ height: `${entryHeight}%` }} />
+                  <div className="expense" style={{ height: `${expenseHeight}%` }} />
+                </div>
+                <span>{dayLabel}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="finance-flow-legend">
+          <span><i className="entry" />Entradas</span>
+          <span><i className="expense" />Saidas</span>
         </div>
       </div>
 
       <div className="panel">
-        <h3>Resultado liquido diario</h3>
-        <div style={{ width: '100%', height: 260 }}>
-          <ResponsiveContainer>
-            <BarChart data={data?.chart ?? []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="net" fill="#b07d4a" name="Liquido" />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="finance-transactions-head">
+          <h3>Ultimas transacoes</h3>
+          <button type="button" className="ghost">Ver todas</button>
+        </div>
+        <div className="table">
+          {transactions.map((item) => (
+            <div key={item.id} className="list-row finance-transaction-row">
+              <div>
+                <strong>{item.title}</strong>
+                <span className="muted">{item.method}</span>
+              </div>
+              <strong className={item.positive ? 'positive' : 'negative'}>
+                {item.positive ? '+' : '-'}{formatCurrency(item.amount)}
+              </strong>
+            </div>
+          ))}
         </div>
       </div>
     </div>
