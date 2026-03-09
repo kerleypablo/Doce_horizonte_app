@@ -174,6 +174,10 @@ export const OrdersPage = () => {
   const [editProductIndex, setEditProductIndex] = useState<number | null>(null);
   const [editProductName, setEditProductName] = useState('');
   const [editProductUnitPrice, setEditProductUnitPrice] = useState(0);
+  const [pdfPreviewHtml, setPdfPreviewHtml] = useState<string | null>(null);
+  const createRouteInitRef = useRef<string>('');
+  const latestOrderDefaultsRef = useRef<CompanySettings>({});
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [customerForm, setCustomerForm] = useState({
     name: '',
     phone: '',
@@ -238,6 +242,10 @@ export const OrdersPage = () => {
     if (settingsQuery.data) setOrderDefaults(settingsQuery.data);
   }, [settingsQuery.data]);
 
+  useEffect(() => {
+    latestOrderDefaultsRef.current = orderDefaults;
+  }, [orderDefaults]);
+
   const resetForm = () => {
     setForm(newOrderForm(orderDefaults));
     setEditingId(null);
@@ -267,19 +275,24 @@ export const OrdersPage = () => {
 
   useEffect(() => {
     if (isCreateView) {
-      const next = newOrderForm(orderDefaults);
       const initialDeliveryDate = deliveryDateFromQuery || deliveryDateFromState;
-      if (initialDeliveryDate) next.deliveryDate = initialDeliveryDate;
-      setForm(next);
-      setEditingId(null);
-      setTab('pessoa');
-      setShowForm(true);
+      const initKey = `${pathname}|${initialDeliveryDate || ''}`;
+      if (createRouteInitRef.current !== initKey) {
+        const next = newOrderForm(latestOrderDefaultsRef.current);
+        if (initialDeliveryDate) next.deliveryDate = initialDeliveryDate;
+        setForm(next);
+        setEditingId(null);
+        setTab('pessoa');
+        setShowForm(true);
+        createRouteInitRef.current = initKey;
+      }
       return;
     }
+    createRouteInitRef.current = '';
     if (!isDetailView) {
       setShowForm(false);
     }
-  }, [isCreateView, isDetailView, orderDefaults, deliveryDateFromQuery, deliveryDateFromState]);
+  }, [isCreateView, isDetailView, deliveryDateFromQuery, deliveryDateFromState, pathname]);
 
   useEffect(() => {
     if (!isDetailView) return;
@@ -461,7 +474,7 @@ export const OrdersPage = () => {
     });
   };
 
-  const generatePdf = (order: OrderItem) => {
+  const buildPdfHtml = (order: OrderItem) => {
     const customer = order.customerSnapshot;
     const companyName = settingsQuery.data?.companyName ?? 'Controle Precificacao';
     const companyPhone = settingsQuery.data?.companyPhone ?? '';
@@ -594,26 +607,7 @@ export const OrdersPage = () => {
       </div>` : ''}
       </body></html>`;
 
-    const frame = document.createElement('iframe');
-    frame.style.position = 'fixed';
-    frame.style.right = '0';
-    frame.style.bottom = '0';
-    frame.style.width = '0';
-    frame.style.height = '0';
-    frame.style.border = '0';
-    frame.style.opacity = '0';
-    frame.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(frame);
-    frame.srcdoc = html;
-    frame.onload = () => {
-      setTimeout(() => {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-        setTimeout(() => {
-          if (frame.parentNode) frame.parentNode.removeChild(frame);
-        }, 1200);
-      }, 80);
-    };
+    return html;
   };
 
   const handleGeneratePdf = async (orderIdToPrint: string) => {
@@ -622,7 +616,7 @@ export const OrdersPage = () => {
       () => apiFetch<OrderItem>(`/orders/${orderIdToPrint}`, { token: user?.token }),
       { staleTime: 60_000 }
     );
-    generatePdf(order);
+    setPdfPreviewHtml(buildPdfHtml(order));
   };
 
   return (
@@ -644,9 +638,9 @@ export const OrdersPage = () => {
             {filtered.map((order) => (
               <div key={order.id} className="list-row">
                 <div>
-                  <strong>{order.number} • {order.type}</strong>
+                  <strong>{order.customerSnapshot?.name ?? 'Sem cliente'}</strong>
                   <span className="muted">
-                    {order.customerSnapshot?.name ?? 'Sem cliente'} • {order.status}
+                    Entrega: {order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'} • {order.status}
                   </span>
                 </div>
                 <div className="inline-right">
@@ -995,7 +989,22 @@ export const OrdersPage = () => {
             {tab === 'imagens' && (
               <div className="panel form-box">
                 <h4>Imagens de referencia</h4>
-                <input type="file" accept="image/*" multiple onChange={(e) => handleUploadImages(e.target.files)} />
+                <input
+                  ref={imageInputRef}
+                  className="order-image-input-hidden"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleUploadImages(e.target.files)}
+                />
+                <div className="order-image-picker-row">
+                  <button type="button" className="ghost" onClick={() => imageInputRef.current?.click()}>
+                    Selecionar imagens
+                  </button>
+                  <span className="order-image-picker-text">
+                    {form.images.length > 0 ? `${form.images.length} imagem(ns) selecionada(s)` : 'Nenhuma imagem selecionada'}
+                  </span>
+                </div>
                 <div className="image-grid">
                   {form.images.map((image, index) => (
                     <div key={`${image.name}-${index}`} className="image-card">
@@ -1088,6 +1097,25 @@ export const OrdersPage = () => {
           </div>
         </div>
       )}
+
+      {pdfPreviewHtml ? (
+        <div className="tasks-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="tasks-modal">
+            <div className="tasks-modal-head">
+              <h4>Pre-visualizacao do PDF</h4>
+              <button type="button" className="icon-button small" onClick={() => setPdfPreviewHtml(null)} aria-label="Fechar">
+                <span className="material-symbols-outlined" aria-hidden="true">close</span>
+              </button>
+            </div>
+            <div className="tasks-modal-content">
+              <iframe title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => setPdfPreviewHtml(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmOpen}

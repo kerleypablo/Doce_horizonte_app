@@ -1988,6 +1988,15 @@ button:disabled {
 .order-editor {
   position: relative;
   z-index: 140;
+  isolation: isolate;
+}
+
+.order-editor .form-box {
+  position: relative;
+}
+
+.order-editor .form-box:has(.select-field.open) {
+  z-index: 980;
 }
 
 .order-editor .select-field {
@@ -1995,11 +2004,11 @@ button:disabled {
 }
 
 .order-editor .select-field.open {
-  z-index: 900;
+  z-index: 990;
 }
 
 .order-editor .select-menu {
-  z-index: 950;
+  z-index: 1000;
 }
 
 .order-editor .select-search,
@@ -2016,23 +2025,38 @@ button:disabled {
   white-space: nowrap;
 }
 
-.order-editor input[type='file'] {
-  width: 100%;
-  max-width: 100%;
-  font-size: 10px;
+.order-image-input-hidden {
+  display: none !important;
+}
+
+.order-image-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.order-image-picker-row .ghost {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.order-image-picker-text {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.order-editor input[type='file']::file-selector-button {
-  margin-right: 8px;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-alt);
-  color: var(--text);
-  font-size: 10px;
+.pdf-preview-frame {
+  width: 100%;
+  min-height: clamp(420px, 72dvh, 900px);
+  border: none;
+  border-radius: 12px;
+  background: #fff;
 }
 
 .order-product-qty {
