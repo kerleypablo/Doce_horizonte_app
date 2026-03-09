@@ -240,17 +240,21 @@ export const BackofficePage = () => {
 
       <div className="panel">
         <h3>Plano da empresa</h3>
-        <label>
-          Plano
-          <SelectField
-            value={selectedPlanId}
-            onChange={(value) => setSelectedPlanId(value)}
-            options={plans.map((plan) => ({ value: plan.id, label: `${plan.name} (${plan.code})` }))}
-          />
-        </label>
-        <button type="button" className="ghost" onClick={handleSavePlan} disabled={savingPlan || !selectedPlanId}>
-          {savingPlan ? 'Salvando plano...' : 'Salvar plano'}
-        </button>
+        <div className="form">
+          <label>
+            Plano
+            <SelectField
+              value={selectedPlanId}
+              onChange={(value) => setSelectedPlanId(value)}
+              options={plans.map((plan) => ({ value: plan.id, label: `${plan.name} (${plan.code})` }))}
+            />
+          </label>
+          <div className="actions">
+            <button type="button" className="ghost" onClick={handleSavePlan} disabled={savingPlan || !selectedPlanId}>
+              {savingPlan ? 'Salvando plano...' : 'Salvar plano'}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="panel">
@@ -295,7 +299,7 @@ export const BackofficePage = () => {
             <h3>Modulos desse usuario</h3>
             <div className="form">
               {modules.map((module) => (
-                <label key={module.key} className="settings-switch compact">
+                <label key={module.key} className="settings-switch">
                   <span>{module.name}</span>
                   <input
                     type="checkbox"
@@ -305,9 +309,11 @@ export const BackofficePage = () => {
                 </label>
               ))}
             </div>
-            <button type="button" className="ghost" onClick={handleSaveModules} disabled={savingUser || !selectedUserId}>
-              {savingUser ? 'Salvando modulos...' : 'Salvar modulos'}
-            </button>
+            <div className="actions">
+              <button type="button" className="ghost" onClick={handleSaveModules} disabled={savingUser || !selectedUserId}>
+                {savingUser ? 'Salvando modulos...' : 'Salvar modulos'}
+              </button>
+            </div>
           </>
         ) : (
           <p>Nenhum usuario nesta empresa.</p>
