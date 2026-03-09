@@ -77,6 +77,7 @@ export const DashboardPage = () => {
   const today = useMemo(() => new Date(), []);
   const [monthDate, setMonthDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(toDateKey(today));
+  const [calendarCompact, setCalendarCompact] = useState(false);
   const [showRevenue, setShowRevenue] = useState(true);
   const ordersQuery = useCachedQuery(
     queryKeys.ordersSummaryCalendar,
@@ -136,6 +137,19 @@ export const DashboardPage = () => {
     return cells;
   }, [monthDate]);
 
+  const visibleCalendarCells = useMemo(() => {
+    if (!calendarCompact) return calendarCells;
+    const selected = new Date(`${selectedDate}T12:00:00`);
+    if (Number.isNaN(selected.getTime())) return calendarCells;
+    const weekStart = new Date(selected);
+    weekStart.setDate(selected.getDate() - selected.getDay());
+    return Array.from({ length: 7 }, (_, index) => {
+      const dayDate = new Date(weekStart);
+      dayDate.setDate(weekStart.getDate() + index);
+      return { day: dayDate.getDate(), dateKey: toDateKey(dayDate) };
+    });
+  }, [calendarCells, calendarCompact, selectedDate]);
+
   const selectedOrders = ordersByDate.get(selectedDate) ?? [];
   const confirmedRevenue = useMemo(() => {
     const calcTotal = (order: OrderItem) => {
@@ -193,10 +207,22 @@ export const DashboardPage = () => {
         <div className="home-calendar-header">
           <div className="home-calendar-title-row">
             <h3>Calendario de pedidos</h3>
-            <Link to="/app/tasks" className="ghost home-tasks-link">
-              <span className="material-symbols-outlined" aria-hidden="true">view_kanban</span>
-              <span>Modo Tasks</span>
-            </Link>
+            <div className="home-calendar-title-actions">
+              <button
+                type="button"
+                className="icon-button small"
+                aria-label={calendarCompact ? 'Expandir calendario' : 'Recolher calendario'}
+                onClick={() => setCalendarCompact((prev) => !prev)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {calendarCompact ? 'calendar_view_month' : 'calendar_view_week'}
+                </span>
+              </button>
+              <Link to="/app/tasks" className="ghost home-tasks-link">
+                <span className="material-symbols-outlined" aria-hidden="true">view_kanban</span>
+                <span>Modo Tasks</span>
+              </Link>
+            </div>
           </div>
           <div className="home-calendar-nav">
             <button
@@ -226,7 +252,7 @@ export const DashboardPage = () => {
               {day}
             </span>
           ))}
-          {calendarCells.map((cell, index) =>
+          {visibleCalendarCells.map((cell, index) =>
             cell ? (
               <button
                 key={cell.dateKey}

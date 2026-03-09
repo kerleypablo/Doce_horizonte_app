@@ -178,6 +178,7 @@ export const OrdersPage = () => {
   const createRouteInitRef = useRef<string>('');
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
   const [customerForm, setCustomerForm] = useState({
     name: '',
     phone: '',
@@ -507,11 +508,13 @@ export const OrdersPage = () => {
       })
       .join('');
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"/><title>${order.type} ${order.number}</title>
+    const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${order.type} ${order.number}</title>
       <style>
-        *{box-sizing:border-box}
-        body{font-family:Manrope,Arial,sans-serif;margin:0;padding:28px;color:#1f2328;background:#fff}
-        .wrap{max-width:860px;margin:0 auto}
+        @page{size:A4;margin:12mm}
+        *{box-sizing:border-box;-webkit-text-size-adjust:100%}
+        body{font-family:Manrope,Arial,sans-serif;margin:0;padding:10px;color:#1f2328;background:#e8edf3;overflow:auto}
+        .sheet{width:210mm;min-height:297mm;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 10px 32px rgba(17,24,39,.12);padding:20px}
+        .wrap{max-width:100%;margin:0 auto}
         .top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
         h1{font-family:"Space Grotesk",Arial,sans-serif;font-size:54px;line-height:1;margin:0 0 8px;color:#1f2328}
         .subtitle{font-size:22px;color:#4c5158}
@@ -546,8 +549,12 @@ export const OrdersPage = () => {
         .photo{border:1px solid #d7dce2;border-radius:10px;padding:8px}
         .photo img{width:100%;height:280px;object-fit:contain;background:#fff}
         .photo span{display:block;margin-top:6px;font-size:12px;color:#5a6068;word-break:break-word}
+        @media print{
+          body{padding:0;background:#fff;overflow:visible}
+          .sheet{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none;border-radius:0}
+        }
       </style></head><body>
-      <div class="wrap">
+      <div class="sheet"><div class="wrap">
         <div class="top">
           <div>
             <h1>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}</h1>
@@ -604,7 +611,7 @@ export const OrdersPage = () => {
             .map((image) => `<div class="photo"><img src="${image.dataUrl}" alt="Foto de referencia" /><span>${escapeHtml(image.name || 'Imagem')}</span></div>`)
             .join('')}
         </div>
-      </div>` : ''}
+      </div>` : ''}</div>
       </body></html>`;
 
     return html;
@@ -617,6 +624,29 @@ export const OrdersPage = () => {
       { staleTime: 60_000 }
     );
     setPdfPreviewHtml(buildPdfHtml(order));
+  };
+
+  const handlePrintPdfPreview = () => {
+    const frameWindow = pdfPreviewRef.current?.contentWindow;
+    if (frameWindow) {
+      try {
+        frameWindow.focus();
+        frameWindow.print();
+        return;
+      } catch {
+        // fallback below
+      }
+    }
+    if (!pdfPreviewHtml) return;
+    const popup = window.open('', '_blank', 'noopener,noreferrer,width=980,height=720');
+    if (!popup) return;
+    popup.document.open();
+    popup.document.write(pdfPreviewHtml);
+    popup.document.close();
+    popup.focus();
+    setTimeout(() => {
+      popup.print();
+    }, 250);
   };
 
   return (
@@ -1108,9 +1138,10 @@ export const OrdersPage = () => {
               </button>
             </div>
             <div className="tasks-modal-content">
-              <iframe title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
+              <iframe ref={pdfPreviewRef} title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
             </div>
             <div className="modal-actions">
+              <button type="button" onClick={handlePrintPdfPreview}>Imprimir / Salvar PDF</button>
               <button type="button" className="ghost" onClick={() => setPdfPreviewHtml(null)}>Fechar</button>
             </div>
           </div>
