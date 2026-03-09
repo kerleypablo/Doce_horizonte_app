@@ -151,7 +151,8 @@ const newOrderForm = (defaults?: CompanySettings) => ({
 export const OrdersPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const { orderId } = useParams<{ orderId?: string }>();
   const isCreateView = pathname === '/app/pedidos/novo';
   const isDetailView = Boolean(orderId);
@@ -185,6 +186,15 @@ export const OrdersPage = () => {
     zipCode: '',
     notes: ''
   });
+  const deliveryDateFromQuery = useMemo(() => {
+    const value = new URLSearchParams(location.search).get('deliveryDate');
+    return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
+  }, [location.search]);
+  const deliveryDateFromState = useMemo(() => {
+    const state = location.state as { deliveryDate?: string } | null;
+    const value = state?.deliveryDate ?? '';
+    return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
+  }, [location.state]);
 
   const ordersQuery = useCachedQuery(
     queryKeys.orders,
@@ -257,14 +267,19 @@ export const OrdersPage = () => {
 
   useEffect(() => {
     if (isCreateView) {
-      resetForm();
+      const next = newOrderForm(orderDefaults);
+      const initialDeliveryDate = deliveryDateFromQuery || deliveryDateFromState;
+      if (initialDeliveryDate) next.deliveryDate = initialDeliveryDate;
+      setForm(next);
+      setEditingId(null);
+      setTab('pessoa');
       setShowForm(true);
       return;
     }
     if (!isDetailView) {
       setShowForm(false);
     }
-  }, [isCreateView, isDetailView, orderDefaults]);
+  }, [isCreateView, isDetailView, orderDefaults, deliveryDateFromQuery, deliveryDateFromState]);
 
   useEffect(() => {
     if (!isDetailView) return;
@@ -888,7 +903,7 @@ export const OrdersPage = () => {
                   </div>
                   <div className="values-main-row">
                     <label>
-                      Desconto tipo
+                      tipo
                       <SelectField
                         className="value-type-select"
                         value={form.discountMode}

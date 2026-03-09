@@ -12,6 +12,7 @@ const productSchema = z.object({
   unitsCount: z.number().positive(),
   targetProfitPercent: z.number().min(0),
   extraPercent: z.number().min(0).default(0),
+  manualUnitPrice: z.number().min(0).optional(),
   channelId: z.string().optional(),
   extraRecipes: z.array(z.object({ recipeId: z.string().min(1), quantity: z.number().positive() })).default([]),
   extraProducts: z.array(z.object({ productId: z.string().min(1), quantity: z.number().positive() })).default([]),
@@ -147,6 +148,9 @@ export const productRoutes = async (app: FastifyInstance) => {
       paymentFeePercent: channel?.payment_fee_percent ?? 0,
       feeFixed: channel?.fee_fixed ?? 0
     });
+    const fallbackUnitPrice = Number(data.manualUnitPrice ?? 0);
+    const persistedUnitPrice = preview.unitPrice > 0 ? preview.unitPrice : fallbackUnitPrice;
+    const persistedSalePrice = preview.totalPrice > 0 ? preview.totalPrice : persistedUnitPrice * data.unitsCount;
 
     const { data: created, error } = await supabaseAdmin
       .from('products')
@@ -160,8 +164,8 @@ export const productRoutes = async (app: FastifyInstance) => {
         units_count: data.unitsCount,
         target_profit_percent: data.targetProfitPercent,
         extra_percent: data.extraPercent,
-        unit_price: preview.unitPrice,
-        sale_price: preview.totalPrice,
+        unit_price: persistedUnitPrice,
+        sale_price: persistedSalePrice,
         channel_id: channel?.id,
         extra_recipes: data.extraRecipes,
         extra_products: data.extraProducts,
@@ -246,6 +250,9 @@ export const productRoutes = async (app: FastifyInstance) => {
       paymentFeePercent: channel?.payment_fee_percent ?? 0,
       feeFixed: channel?.fee_fixed ?? 0
     });
+    const fallbackUnitPrice = Number(data.manualUnitPrice ?? 0);
+    const persistedUnitPrice = preview.unitPrice > 0 ? preview.unitPrice : fallbackUnitPrice;
+    const persistedSalePrice = preview.totalPrice > 0 ? preview.totalPrice : persistedUnitPrice * data.unitsCount;
 
     const { data: updated, error } = await supabaseAdmin
       .from('products')
@@ -257,8 +264,8 @@ export const productRoutes = async (app: FastifyInstance) => {
         units_count: data.unitsCount,
         target_profit_percent: data.targetProfitPercent,
         extra_percent: data.extraPercent,
-        unit_price: preview.unitPrice,
-        sale_price: preview.totalPrice,
+        unit_price: persistedUnitPrice,
+        sale_price: persistedSalePrice,
         channel_id: channel?.id,
         extra_recipes: data.extraRecipes,
         extra_products: data.extraProducts,

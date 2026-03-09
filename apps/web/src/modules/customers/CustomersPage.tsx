@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
-import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
@@ -42,13 +42,16 @@ const toWhatsAppUrl = (phone: string) => {
 
 export const CustomersPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const params = useParams<{ customerId?: string }>();
+  const isCreateView = pathname.endsWith('/novo');
+  const editingRouteId = pathname.includes('/editar/') ? params.customerId ?? null : null;
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
+  const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [saving, setSaving] = useState(false);
-  const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -72,6 +75,35 @@ export const CustomersPage = () => {
     if (customersQuery.data) setCustomers(customersQuery.data);
   }, [customersQuery.data]);
 
+  useEffect(() => {
+    if (isCreateView) {
+      resetForm();
+      setShowForm(true);
+      return;
+    }
+    if (editingRouteId) {
+      const current = (customersQuery.data ?? []).find((item) => item.id === editingRouteId);
+      if (!current) return;
+      setEditingId(current.id);
+      setForm({
+        name: current.name,
+        phone: formatPhoneBR(current.phone),
+        personType: current.personType,
+        email: current.email ?? '',
+        address: current.address ?? '',
+        number: current.number ?? '',
+        city: current.city ?? '',
+        neighborhood: current.neighborhood ?? '',
+        zipCode: current.zipCode ?? '',
+        notes: current.notes ?? ''
+      });
+      setShowForm(true);
+      return;
+    }
+    setEditingId(null);
+    setShowForm(false);
+  }, [isCreateView, editingRouteId, customersQuery.data]);
+
   const resetForm = () => {
     setForm({
       name: '',
@@ -89,16 +121,7 @@ export const CustomersPage = () => {
   };
 
   const handleNew = () => {
-    if (editingId) {
-      confirmActionRef.current = () => {
-        resetForm();
-        setShowForm(true);
-      };
-      setConfirmOpen(true);
-      return;
-    }
-    resetForm();
-    setShowForm(true);
+    navigate('/app/clientes/novo');
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -122,6 +145,7 @@ export const CustomersPage = () => {
       setShowForm(false);
       invalidateQueryCache(queryKeys.customers);
       await customersQuery.refetch();
+      navigate('/app/clientes');
     } finally {
       setSaving(false);
     }
@@ -134,6 +158,7 @@ export const CustomersPage = () => {
 
   return (
     <div className="page">
+      {!isCreateView && !editingRouteId ? (
       <div className="panel">
         <ListToolbar
           title="Clientes cadastrados"
@@ -170,27 +195,12 @@ export const CustomersPage = () => {
                       </svg>
                     </a>
                   )}
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Editar"
-                    onClick={() => {
-                      setEditingId(customer.id);
-                      setForm({
-                        name: customer.name,
-                        phone: formatPhoneBR(customer.phone),
-                        personType: customer.personType,
-                        email: customer.email ?? '',
-                        address: customer.address ?? '',
-                        number: customer.number ?? '',
-                        city: customer.city ?? '',
-                        neighborhood: customer.neighborhood ?? '',
-                        zipCode: customer.zipCode ?? '',
-                        notes: customer.notes ?? ''
-                      });
-                      setShowForm(true);
-                    }}
-                  >
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Editar"
+                  onClick={() => navigate(`/app/clientes/editar/${customer.id}`)}
+                >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
                     </svg>
@@ -201,10 +211,16 @@ export const CustomersPage = () => {
           </div>
         )}
       </div>
+      ) : null}
 
       {showForm && (
         <div className="panel">
-          <h3>{editingId ? 'Editar cliente' : 'Novo cliente'}</h3>
+          <div className="panel-title-row">
+            <button type="button" className="icon-button small" onClick={() => navigate('/app/clientes')} aria-label="Voltar">
+              <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+            </button>
+            <h3>{editingId ? 'Editar cliente' : 'Novo cliente'}</h3>
+          </div>
           <form className="form" onSubmit={handleSubmit}>
             <div className="grid-2">
               <label>
@@ -266,7 +282,7 @@ export const CustomersPage = () => {
               <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
             </label>
             <div className="actions">
-              <button type="button" className="ghost" onClick={() => setShowForm(false)}>
+              <button type="button" className="ghost" onClick={() => navigate('/app/clientes')}>
                 Cancelar
               </button>
               <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar cliente'}</button>
@@ -274,23 +290,6 @@ export const CustomersPage = () => {
           </form>
         </div>
       )}
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Descartar edicao?"
-        message="Voce tem uma edicao em andamento. Deseja cancelar e criar um novo cliente?"
-        confirmLabel="Sim, descartar"
-        cancelLabel="Continuar editando"
-        onCancel={() => {
-          setConfirmOpen(false);
-          confirmActionRef.current = null;
-        }}
-        onConfirm={() => {
-          confirmActionRef.current?.();
-          confirmActionRef.current = null;
-          setConfirmOpen(false);
-        }}
-      />
       <LoadingOverlay open={saving} label="Salvando cliente..." />
     </div>
   );

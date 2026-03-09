@@ -192,6 +192,7 @@ export const ProductsPage = () => {
       unitsCount: Number(form.unitsCount),
       targetProfitPercent: Number(form.targetProfitPercent),
       extraPercent: Number(form.extraPercent),
+      manualUnitPrice: Number(unitPriceInput || 0),
       channelId: form.channelId,
       extraRecipes: form.extraRecipes.map((item) => ({
         recipeId: item.recipeId,

@@ -244,7 +244,17 @@ export const DashboardPage = () => {
         </div>
 
         <div className="home-orders-summary">
-          <h4>Pedidos do dia {selectedDate.split('-').reverse().join('/')}</h4>
+          <div className="home-orders-summary-head">
+            <h4>Pedidos do dia {selectedDate.split('-').reverse().join('/')}</h4>
+            <button
+              type="button"
+              className="icon-button small"
+              aria-label="Criar pedido na data selecionada"
+              onClick={() => navigate(`/app/pedidos/novo?deliveryDate=${selectedDate}`, { state: { deliveryDate: selectedDate } })}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">add</span>
+            </button>
+          </div>
           {selectedOrders.length === 0 ? (
             <p className="muted">Nenhum pedido nesta data.</p>
           ) : (
