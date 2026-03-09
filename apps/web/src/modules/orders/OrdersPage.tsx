@@ -528,6 +528,7 @@ export const OrdersPage = () => {
         .meta{margin-top:12px;font-size:14px;color:#2e3338}
         table{width:100%;border-collapse:collapse;margin-top:18px}
         th{background:#1f2328;color:#fff;padding:10px 8px;text-align:left;font-weight:600;font-size:13px}
+        th:nth-child(4),th:nth-child(5){text-align:right}
         td{padding:10px 8px;border-bottom:1px solid #dde1e6;font-size:14px}
         td:nth-child(1),td:nth-child(3){text-align:center}
         td:nth-child(4),td:nth-child(5){text-align:right}
@@ -540,8 +541,8 @@ export const OrdersPage = () => {
         .section-grid{margin-top:24px;display:grid;gap:12px}
         .box-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
         .box{border:1px solid #d7dce2;padding:12px;min-height:110px}
-        .box h4{margin:0 0 8px;font-size:14px;color:#5a6068;text-transform:uppercase;letter-spacing:.06em}
-        .box p{margin:0;font-size:13px;line-height:1.45;white-space:pre-wrap}
+        .box h4{margin:0 0 8px;font-size:14px;color:#5a6068;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+        .box p{margin:0;font-size:15px;line-height:1.45;white-space:pre-wrap}
         .contact-line{display:flex;align-items:center;gap:8px;font-size:13px;line-height:1.45;margin:0 0 6px}
         .pix{font-weight:800;margin-top:8px}
         .page-break{break-before:page;page-break-before:always}
