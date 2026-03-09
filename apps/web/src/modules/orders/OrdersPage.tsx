@@ -656,12 +656,14 @@ export const OrdersPage = () => {
 
       {showForm && (
         <div className="panel order-editor">
-          {isFormRoute && (
-            <button type="button" className="ghost" onClick={() => navigate('/app/pedidos')}>
-              Voltar para lista
-            </button>
-          )}
-          <h3>{editingId ? 'Editar pedido/orcamento' : 'Novo pedido/orcamento'}</h3>
+          <div className="panel-title-row">
+            {isFormRoute && (
+              <button type="button" className="icon-button small" onClick={() => navigate('/app/pedidos')} aria-label="Voltar">
+                <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+              </button>
+            )}
+            <h3>{editingId ? 'Editar pedido/orcamento' : 'Novo pedido/orcamento'}</h3>
+          </div>
           <div className="tabs order-tabs" style={{ '--order-tab-index': Math.max(activeTabIndex, 0) } as CSSProperties}>
             <span className="order-tabs-indicator" aria-hidden="true" />
             {orderTabs.map((item) => (

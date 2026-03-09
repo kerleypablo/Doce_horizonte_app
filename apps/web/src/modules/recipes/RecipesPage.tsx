@@ -120,6 +120,12 @@ export const RecipesPage = () => {
     setShowForm(true);
   }, [isCreateView]);
 
+  useEffect(() => {
+    if (!isCreateView && !editingId) {
+      setShowForm(false);
+    }
+  }, [isCreateView, editingId]);
+
   const resetForm = () => {
     setForm({
       name: '',
@@ -377,12 +383,14 @@ export const RecipesPage = () => {
       {showForm && (
         <>
           <div className="panel">
-            {isCreateView && (
-              <button type="button" className="ghost" onClick={() => navigate('/app/receitas')}>
-                Voltar para lista
-              </button>
-            )}
-            <h3>{editingId ? 'Editar receita' : 'Nova receita'}</h3>
+            <div className="panel-title-row">
+              {isCreateView && (
+                <button type="button" className="icon-button small" onClick={() => navigate('/app/receitas')} aria-label="Voltar">
+                  <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                </button>
+              )}
+              <h3>{editingId ? 'Editar receita' : 'Nova receita'}</h3>
+            </div>
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
                 <label>

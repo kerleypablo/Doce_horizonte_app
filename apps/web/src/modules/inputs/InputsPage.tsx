@@ -63,6 +63,12 @@ export const InputsPage = () => {
     setShowForm(true);
   }, [isCreateView]);
 
+  useEffect(() => {
+    if (!isCreateView && !editingId) {
+      setShowForm(false);
+    }
+  }, [isCreateView, editingId]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -190,12 +196,14 @@ export const InputsPage = () => {
 
       {showForm && (
         <div className="panel">
-          {isCreateView && (
-            <button type="button" className="ghost" onClick={() => navigate('/app/insumos')}>
-              Voltar para lista
-            </button>
-          )}
-          <h3>{editingId ? 'Editar insumo' : 'Novo insumo'}</h3>
+          <div className="panel-title-row">
+            {isCreateView && (
+              <button type="button" className="icon-button small" onClick={() => navigate('/app/insumos')} aria-label="Voltar">
+                <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+              </button>
+            )}
+            <h3>{editingId ? 'Editar insumo' : 'Novo insumo'}</h3>
+          </div>
           <form className="form" onSubmit={handleSubmit}>
             <div className="grid-2">
               <label>

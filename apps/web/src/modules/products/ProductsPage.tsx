@@ -132,6 +132,12 @@ export const ProductsPage = () => {
     setShowForm(true);
   }, [isCreateView]);
 
+  useEffect(() => {
+    if (!isCreateView && !editingId) {
+      setShowForm(false);
+    }
+  }, [isCreateView, editingId]);
+
   const resetForm = () => {
     setForm({
       name: '',
@@ -426,12 +432,14 @@ export const ProductsPage = () => {
       {showForm && (
         <>
           <div className="panel">
-            {isCreateView && (
-              <button type="button" className="ghost" onClick={() => navigate('/app/produtos')}>
-                Voltar para lista
-              </button>
-            )}
-            <h3>{editingId ? 'Editar produto' : 'Novo produto'}</h3>
+            <div className="panel-title-row">
+              {isCreateView && (
+                <button type="button" className="icon-button small" onClick={() => navigate('/app/produtos')} aria-label="Voltar">
+                  <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                </button>
+              )}
+              <h3>{editingId ? 'Editar produto' : 'Novo produto'}</h3>
+            </div>
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
                 <label>
