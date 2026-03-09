@@ -21,7 +21,13 @@ export const buildApp = () => {
 
   registerAuth(app);
 
-  app.get('/health', async () => ({ ok: true }));
+  app.get('/health', async () => ({
+    ok: true,
+    status: 'up',
+    service: 'confeitaria-api',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime())
+  }));
 
   app.register(authRoutes);
   app.register(companyRoutes);
