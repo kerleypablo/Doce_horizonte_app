@@ -14,6 +14,13 @@ import { OrdersPage } from './modules/orders/OrdersPage.tsx';
 import { SettingsPage } from './modules/settings/SettingsPage.tsx';
 import { TasksBoardPage } from './modules/tasks/TasksBoardPage.tsx';
 import { BackofficePage } from './modules/backoffice/BackofficePage.tsx';
+import {
+  FinanceAccountsPage,
+  FinanceDashboardPage,
+  FinanceExpensesPage,
+  FinanceManualSalesPage,
+  FinanceRulesPage
+} from './modules/finance/FinancePages.tsx';
 
 const App = () => {
   return (
@@ -35,6 +42,17 @@ const App = () => {
         <Route path="/app/pedidos" element={<OrdersPage />} />
         <Route path="/app/pedidos/novo" element={<OrdersPage />} />
         <Route path="/app/pedidos/:orderId" element={<OrdersPage />} />
+        <Route path="/app/financeiro" element={<FinanceDashboardPage />} />
+        <Route path="/app/financeiro/contas" element={<FinanceAccountsPage />} />
+        <Route path="/app/financeiro/contas/novo" element={<FinanceAccountsPage />} />
+        <Route path="/app/financeiro/contas/editar/:accountId" element={<FinanceAccountsPage />} />
+        <Route path="/app/financeiro/regras" element={<FinanceRulesPage />} />
+        <Route path="/app/financeiro/vendas-manuais" element={<FinanceManualSalesPage />} />
+        <Route path="/app/financeiro/vendas-manuais/novo" element={<FinanceManualSalesPage />} />
+        <Route path="/app/financeiro/vendas-manuais/editar/:saleId" element={<FinanceManualSalesPage />} />
+        <Route path="/app/financeiro/despesas" element={<FinanceExpensesPage />} />
+        <Route path="/app/financeiro/despesas/novo" element={<FinanceExpensesPage />} />
+        <Route path="/app/financeiro/despesas/editar/:expenseId" element={<FinanceExpensesPage />} />
         <Route path="/app/tasks" element={<TasksBoardPage />} />
         <Route path="/app/empresa" element={<CompanySettingsPage />} />
         <Route path="/app/configuracoes" element={<SettingsPage />} />

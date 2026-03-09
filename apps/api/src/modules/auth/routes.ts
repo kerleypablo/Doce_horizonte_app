@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { supabaseAdmin, supabaseAnon, getAppUserByAuthId } from '../../db/supabase.js';
+import { supabaseAdmin, supabaseAnon, getAppUserByAuthId, getEnabledModulesForAccess } from '../../db/supabase.js';
 import { MODULE_DEFINITIONS } from '../common/modules.js';
 
 const loginSchema = z.object({
@@ -35,7 +35,14 @@ export const authRoutes = async (app: FastifyInstance) => {
     if (!appUser) {
       return reply.status(403).send({ message: 'Usuario sem empresa vinculada' });
     }
-    return reply.send({ token: authData.session.access_token, role: appUser.role });
+    return reply.send({
+      token: authData.session.access_token,
+      role: appUser.role,
+      modules: await getEnabledModulesForAccess({
+        companyId: appUser.company_id,
+        authUserId: appUser.auth_user_id
+      })
+    });
   });
 
   app.post('/auth/signup', async (request, reply) => {

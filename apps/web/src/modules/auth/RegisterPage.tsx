@@ -40,8 +40,8 @@ export const RegisterPage = () => {
         });
       }
 
-      const me = await apiFetch<{ role: 'master' | 'admin' | 'common' }>('/auth/me', { token: signup.token });
-      login(signup.token, me.role);
+      const me = await apiFetch<{ role: 'master' | 'admin' | 'common'; modules: string[] }>('/auth/me', { token: signup.token });
+      login(signup.token, me.role, me.modules ?? []);
       navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar conta');

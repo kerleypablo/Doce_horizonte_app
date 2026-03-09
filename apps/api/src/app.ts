@@ -11,6 +11,7 @@ import { onboardingRoutes } from './modules/onboarding/routes.js';
 import { customerRoutes } from './modules/customers/routes.js';
 import { orderRoutes } from './modules/orders/routes.js';
 import { backofficeRoutes } from './modules/backoffice/routes.js';
+import { financeRoutes } from './modules/finance/routes.js';
 
 export const buildApp = () => {
   const app = Fastify({
@@ -37,6 +38,7 @@ export const buildApp = () => {
   app.register(productRoutes);
   app.register(customerRoutes);
   app.register(orderRoutes);
+  app.register(financeRoutes);
   app.register(pricingRoutes);
   app.register(onboardingRoutes);
   app.register(backofficeRoutes);

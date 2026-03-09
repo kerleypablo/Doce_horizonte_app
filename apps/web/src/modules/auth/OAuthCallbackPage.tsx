@@ -20,7 +20,7 @@ export const OAuthCallbackPage = () => {
       }
 
       try {
-        const me = await apiFetch<{ role: 'master' | 'admin' | 'common' }>('/auth/me', { token });
+        const me = await apiFetch<{ role: 'master' | 'admin' | 'common'; modules: string[] }>('/auth/me', { token });
         const profile = data.session?.user
           ? {
               email: data.session.user.email ?? undefined,
@@ -28,7 +28,7 @@ export const OAuthCallbackPage = () => {
               avatarUrl: (data.session.user.user_metadata?.avatar_url as string | undefined) ?? undefined
             }
           : undefined;
-        login(token, me.role, profile);
+        login(token, me.role, me.modules ?? [], profile);
         navigate('/app');
       } catch (err) {
         const message = err instanceof Error ? err.message : '';

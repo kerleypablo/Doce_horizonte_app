@@ -5,6 +5,7 @@ import { supabase } from '../shared/supabase.ts';
 export type AuthUser = {
   token: string;
   role: 'master' | 'admin' | 'common';
+  modules: string[];
   email?: string;
   name?: string;
   avatarUrl?: string;
@@ -15,6 +16,7 @@ type AuthContextValue = {
   login: (
     token: string,
     role: 'master' | 'admin' | 'common',
+    modules: string[],
     profile?: { email?: string; name?: string; avatarUrl?: string }
   ) => void;
   logout: () => void;
@@ -28,7 +30,16 @@ const loadUser = (): AuthUser | null => {
   const raw = localStorage.getItem(storageKey);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as AuthUser;
+    const parsed = JSON.parse(raw) as Partial<AuthUser>;
+    if (!parsed.token || !parsed.role) return null;
+    return {
+      token: parsed.token,
+      role: parsed.role,
+      modules: parsed.modules ?? [],
+      email: parsed.email,
+      name: parsed.name,
+      avatarUrl: parsed.avatarUrl
+    };
   } catch {
     return null;
   }
@@ -40,9 +51,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login = (
     token: string,
     role: 'master' | 'admin' | 'common',
+    modules: string[],
     profile?: { email?: string; name?: string; avatarUrl?: string }
   ) => {
-    const next = { token, role, ...profile };
+    const next = { token, role, modules, ...profile };
     setUser(next);
     localStorage.setItem(storageKey, JSON.stringify(next));
     clearQueryCache();
@@ -60,6 +72,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!fetchedName && !fetchedAvatar && !fetchedEmail) return;
       const next: AuthUser = {
         ...user,
+        modules: user.modules ?? [],
         email: fetchedEmail,
         name: fetchedName,
         avatarUrl: fetchedAvatar

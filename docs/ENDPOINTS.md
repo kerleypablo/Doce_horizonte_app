@@ -23,6 +23,24 @@
 - `PUT /backoffice/users/:authUserId/access`
 - `PUT /backoffice/users/:authUserId/modules`
 
+## Financeiro
+- `GET /finance/dashboard?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /finance/accounts`
+- `POST /finance/accounts`
+- `PUT /finance/accounts/:id`
+- `DELETE /finance/accounts/:id`
+- `GET /finance/method-rules`
+- `PUT /finance/method-rules`
+- `GET /finance/manual-sales?from=YYYY-MM-DD&to=YYYY-MM-DD&tag=tagOpcional&search=textoOpcional`
+- `GET /finance/manual-sales/tags`
+- `POST /finance/manual-sales`
+- `PUT /finance/manual-sales/:id`
+- `DELETE /finance/manual-sales/:id`
+- `GET /finance/expenses?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `POST /finance/expenses`
+- `PUT /finance/expenses/:id`
+- `DELETE /finance/expenses/:id`
+
 ## Insumos
 - `GET /inputs`
 - `POST /inputs`

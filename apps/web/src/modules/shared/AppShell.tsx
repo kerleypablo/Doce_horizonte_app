@@ -38,6 +38,12 @@ const navItems = [
     icon: 'receipt_long'
   },
   {
+    path: '/app/financeiro',
+    label: 'Financeiro',
+    icon: 'monitoring',
+    requiresModule: 'financeiro'
+  },
+  {
     path: '/app/tasks',
     label: 'Tasks',
     icon: 'checklist'
@@ -85,7 +91,11 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const headerTitle = getHeaderTitle(pathname);
   const activeBottomIndex = bottomNavItems.findIndex((item) => isPathActive(pathname, item.path));
-  const visibleNavItems = navItems.filter((item) => !item.requiresMaster || user?.role === 'master');
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.requiresMaster && user?.role !== 'master') return false;
+    if (item.requiresModule && !user?.modules?.includes(item.requiresModule)) return false;
+    return true;
+  });
   const settingsQuery = useCachedQuery(
     queryKeys.companySettings,
     () => apiFetch<{ appTheme?: string; darkMode?: boolean }>('/company/settings', { token: user?.token }),
@@ -158,7 +168,9 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <div className="role">Perfil: {user?.role === 'admin' ? 'Admin' : 'Comum'}</div>
+          <div className="role">
+            Perfil: {user?.role === 'master' ? 'Master' : user?.role === 'admin' ? 'Admin' : 'Comum'}
+          </div>
           <button onClick={logout}>Sair</button>
         </div>
       </aside>
@@ -182,7 +194,9 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             {pathname === '/app' ? <p>Custos, receitas e margens sempre atualizados.</p> : null}
           </div>
           <div className="header-actions">
-            <span>{user?.role === 'admin' ? 'Administrador' : 'Operacional'}</span>
+            <span>
+              {user?.role === 'master' ? 'Master' : user?.role === 'admin' ? 'Administrador' : 'Operacional'}
+            </span>
             <div className="mobile-user" aria-label="Usuario logado">
               {avatarContent}
             </div>
