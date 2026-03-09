@@ -16,6 +16,8 @@ const profitSchema = z.object({
 });
 
 export const pricingRoutes = async (app: FastifyInstance) => {
+  const cadastrosGuard = { preHandler: [app.authenticate, app.requireModule('cadastros')] };
+
   const mapInput = (row: any) => ({
     id: row.id,
     companyId: row.company_id,
@@ -43,7 +45,7 @@ export const pricingRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? undefined
   });
 
-  app.post('/pricing/preview', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/pricing/preview', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = previewSchema.parse(request.body);
 
@@ -104,7 +106,7 @@ export const pricingRoutes = async (app: FastifyInstance) => {
     return reply.send(preview);
   });
 
-  app.post('/pricing/profit', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/pricing/profit', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = profitSchema.parse(request.body);
 

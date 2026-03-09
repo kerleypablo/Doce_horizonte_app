@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin, supabaseAnon, getAppUserByAuthId } from '../../db/supabase.js';
+import { MODULE_DEFINITIONS } from '../common/modules.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -66,7 +67,7 @@ export const authRoutes = async (app: FastifyInstance) => {
     const data = registerSchema.parse(request.body);
     const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
 
-    if (!auth || auth.role !== 'admin') {
+    if (!auth || (auth.role !== 'admin' && auth.role !== 'master')) {
       return reply.status(403).send({ message: 'Apenas admin' });
     }
 
@@ -90,7 +91,17 @@ export const authRoutes = async (app: FastifyInstance) => {
   });
 
   app.get('/auth/me', { preHandler: app.authenticate }, async (request) => {
-    const auth = (request as typeof request & { auth: { userId: string; role: string; companyId: string } }).auth;
-    return { id: auth.userId, role: auth.role, companyId: auth.companyId };
+    const auth = (request as typeof request & {
+      auth: { userId: string; role: string; companyId: string; modules: string[] }
+    }).auth;
+    return { id: auth.userId, role: auth.role, companyId: auth.companyId, modules: auth.modules };
+  });
+
+  app.get('/auth/modules', { preHandler: app.authenticate }, async (request) => {
+    const auth = (request as typeof request & { auth: { modules: string[] } }).auth;
+    return {
+      enabled: auth.modules,
+      available: MODULE_DEFINITIONS
+    };
   });
 };

@@ -40,7 +40,7 @@ export const RegisterPage = () => {
         });
       }
 
-      const me = await apiFetch<{ role: 'admin' | 'common' }>('/auth/me', { token: signup.token });
+      const me = await apiFetch<{ role: 'master' | 'admin' | 'common' }>('/auth/me', { token: signup.token });
       login(signup.token, me.role);
       navigate('/app');
     } catch (err) {

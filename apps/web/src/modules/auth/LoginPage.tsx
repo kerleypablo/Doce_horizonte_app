@@ -18,7 +18,7 @@ export const LoginPage = () => {
     setError(null);
 
     try {
-      const data = await apiFetch<{ token: string; role: 'admin' | 'common' }>(
+      const data = await apiFetch<{ token: string; role: 'master' | 'admin' | 'common' }>(
         '/auth/login',
         {
           method: 'POST',

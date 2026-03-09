@@ -14,6 +14,8 @@ const inputSchema = z.object({
 });
 
 export const inputRoutes = async (app: FastifyInstance) => {
+  const cadastrosGuard = { preHandler: [app.authenticate, app.requireModule('cadastros')] };
+
   const mapInput = (row: any) => ({
     id: row.id,
     name: row.name,
@@ -26,7 +28,7 @@ export const inputRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? undefined
   });
 
-  app.get('/inputs', { preHandler: app.authenticate }, async (request) => {
+  app.get('/inputs', cadastrosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const { data } = await supabaseAdmin
       .from('inputs')
@@ -36,7 +38,7 @@ export const inputRoutes = async (app: FastifyInstance) => {
     return (data ?? []).map(mapInput);
   });
 
-  app.post('/inputs', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/inputs', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = inputSchema.parse(request.body);
 
@@ -60,7 +62,7 @@ export const inputRoutes = async (app: FastifyInstance) => {
     return reply.status(201).send(mapInput(created));
   });
 
-  app.put('/inputs/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.put('/inputs/:id', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = inputSchema.parse(request.body);
     const id = request.params as { id: string };
@@ -86,7 +88,7 @@ export const inputRoutes = async (app: FastifyInstance) => {
     return reply.send(mapInput(updated));
   });
 
-  app.delete('/inputs/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.delete('/inputs/:id', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
 

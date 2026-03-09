@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
@@ -25,6 +26,9 @@ export type InputItem = {
 
 export const InputsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isCreateView = pathname === '/app/insumos/novo';
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -52,6 +56,12 @@ export const InputsPage = () => {
   useEffect(() => {
     if (inputsQuery.data) setInputs(inputsQuery.data);
   }, [inputsQuery.data]);
+
+  useEffect(() => {
+    if (!isCreateView) return;
+    resetForm();
+    setShowForm(true);
+  }, [isCreateView]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -81,6 +91,7 @@ export const InputsPage = () => {
       setShowForm(false);
       invalidateQueryCache(queryKeys.inputs);
       await inputsQuery.refetch();
+      if (isCreateView) navigate('/app/insumos');
     } finally {
       setSaving(false);
     }
@@ -104,13 +115,12 @@ export const InputsPage = () => {
     if (editingId) {
       confirmActionRef.current = () => {
         resetForm();
-        setShowForm(true);
+        navigate('/app/insumos/novo');
       };
       setConfirmOpen(true);
       return;
     }
-    resetForm();
-    setShowForm(true);
+    navigate('/app/insumos/novo');
   };
 
   const filtered = inputs.filter((input) => {
@@ -120,6 +130,7 @@ export const InputsPage = () => {
 
   return (
     <div className="page">
+      {!isCreateView && (
       <div className="panel">
         <ListToolbar
           title="Insumos cadastrados"
@@ -175,9 +186,15 @@ export const InputsPage = () => {
           </div>
         )}
       </div>
+      )}
 
       {showForm && (
         <div className="panel">
+          {isCreateView && (
+            <button type="button" className="ghost" onClick={() => navigate('/app/insumos')}>
+              Voltar para lista
+            </button>
+          )}
           <h3>{editingId ? 'Editar insumo' : 'Novo insumo'}</h3>
           <form className="form" onSubmit={handleSubmit}>
             <div className="grid-2">
@@ -243,7 +260,7 @@ export const InputsPage = () => {
               <TagInput value={form.tags} onChange={(tags) => setForm({ ...form, tags })} placeholder="Ex: doce, natal" />
             </label>
             <div className="actions">
-              <button type="button" className="ghost" onClick={() => { setShowForm(false); }}>
+              <button type="button" className="ghost" onClick={() => (isCreateView ? navigate('/app/insumos') : setShowForm(false))}>
                 Cancelar
               </button>
               <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar insumo'}</button>

@@ -13,6 +13,7 @@ import { CustomersPage } from './modules/customers/CustomersPage.tsx';
 import { OrdersPage } from './modules/orders/OrdersPage.tsx';
 import { SettingsPage } from './modules/settings/SettingsPage.tsx';
 import { TasksBoardPage } from './modules/tasks/TasksBoardPage.tsx';
+import { BackofficePage } from './modules/backoffice/BackofficePage.tsx';
 
 const App = () => {
   return (
@@ -25,8 +26,11 @@ const App = () => {
       <Route element={<ProtectedLayout />}>
         <Route path="/app" element={<DashboardPage />} />
         <Route path="/app/insumos" element={<InputsPage />} />
+        <Route path="/app/insumos/novo" element={<InputsPage />} />
         <Route path="/app/receitas" element={<RecipesPage />} />
+        <Route path="/app/receitas/novo" element={<RecipesPage />} />
         <Route path="/app/produtos" element={<ProductsPage />} />
+        <Route path="/app/produtos/novo" element={<ProductsPage />} />
         <Route path="/app/clientes" element={<CustomersPage />} />
         <Route path="/app/pedidos" element={<OrdersPage />} />
         <Route path="/app/pedidos/novo" element={<OrdersPage />} />
@@ -34,6 +38,7 @@ const App = () => {
         <Route path="/app/tasks" element={<TasksBoardPage />} />
         <Route path="/app/empresa" element={<CompanySettingsPage />} />
         <Route path="/app/configuracoes" element={<SettingsPage />} />
+        <Route path="/backoffice" element={<BackofficePage />} />
       </Route>
     </Routes>
   );

@@ -10,6 +10,7 @@ import { companyRoutes } from './modules/company/routes.js';
 import { onboardingRoutes } from './modules/onboarding/routes.js';
 import { customerRoutes } from './modules/customers/routes.js';
 import { orderRoutes } from './modules/orders/routes.js';
+import { backofficeRoutes } from './modules/backoffice/routes.js';
 
 export const buildApp = () => {
   const app = Fastify({
@@ -38,6 +39,7 @@ export const buildApp = () => {
   app.register(orderRoutes);
   app.register(pricingRoutes);
   app.register(onboardingRoutes);
+  app.register(backofficeRoutes);
 
   return app;
 };

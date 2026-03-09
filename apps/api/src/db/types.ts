@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'common';
+export type Role = 'master' | 'admin' | 'common';
 
 export type CompanySettings = {
   companyName?: string;

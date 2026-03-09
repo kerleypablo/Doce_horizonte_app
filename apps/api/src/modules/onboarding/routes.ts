@@ -12,6 +12,12 @@ const joinSchema = z.object({
 
 const getCompanyCodeFromId = (companyId: string) => companyId.replace(/-/g, '').slice(0, 8).toUpperCase();
 const normalizeCompanyCode = (value: string) => value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+const isModulesInfraMissing = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String((error as { code?: string }).code ?? '') : '';
+  const message = 'message' in error ? String((error as { message?: string }).message ?? '') : '';
+  return code === '42P01' || code === 'PGRST205' || message.toLowerCase().includes('does not exist');
+};
 
 export const onboardingRoutes = async (app: FastifyInstance) => {
   app.post('/onboarding/company', { preHandler: app.authenticateSupabase }, async (request, reply) => {
@@ -88,6 +94,30 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
     });
     if (userError) {
       return reply.status(400).send({ message: 'Erro ao vincular usuario', detail: userError.message });
+    }
+
+    const { data: basePlan, error: basePlanError } = await supabaseAdmin
+      .from('plan_catalog')
+      .select('id')
+      .eq('code', 'base')
+      .maybeSingle();
+
+    if (basePlanError && !isModulesInfraMissing(basePlanError)) {
+      return reply.status(400).send({ message: 'Erro ao preparar plano inicial', detail: basePlanError.message });
+    }
+
+    if (basePlan?.id) {
+      const { error: subscriptionError } = await supabaseAdmin
+        .from('company_subscriptions')
+        .upsert({
+          company_id: company.id,
+          plan_id: basePlan.id,
+          status: 'active'
+        }, { onConflict: 'company_id' });
+
+      if (subscriptionError && !isModulesInfraMissing(subscriptionError)) {
+        return reply.status(400).send({ message: 'Erro ao vincular plano inicial', detail: subscriptionError.message });
+      }
     }
 
     return reply.send({

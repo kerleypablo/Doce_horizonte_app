@@ -19,6 +19,8 @@ const productSchema = z.object({
 });
 
 export const productRoutes = async (app: FastifyInstance) => {
+  const cadastrosGuard = { preHandler: [app.authenticate, app.requireModule('cadastros')] };
+
   const mapInput = (row: any) => ({
     id: row.id,
     companyId: row.company_id,
@@ -64,7 +66,7 @@ export const productRoutes = async (app: FastifyInstance) => {
     packagingInputs: row.packaging_inputs ?? []
   });
 
-  app.get('/products', { preHandler: app.authenticate }, async (request) => {
+  app.get('/products', cadastrosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const { data } = await supabaseAdmin
       .from('products')
@@ -74,7 +76,7 @@ export const productRoutes = async (app: FastifyInstance) => {
     return (data ?? []).map(mapProduct);
   });
 
-  app.post('/products', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/products', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = productSchema.parse(request.body);
 
@@ -172,7 +174,7 @@ export const productRoutes = async (app: FastifyInstance) => {
     return reply.status(201).send({ product: mapProduct(created), preview });
   });
 
-  app.put('/products/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.put('/products/:id', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = productSchema.parse(request.body);
     const id = request.params as { id: string };

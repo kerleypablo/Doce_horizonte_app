@@ -45,7 +45,7 @@ type CompanyUser = {
   email: string;
   name: string;
   avatarUrl: string;
-  role: 'admin' | 'common';
+  role: 'master' | 'admin' | 'common';
   createdAt?: string;
 };
 
@@ -71,7 +71,7 @@ export const CompanySettingsPage = () => {
   const usersQuery = useCachedQuery(
     queryKeys.companyUsers,
     () => apiFetch<CompanyUser[]>('/company/users', { token: user?.token }),
-    { staleTime: 60_000, enabled: Boolean(user?.token && user?.role === 'admin') }
+    { staleTime: 60_000, enabled: Boolean(user?.token && (user?.role === 'admin' || user?.role === 'master')) }
   );
 
   const currentAuthUserId = useMemo(() => {
@@ -202,7 +202,7 @@ export const CompanySettingsPage = () => {
     }
   };
 
-  if (user?.role !== 'admin') {
+  if (user?.role !== 'admin' && user?.role !== 'master') {
     return (
       <div className="panel">
         <h3>Somente administradores</h3>
@@ -319,6 +319,7 @@ export const CompanySettingsPage = () => {
                 </div>
               ))}
             </div>
+
           </div>
         ) : null}
 
@@ -475,4 +476,3 @@ export const CompanySettingsPage = () => {
     </div>
   );
 };
-

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-export type Role = 'admin' | 'common';
+export type Role = 'master' | 'admin' | 'common';
 
 export type User = {
   id: string;

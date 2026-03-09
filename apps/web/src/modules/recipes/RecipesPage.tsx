@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';
@@ -62,6 +63,9 @@ const normalizeQuantity = (quantity: number, unit: string, target: string) => {
 
 export const RecipesPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isCreateView = pathname === '/app/receitas/novo';
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -110,6 +114,12 @@ export const RecipesPage = () => {
     if (settingsQuery.data) setSettings(settingsQuery.data);
   }, [settingsQuery.data]);
 
+  useEffect(() => {
+    if (!isCreateView) return;
+    resetForm();
+    setShowForm(true);
+  }, [isCreateView]);
+
   const resetForm = () => {
     setForm({
       name: '',
@@ -128,13 +138,12 @@ export const RecipesPage = () => {
     if (editingId) {
       confirmActionRef.current = () => {
         resetForm();
-        setShowForm(true);
+        navigate('/app/receitas/novo');
       };
       setConfirmOpen(true);
       return;
     }
-    resetForm();
-    setShowForm(true);
+    navigate('/app/receitas/novo');
   };
 
   const handleIngredientChange = (index: number, field: string, value: string | number) => {
@@ -207,6 +216,7 @@ export const RecipesPage = () => {
       setShowForm(false);
       invalidateQueryCache(queryKeys.recipes);
       await recipesQuery.refetch();
+      if (isCreateView) navigate('/app/receitas');
     } finally {
       setSaving(false);
     }
@@ -312,6 +322,7 @@ export const RecipesPage = () => {
 
   return (
     <div className="page recipes-page">
+      {!isCreateView && (
       <div className="panel">
         <ListToolbar
           title="Receitas cadastradas"
@@ -361,10 +372,16 @@ export const RecipesPage = () => {
           </div>
         )}
       </div>
+      )}
 
       {showForm && (
         <>
           <div className="panel">
+            {isCreateView && (
+              <button type="button" className="ghost" onClick={() => navigate('/app/receitas')}>
+                Voltar para lista
+              </button>
+            )}
             <h3>{editingId ? 'Editar receita' : 'Nova receita'}</h3>
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
@@ -412,7 +429,7 @@ export const RecipesPage = () => {
                 <TagInput value={form.tags} onChange={(tags) => setForm({ ...form, tags })} placeholder="Ex: doce, natal" />
               </label>
               <div className="actions">
-                <button type="button" className="ghost" onClick={() => setShowForm(false)}>
+                <button type="button" className="ghost" onClick={() => (isCreateView ? navigate('/app/receitas') : setShowForm(false))}>
                   Cancelar
                 </button>
                 <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar receita'}</button>

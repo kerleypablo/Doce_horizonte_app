@@ -20,7 +20,7 @@ export const OAuthCallbackPage = () => {
       }
 
       try {
-        const me = await apiFetch<{ role: 'admin' | 'common' }>('/auth/me', { token });
+        const me = await apiFetch<{ role: 'master' | 'admin' | 'common' }>('/auth/me', { token });
         const profile = data.session?.user
           ? {
               email: data.session.user.email ?? undefined,

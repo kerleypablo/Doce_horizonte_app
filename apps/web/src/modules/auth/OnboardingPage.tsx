@@ -40,7 +40,7 @@ export const OnboardingPage = () => {
         });
       }
 
-      const me = await apiFetch<{ role: 'admin' | 'common' }>('/auth/me', { token });
+      const me = await apiFetch<{ role: 'master' | 'admin' | 'common' }>('/auth/me', { token });
       login(token, me.role);
       sessionStorage.removeItem('pending_token');
       navigate('/app/empresa');

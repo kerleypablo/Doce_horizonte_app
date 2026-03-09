@@ -16,6 +16,8 @@ const customerSchema = z.object({
 });
 
 export const customerRoutes = async (app: FastifyInstance) => {
+  const cadastrosGuard = { preHandler: [app.authenticate, app.requireModule('cadastros')] };
+
   const mapCustomer = (row: any) => ({
     id: row.id,
     name: row.name,
@@ -30,7 +32,7 @@ export const customerRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? undefined
   });
 
-  app.get('/customers', { preHandler: app.authenticate }, async (request) => {
+  app.get('/customers', cadastrosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const { data } = await supabaseAdmin
       .from('customers')
@@ -41,7 +43,7 @@ export const customerRoutes = async (app: FastifyInstance) => {
     return (data ?? []).map(mapCustomer);
   });
 
-  app.post('/customers', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/customers', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = customerSchema.parse(request.body);
 
@@ -67,7 +69,7 @@ export const customerRoutes = async (app: FastifyInstance) => {
     return reply.status(201).send(mapCustomer(created));
   });
 
-  app.put('/customers/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.put('/customers/:id', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = customerSchema.parse(request.body);
     const id = request.params as { id: string };

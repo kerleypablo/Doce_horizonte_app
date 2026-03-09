@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
+import { MODULE_DEFINITIONS, MODULE_KEYS, isModuleKey, type AppModuleKey } from '../common/modules.js';
 
 const salesChannelSchema = z.object({
   id: z.string().optional(),
@@ -40,8 +41,32 @@ const userParamsSchema = z.object({
   authUserId: z.string().min(1)
 });
 
+const moduleOverrideSchema = z.object({
+  enabledModules: z.array(z.enum(MODULE_KEYS)).default([])
+});
+
+const subscriptionSchema = z.object({
+  planId: z.string().uuid().optional(),
+  planCode: z.string().min(1).optional(),
+  status: z.enum(['active', 'paused', 'canceled']).default('active')
+}).refine((data) => Boolean(data.planId || data.planCode), {
+  message: 'Informe planId ou planCode'
+});
+
+const isModulesInfraMissing = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String((error as { code?: string }).code ?? '') : '';
+  const message = 'message' in error ? String((error as { message?: string }).message ?? '') : '';
+  return code === '42P01' || code === 'PGRST205' || message.toLowerCase().includes('does not exist');
+};
+
+const hasAdminAccess = (role: string) => role === 'admin' || role === 'master';
+const isMasterAccess = (role: string) => role === 'master';
+
 export const companyRoutes = async (app: FastifyInstance) => {
-  app.get('/company/settings', { preHandler: app.authenticate }, async (request, reply) => {
+  const empresaGuard = { preHandler: [app.authenticate, app.requireModule('empresa')] };
+
+  app.get('/company/settings', empresaGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 
     const { data: settings } = await supabaseAdmin
@@ -94,9 +119,9 @@ export const companyRoutes = async (app: FastifyInstance) => {
     };
   });
 
-  app.put('/company/settings', { preHandler: app.authenticate }, async (request, reply) => {
+  app.put('/company/settings', empresaGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
-    if (auth.role !== 'admin') return reply.status(403).send({ message: 'Apenas admin' });
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
 
     const data = settingsSchema.parse(request.body);
 
@@ -179,9 +204,150 @@ export const companyRoutes = async (app: FastifyInstance) => {
     });
   });
 
-  app.get('/company/users', { preHandler: app.authenticate }, async (request, reply) => {
+  app.get('/company/plans', empresaGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
-    if (auth.role !== 'admin') return reply.status(403).send({ message: 'Apenas admin' });
+    if (!isMasterAccess(auth.role)) return reply.status(403).send({ message: 'Apenas master' });
+
+    const { data: modulesData, error: modulesError } = await supabaseAdmin
+      .from('module_catalog')
+      .select('key, name, premium, description, active')
+      .order('created_at', { ascending: true });
+
+    if (modulesError && !isModulesInfraMissing(modulesError)) {
+      return reply.status(400).send({ message: 'Erro ao carregar modulos', detail: modulesError.message });
+    }
+
+    const modules = modulesError
+      ? MODULE_DEFINITIONS.map((item) => ({ ...item, active: true }))
+      : (modulesData ?? [])
+          .map((item) => ({
+            key: String(item.key),
+            name: String(item.name),
+            premium: Boolean(item.premium),
+            description: String(item.description ?? ''),
+            active: Boolean(item.active)
+          }))
+          .filter((item) => isModuleKey(item.key));
+
+    const { data: plansData, error: plansError } = await supabaseAdmin
+      .from('plan_catalog')
+      .select('id, code, name, active, created_at')
+      .order('created_at', { ascending: true });
+
+    if (plansError && !isModulesInfraMissing(plansError)) {
+      return reply.status(400).send({ message: 'Erro ao carregar planos', detail: plansError.message });
+    }
+
+    const plansList = plansError
+      ? [{ id: 'base', code: 'base', name: 'Plano Base', active: true, created_at: null }]
+      : (plansData ?? []);
+
+    const planIds = plansList.map((plan) => String(plan.id));
+
+    let modulesByPlan = new Map<string, AppModuleKey[]>();
+    if (planIds.length > 0 && !plansError) {
+      const { data: planModules, error: planModulesError } = await supabaseAdmin
+        .from('plan_modules')
+        .select('plan_id, module_key')
+        .in('plan_id', planIds);
+
+      if (planModulesError && !isModulesInfraMissing(planModulesError)) {
+        return reply.status(400).send({ message: 'Erro ao carregar modulos do plano', detail: planModulesError.message });
+      }
+
+      modulesByPlan = (planModules ?? []).reduce((acc, item) => {
+        const planId = String(item.plan_id);
+        const moduleKey = String(item.module_key);
+        if (!isModuleKey(moduleKey)) return acc;
+        const current = acc.get(planId) ?? [];
+        current.push(moduleKey);
+        acc.set(planId, current);
+        return acc;
+      }, new Map<string, AppModuleKey[]>());
+    } else {
+      modulesByPlan.set('base', ['cadastros', 'pedidos', 'empresa']);
+    }
+
+    const { data: subscription, error: subscriptionError } = await supabaseAdmin
+      .from('company_subscriptions')
+      .select('plan_id, status, updated_at')
+      .eq('company_id', auth.companyId)
+      .maybeSingle();
+
+    if (subscriptionError && !isModulesInfraMissing(subscriptionError)) {
+      return reply.status(400).send({ message: 'Erro ao carregar assinatura', detail: subscriptionError.message });
+    }
+
+    const plans = plansList.map((plan) => {
+      const id = String(plan.id);
+      return {
+        id,
+        code: String(plan.code),
+        name: String(plan.name),
+        active: Boolean(plan.active),
+        modules: modulesByPlan.get(id) ?? []
+      };
+    });
+
+    const currentPlan = plans.find((plan) => plan.id === subscription?.plan_id) ?? plans[0] ?? null;
+
+    return reply.send({
+      modules,
+      plans,
+      subscription: {
+        planId: currentPlan?.id ?? null,
+        planCode: currentPlan?.code ?? null,
+        status: subscription?.status ?? 'active',
+        updatedAt: subscription?.updated_at ?? null
+      }
+    });
+  });
+
+  app.put('/company/subscription', empresaGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
+    if (!isMasterAccess(auth.role)) return reply.status(403).send({ message: 'Apenas master' });
+
+    const data = subscriptionSchema.parse(request.body);
+
+    let planQuery = supabaseAdmin
+      .from('plan_catalog')
+      .select('id, code, name, active')
+      .eq('active', true)
+      .limit(1);
+
+    if (data.planId) {
+      planQuery = planQuery.eq('id', data.planId);
+    } else if (data.planCode) {
+      planQuery = planQuery.eq('code', data.planCode);
+    }
+
+    const { data: foundPlan, error: planError } = await planQuery.maybeSingle();
+    if (planError) return reply.status(400).send({ message: 'Erro ao carregar plano', detail: planError.message });
+    if (!foundPlan) return reply.status(404).send({ message: 'Plano nao encontrado' });
+
+    const { error: upsertError } = await supabaseAdmin
+      .from('company_subscriptions')
+      .upsert({
+        company_id: auth.companyId,
+        plan_id: foundPlan.id,
+        status: data.status
+      }, { onConflict: 'company_id' });
+
+    if (upsertError) return reply.status(400).send({ message: 'Erro ao atualizar assinatura', detail: upsertError.message });
+
+    return reply.send({
+      ok: true,
+      subscription: {
+        planId: foundPlan.id,
+        planCode: foundPlan.code,
+        status: data.status
+      }
+    });
+  });
+
+  app.get('/company/users', empresaGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
 
     const { data: appUsers, error } = await supabaseAdmin
       .from('app_users')
@@ -193,6 +359,25 @@ export const companyRoutes = async (app: FastifyInstance) => {
       return reply.status(400).send({ message: 'Erro ao carregar usuarios', detail: error.message });
     }
 
+    const { data: overridesData, error: overridesError } = await supabaseAdmin
+      .from('user_module_overrides')
+      .select('auth_user_id, module_key, enabled')
+      .eq('company_id', auth.companyId);
+
+    if (overridesError && !isModulesInfraMissing(overridesError)) {
+      return reply.status(400).send({ message: 'Erro ao carregar modulos por usuario', detail: overridesError.message });
+    }
+
+    const overridesByUser = (overridesData ?? []).reduce((acc, item) => {
+      const authUserId = String(item.auth_user_id);
+      const moduleKey = String(item.module_key);
+      if (!isModuleKey(moduleKey)) return acc;
+      const current = acc.get(authUserId) ?? [];
+      current.push({ moduleKey, enabled: Boolean(item.enabled) });
+      acc.set(authUserId, current);
+      return acc;
+    }, new Map<string, Array<{ moduleKey: AppModuleKey; enabled: boolean }>>());
+
     const users = await Promise.all(
       (appUsers ?? []).map(async (item) => {
         const authResult = await supabaseAdmin.auth.admin.getUserById(item.auth_user_id);
@@ -203,7 +388,8 @@ export const companyRoutes = async (app: FastifyInstance) => {
           createdAt: item.created_at,
           email: authUser?.email ?? '',
           name: (authUser?.user_metadata?.full_name as string | undefined) ?? '',
-          avatarUrl: (authUser?.user_metadata?.avatar_url as string | undefined) ?? ''
+          avatarUrl: (authUser?.user_metadata?.avatar_url as string | undefined) ?? '',
+          moduleOverrides: overridesByUser.get(item.auth_user_id) ?? []
         };
       })
     );
@@ -211,9 +397,9 @@ export const companyRoutes = async (app: FastifyInstance) => {
     return reply.send(users);
   });
 
-  app.put('/company/users/:authUserId/role', { preHandler: app.authenticate }, async (request, reply) => {
+  app.put('/company/users/:authUserId/role', empresaGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { userId: string; companyId: string; role: string } }).auth;
-    if (auth.role !== 'admin') return reply.status(403).send({ message: 'Apenas admin' });
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
 
     const params = userParamsSchema.parse(request.params);
     const data = userRoleSchema.parse(request.body);
@@ -240,9 +426,9 @@ export const companyRoutes = async (app: FastifyInstance) => {
     return reply.send({ ok: true });
   });
 
-  app.delete('/company/users/:authUserId', { preHandler: app.authenticate }, async (request, reply) => {
+  app.delete('/company/users/:authUserId', empresaGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { userId: string; companyId: string; role: string } }).auth;
-    if (auth.role !== 'admin') return reply.status(403).send({ message: 'Apenas admin' });
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
 
     const params = userParamsSchema.parse(request.params);
     if (params.authUserId === auth.userId) {
@@ -265,5 +451,96 @@ export const companyRoutes = async (app: FastifyInstance) => {
     }
 
     return reply.status(204).send();
+  });
+
+  app.put('/company/users/:authUserId/module-access', empresaGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
+    if (!isMasterAccess(auth.role)) return reply.status(403).send({ message: 'Apenas master' });
+
+    const params = userParamsSchema.parse(request.params);
+    const data = moduleOverrideSchema.parse(request.body);
+
+    const { data: subscription, error: subscriptionError } = await supabaseAdmin
+      .from('company_subscriptions')
+      .select('plan_id, status')
+      .eq('company_id', auth.companyId)
+      .maybeSingle();
+
+    if (subscriptionError && !isModulesInfraMissing(subscriptionError)) {
+      return reply.status(400).send({ message: 'Erro ao carregar assinatura', detail: subscriptionError.message });
+    }
+
+    const baseModules = new Set<AppModuleKey>(['cadastros', 'pedidos', 'empresa']);
+
+    if (subscription?.plan_id && subscription.status === 'active') {
+      const { data: planModules, error: planModulesError } = await supabaseAdmin
+        .from('plan_modules')
+        .select('module_key')
+        .eq('plan_id', subscription.plan_id);
+
+      if (planModulesError && !isModulesInfraMissing(planModulesError)) {
+        return reply.status(400).send({ message: 'Erro ao carregar modulos base do plano', detail: planModulesError.message });
+      }
+
+      if (!planModulesError) {
+        baseModules.clear();
+        for (const item of planModules ?? []) {
+          const key = String(item.module_key);
+          if (isModuleKey(key)) baseModules.add(key);
+        }
+      }
+    }
+
+    const targetModules = new Set<AppModuleKey>(data.enabledModules);
+    const changedKeys = new Set<AppModuleKey>([...baseModules, ...targetModules]);
+
+    const overridesToUpsert: Array<{
+      company_id: string;
+      auth_user_id: string;
+      module_key: AppModuleKey;
+      enabled: boolean;
+    }> = [];
+
+    const overrideKeysToDelete: AppModuleKey[] = [];
+
+    for (const key of changedKeys) {
+      const baseEnabled = baseModules.has(key);
+      const targetEnabled = targetModules.has(key);
+      if (baseEnabled === targetEnabled) {
+        overrideKeysToDelete.push(key);
+      } else {
+        overridesToUpsert.push({
+          company_id: auth.companyId,
+          auth_user_id: params.authUserId,
+          module_key: key,
+          enabled: targetEnabled
+        });
+      }
+    }
+
+    if (overrideKeysToDelete.length > 0) {
+      const { error: deleteError } = await supabaseAdmin
+        .from('user_module_overrides')
+        .delete()
+        .eq('company_id', auth.companyId)
+        .eq('auth_user_id', params.authUserId)
+        .in('module_key', overrideKeysToDelete);
+
+      if (deleteError && !isModulesInfraMissing(deleteError)) {
+        return reply.status(400).send({ message: 'Erro ao limpar overrides', detail: deleteError.message });
+      }
+    }
+
+    if (overridesToUpsert.length > 0) {
+      const { error: upsertError } = await supabaseAdmin
+        .from('user_module_overrides')
+        .upsert(overridesToUpsert, { onConflict: 'company_id,auth_user_id,module_key' });
+
+      if (upsertError && !isModulesInfraMissing(upsertError)) {
+        return reply.status(400).send({ message: 'Erro ao salvar overrides', detail: upsertError.message });
+      }
+    }
+
+    return reply.send({ ok: true });
   });
 };

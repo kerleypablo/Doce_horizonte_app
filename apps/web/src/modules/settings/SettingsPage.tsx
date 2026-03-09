@@ -87,7 +87,7 @@ export const SettingsPage = () => {
     }
   };
 
-  if (user?.role !== 'admin') {
+  if (user?.role !== 'admin' && user?.role !== 'master') {
     return (
       <div className="panel">
         <h3>Somente administradores</h3>
@@ -165,4 +165,3 @@ export const SettingsPage = () => {
     </div>
   );
 };
-

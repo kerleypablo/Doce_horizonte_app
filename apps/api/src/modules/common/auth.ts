@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { supabaseAdmin, getAppUserByAuthId } from '../../db/supabase.js';
+import { supabaseAdmin, getAppUserByAuthId, getEnabledModulesForAccess } from '../../db/supabase.js';
+import type { AppModuleKey } from './modules.js';
 
 export type AuthContext = {
   userId: string;
   companyId: string;
-  role: 'admin' | 'common';
+  role: 'master' | 'admin' | 'common';
+  modules: AppModuleKey[];
 };
 
 const httpError = (statusCode: number, message: string) => Object.assign(new Error(message), { statusCode });
@@ -30,10 +32,17 @@ export const registerAuth = (app: FastifyInstance) => {
     if (!appUser) {
       throw httpError(403, 'Usuario sem empresa vinculada');
     }
+    if (appUser.access_blocked) {
+      throw httpError(403, 'Acesso bloqueado. Fale com o administrador.');
+    }
     (request as FastifyRequest & { auth: AuthContext }).auth = {
       userId: appUser.auth_user_id,
       companyId: appUser.company_id,
-      role: appUser.role
+      role: appUser.role,
+      modules: await getEnabledModulesForAccess({
+        companyId: appUser.company_id,
+        authUserId: appUser.auth_user_id
+      })
     };
   });
 
@@ -43,6 +52,17 @@ export const registerAuth = (app: FastifyInstance) => {
       throw httpError(403, 'Sem permissao');
     }
   });
+
+  app.decorate('requireModule', (moduleKey: AppModuleKey) => async (request: FastifyRequest) => {
+    let auth = (request as FastifyRequest & { auth?: AuthContext }).auth;
+    if (!auth) {
+      await app.authenticate(request);
+      auth = (request as FastifyRequest & { auth?: AuthContext }).auth;
+    }
+    if (!auth || !auth.modules.includes(moduleKey)) {
+      throw httpError(403, `Modulo ${moduleKey} nao habilitado para este usuario`);
+    }
+  });
 };
 
 declare module 'fastify' {
@@ -50,5 +70,6 @@ declare module 'fastify' {
     authenticateSupabase: (request: FastifyRequest) => Promise<void>;
     authenticate: (request: FastifyRequest) => Promise<void>;
     authorize: (role: AuthContext['role']) => (request: FastifyRequest) => Promise<void>;
+    requireModule: (moduleKey: AppModuleKey) => (request: FastifyRequest) => Promise<void>;
   }
 }

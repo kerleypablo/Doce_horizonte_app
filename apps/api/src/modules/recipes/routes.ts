@@ -26,6 +26,8 @@ const recipeSchema = z.object({
 });
 
 export const recipeRoutes = async (app: FastifyInstance) => {
+  const cadastrosGuard = { preHandler: [app.authenticate, app.requireModule('cadastros')] };
+
   const mapRecipe = (row: any) => ({
     id: row.id,
     name: row.name,
@@ -39,7 +41,7 @@ export const recipeRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? undefined
   });
 
-  app.get('/recipes', { preHandler: app.authenticate }, async (request) => {
+  app.get('/recipes', cadastrosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const { data } = await supabaseAdmin
       .from('recipes')
@@ -49,7 +51,7 @@ export const recipeRoutes = async (app: FastifyInstance) => {
     return (data ?? []).map(mapRecipe);
   });
 
-  app.post('/recipes', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/recipes', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = recipeSchema.parse(request.body);
 
@@ -74,7 +76,7 @@ export const recipeRoutes = async (app: FastifyInstance) => {
     return reply.status(201).send(mapRecipe(created));
   });
 
-  app.get('/recipes/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.get('/recipes/:id', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
     const { data, error } = await supabaseAdmin
@@ -87,7 +89,7 @@ export const recipeRoutes = async (app: FastifyInstance) => {
     return mapRecipe(data);
   });
 
-  app.put('/recipes/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.put('/recipes/:id', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = recipeSchema.parse(request.body);
     const id = request.params as { id: string };

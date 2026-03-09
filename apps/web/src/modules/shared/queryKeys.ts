@@ -6,5 +6,6 @@ export const queryKeys = {
   customers: 'customers',
   products: 'products',
   companySettings: 'company-settings',
-  companyUsers: 'company-users'
+  companyUsers: 'company-users',
+  companyPlans: 'company-plans'
 };

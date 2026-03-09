@@ -11,9 +11,14 @@ create table if not exists app_users (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid not null unique,
   company_id uuid not null references companies(id) on delete cascade,
-  role text not null check (role in ('admin', 'common')),
+  role text not null check (role in ('master', 'admin', 'common')),
+  access_blocked boolean not null default false,
   created_at timestamp with time zone default now()
 );
+
+alter table app_users drop constraint if exists app_users_role_check;
+alter table app_users add constraint app_users_role_check check (role in ('master', 'admin', 'common'));
+alter table app_users add column if not exists access_blocked boolean not null default false;
 
 create table if not exists company_settings (
   company_id uuid primary key references companies(id) on delete cascade,

@@ -89,6 +89,8 @@ const parseSeqFromNumber = (value?: string | null) => {
 };
 
 export const orderRoutes = async (app: FastifyInstance) => {
+  const pedidosGuard = { preHandler: [app.authenticate, app.requireModule('pedidos')] };
+
   const listQuerySchema = z.object({
     view: z.enum(['full', 'list']).optional()
   });
@@ -171,7 +173,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     total: calcOrderTotal(row)
   });
 
-  app.get('/orders', { preHandler: app.authenticate }, async (request) => {
+  app.get('/orders', pedidosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const query = listQuerySchema.parse(request.query ?? {});
 
@@ -194,7 +196,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     return (data ?? []).map(mapOrder);
   });
 
-  app.get('/orders/summary-calendar', { preHandler: app.authenticate }, async (request) => {
+  app.get('/orders/summary-calendar', pedidosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const query = summaryQuerySchema.parse(request.query ?? {});
 
@@ -211,7 +213,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     return (data ?? []).map(mapOrderSummary);
   });
 
-  app.get('/orders/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.get('/orders/:id', pedidosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
 
@@ -226,7 +228,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     return reply.send(mapOrder(data));
   });
 
-  app.post('/orders', { preHandler: app.authenticate }, async (request, reply) => {
+  app.post('/orders', pedidosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = orderSchema.parse(request.body);
 
@@ -281,7 +283,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     return reply.status(400).send({ message: lastError?.message ?? 'Erro ao criar pedido' });
   });
 
-  app.put('/orders/:id', { preHandler: app.authenticate }, async (request, reply) => {
+  app.put('/orders/:id', pedidosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
     const data = orderSchema.parse(request.body);

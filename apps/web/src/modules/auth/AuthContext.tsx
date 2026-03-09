@@ -4,7 +4,7 @@ import { supabase } from '../shared/supabase.ts';
 
 export type AuthUser = {
   token: string;
-  role: 'admin' | 'common';
+  role: 'master' | 'admin' | 'common';
   email?: string;
   name?: string;
   avatarUrl?: string;
@@ -14,7 +14,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   login: (
     token: string,
-    role: 'admin' | 'common',
+    role: 'master' | 'admin' | 'common',
     profile?: { email?: string; name?: string; avatarUrl?: string }
   ) => void;
   logout: () => void;
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = (
     token: string,
-    role: 'admin' | 'common',
+    role: 'master' | 'admin' | 'common',
     profile?: { email?: string; name?: string; avatarUrl?: string }
   ) => {
     const next = { token, role, ...profile };

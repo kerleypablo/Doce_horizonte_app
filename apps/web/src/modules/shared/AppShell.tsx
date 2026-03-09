@@ -51,6 +51,12 @@ const navItems = [
     path: '/app/configuracoes',
     label: 'Configuracoes',
     icon: 'settings'
+  },
+  {
+    path: '/backoffice',
+    label: 'Backoffice',
+    icon: 'admin_panel_settings',
+    requiresMaster: true
   }
 ];
 
@@ -65,6 +71,7 @@ const isPathActive = (pathname: string, path: string) => {
 
 const getHeaderTitle = (pathname: string) => {
   if (pathname === '/app') return 'Controle de Precificacao';
+  if (pathname === '/backoffice') return 'Backoffice';
   const matched = navItems.find((item) => isPathActive(pathname, item.path));
   if (!matched) return 'Controle de Precificacao';
   if (matched.path === '/app/pedidos' && pathname !== '/app/pedidos') return 'Pedido';
@@ -78,6 +85,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const headerTitle = getHeaderTitle(pathname);
   const activeBottomIndex = bottomNavItems.findIndex((item) => isPathActive(pathname, item.path));
+  const visibleNavItems = navItems.filter((item) => !item.requiresMaster || user?.role === 'master');
   const settingsQuery = useCachedQuery(
     queryKeys.companySettings,
     () => apiFetch<{ appTheme?: string; darkMode?: boolean }>('/company/settings', { token: user?.token }),
@@ -137,7 +145,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
           <strong>Precificacao</strong>
         </div>
         <nav>
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}

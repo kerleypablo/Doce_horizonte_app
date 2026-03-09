@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import type { RecipeItem } from '../recipes/RecipesPage.tsx';
@@ -52,6 +53,9 @@ const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
 export const ProductsPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isCreateView = pathname === '/app/produtos/novo';
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -122,6 +126,12 @@ export const ProductsPage = () => {
     if (inputsQuery.data) setInputs(inputsQuery.data);
   }, [inputsQuery.data]);
 
+  useEffect(() => {
+    if (!isCreateView) return;
+    resetForm();
+    setShowForm(true);
+  }, [isCreateView]);
+
   const resetForm = () => {
     setForm({
       name: '',
@@ -144,13 +154,12 @@ export const ProductsPage = () => {
     if (editingId) {
       confirmActionRef.current = () => {
         resetForm();
-        setShowForm(true);
+        navigate('/app/produtos/novo');
       };
       setConfirmOpen(true);
       return;
     }
-    resetForm();
-    setShowForm(true);
+    navigate('/app/produtos/novo');
   };
 
   const addExtraRecipe = () => {
@@ -210,6 +219,7 @@ export const ProductsPage = () => {
       resetForm();
       setShowForm(false);
       lastEditedRef.current = null;
+      if (isCreateView) navigate('/app/produtos');
     } finally {
       setSaving(false);
     }
@@ -359,6 +369,7 @@ export const ProductsPage = () => {
 
   return (
     <div className="page">
+      {!isCreateView && (
       <div className="panel">
         <ListToolbar
           title="Produtos cadastrados"
@@ -410,10 +421,16 @@ export const ProductsPage = () => {
           </div>
         )}
       </div>
+      )}
 
       {showForm && (
         <>
           <div className="panel">
+            {isCreateView && (
+              <button type="button" className="ghost" onClick={() => navigate('/app/produtos')}>
+                Voltar para lista
+              </button>
+            )}
             <h3>{editingId ? 'Editar produto' : 'Novo produto'}</h3>
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
@@ -436,7 +453,7 @@ export const ProductsPage = () => {
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
               </label>
               <div className="actions">
-                <button type="button" className="ghost" onClick={() => setShowForm(false)}>
+                <button type="button" className="ghost" onClick={() => (isCreateView ? navigate('/app/produtos') : setShowForm(false))}>
                   Cancelar
                 </button>
                 <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar produto'}</button>
