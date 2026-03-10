@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
@@ -6,7 +6,6 @@ import { SelectField } from '../shared/SelectField.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
-import { TagInput } from '../shared/TagInput.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
@@ -33,10 +32,12 @@ export const InputsPage = () => {
   const editingRouteId = pathname.includes('/editar/') ? params.inputId ?? null : null;
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [search, setSearch] = useState('');
+  const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tagDraft, setTagDraft] = useState('');
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -131,6 +132,7 @@ export const InputsPage = () => {
       notes: '',
       tags: []
     });
+    setTagDraft('');
     setEditingId(null);
   };
 
@@ -146,10 +148,55 @@ export const InputsPage = () => {
     navigate('/app/insumos/novo');
   };
 
+  const listTagOptions = useMemo(() => {
+    const unique = new Map<string, string>();
+    inputs.forEach((item) => {
+      (item.tags ?? []).forEach((tag) => {
+        const clean = tag.trim();
+        if (!clean) return;
+        const key = clean.toLowerCase();
+        if (!unique.has(key)) unique.set(key, clean);
+      });
+    });
+    return [...unique.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [inputs]);
+
+  const availableTags = useMemo(() => {
+    const unique = new Map<string, string>();
+    [...inputs.flatMap((item) => item.tags ?? []), ...form.tags].forEach((tag) => {
+      const clean = tag.trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!unique.has(key)) unique.set(key, clean);
+    });
+    return [...unique.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [inputs, form.tags]);
+
+  const availableTagsSorted = useMemo(() => {
+    return [...availableTags].sort((left, right) => {
+      const leftSelected = form.tags.some((tag) => tag.toLowerCase() === left.toLowerCase());
+      const rightSelected = form.tags.some((tag) => tag.toLowerCase() === right.toLowerCase());
+      if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
+      return left.localeCompare(right, 'pt-BR');
+    });
+  }, [availableTags, form.tags]);
+
   const filtered = inputs.filter((input) => {
     const haystack = `${input.name} ${input.brand ?? ''} ${input.category} ${(input.tags || []).join(' ')}`.toLowerCase();
-    return haystack.includes(search.toLowerCase());
+    const searchMatch = haystack.includes(search.toLowerCase());
+    if (!searchMatch) return false;
+    if (activeTagFilters.length === 0) return true;
+    const inputTags = new Set((input.tags ?? []).map((tag) => tag.toLowerCase()));
+    return activeTagFilters.every((tag) => inputTags.has(tag.toLowerCase()));
   });
+
+  const addTagToForm = (value: string) => {
+    const clean = value.trim();
+    if (!clean) return;
+    const alreadyExists = form.tags.some((tag) => tag.toLowerCase() === clean.toLowerCase());
+    if (alreadyExists) return;
+    setForm((current) => ({ ...current, tags: [...current.tags, clean] }));
+  };
 
   return (
     <div className="page">
@@ -162,6 +209,29 @@ export const InputsPage = () => {
           actionLabel="+"
           onAction={handleNew}
         />
+        {listTagOptions.length > 0 ? (
+          <div className="list-tags-carousel" aria-label="Filtrar por tags">
+            {listTagOptions.map((tag) => {
+              const selected = activeTagFilters.some((value) => value.toLowerCase() === tag.toLowerCase());
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`list-tag-filter ${selected ? 'active' : ''}`}
+                  onClick={() =>
+                    setActiveTagFilters((current) =>
+                      selected
+                        ? current.filter((value) => value.toLowerCase() !== tag.toLowerCase())
+                        : [...current, tag]
+                    )
+                  }
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         {inputsQuery.loading && inputs.length === 0 ? (
           <ListSkeleton withTableHead />
         ) : (
@@ -267,7 +337,57 @@ export const InputsPage = () => {
             </div>
             <label>
               Tags
-              <TagInput value={form.tags} onChange={(tags) => setForm({ ...form, tags })} placeholder="Ex: doce, natal" />
+              <div className="input-tags-panel">
+                <div className="input-tags-create">
+                  <input
+                    value={tagDraft}
+                    placeholder="Digite a tag"
+                    onChange={(event) => setTagDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return;
+                      event.preventDefault();
+                      addTagToForm(tagDraft);
+                      setTagDraft('');
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="input-tags-add"
+                    aria-label="Criar tag"
+                    onClick={() => {
+                      addTagToForm(tagDraft);
+                      setTagDraft('');
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="input-tags-pool">
+                  {availableTagsSorted.map((tag) => {
+                    const selected = form.tags.some((current) => current.toLowerCase() === tag.toLowerCase());
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={`input-tag-item ${selected ? 'active' : ''}`}
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            tags: selected
+                              ? current.tags.filter((currentTag) => currentTag.toLowerCase() !== tag.toLowerCase())
+                              : [...current.tags, tag]
+                          }))
+                        }
+                      >
+                        {selected ? (
+                          <span className="material-symbols-outlined input-tag-check" aria-hidden="true">check_circle</span>
+                        ) : null}
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </label>
             <div className="actions">
               <button type="button" className="ghost" onClick={() => navigate('/app/insumos')}>
