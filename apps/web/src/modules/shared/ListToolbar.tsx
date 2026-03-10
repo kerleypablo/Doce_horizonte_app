@@ -21,7 +21,6 @@ export const ListToolbar = ({
     <div className="list-toolbar">
       <div>
         <h3>{title}</h3>
-        <p>Gerencie e encontre itens rapidamente.</p>
       </div>
       <div className="list-toolbar-actions">
         <input

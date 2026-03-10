@@ -184,7 +184,7 @@ export const CustomersPage = () => {
           title="Clientes cadastrados"
           searchValue={search}
           onSearch={setSearch}
-          actionLabel="Novo cliente"
+          actionLabel="+"
           onAction={handleNew}
         />
         {customersQuery.loading && customers.length === 0 ? (

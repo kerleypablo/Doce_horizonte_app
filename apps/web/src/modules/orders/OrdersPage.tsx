@@ -5,7 +5,6 @@ import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
-import { SearchableSelect } from '../shared/SearchableSelect.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
@@ -90,6 +89,8 @@ const orderTabs: Array<{ key: 'pessoa' | 'produtos' | 'observacoes' | 'pagamento
   { key: 'alertas', label: 'Alertas', icon: 'notifications' }
 ];
 
+type ValueConfigType = 'ADDITION' | 'DISCOUNT' | 'SHIPPING';
+
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 const formatDateBr = (value?: string) => {
@@ -172,6 +173,21 @@ export const OrdersPage = () => {
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [tab, setTab] = useState<'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'>('pessoa');
   const [form, setForm] = useState(newOrderForm(orderDefaults));
+  const [showValueTypeMenu, setShowValueTypeMenu] = useState(false);
+  const [valueModalOpen, setValueModalOpen] = useState(false);
+  const [valueModalType, setValueModalType] = useState<ValueConfigType>('ADDITION');
+  const [valueModalAdditionIndex, setValueModalAdditionIndex] = useState<number | null>(null);
+  const [valueModalLabel, setValueModalLabel] = useState('');
+  const [valueModalMode, setValueModalMode] = useState<'PERCENT' | 'FIXED'>('FIXED');
+  const [valueModalAmount, setValueModalAmount] = useState(0);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentModalIndex, setPaymentModalIndex] = useState<number | null>(null);
+  const [paymentModalDate, setPaymentModalDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentModalAmount, setPaymentModalAmount] = useState(0);
+  const [paymentModalNote, setPaymentModalNote] = useState('');
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const [productPickerSearch, setProductPickerSearch] = useState('');
+  const [productPickerSelectedIds, setProductPickerSelectedIds] = useState<string[]>([]);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editProductIndex, setEditProductIndex] = useState<number | null>(null);
   const [editProductName, setEditProductName] = useState('');
@@ -315,11 +331,6 @@ export const OrdersPage = () => {
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
-  const productOptions = useMemo(
-    () => products.map((p) => ({ value: p.id, label: `${p.name} • ${formatCurrency(p.unitPrice || p.salePrice)}` })),
-    [products]
-  );
-
   const filtered = orders.filter((order) => {
     const customerName = order.customerSnapshot?.name ?? '';
     const haystack = `${order.number} ${order.type} ${customerName} ${order.status}`.toLowerCase();
@@ -398,12 +409,74 @@ export const OrdersPage = () => {
     }
   };
 
-  const addProductLine = () => {
-    setForm((prev) => ({
-      ...prev,
-      products: [...prev.products, { productId: '', name: '', unitPrice: 0, quantity: 1, notes: '' }]
-    }));
+  const openProductPicker = () => {
+    setProductPickerSelectedIds(
+      form.products
+        .map((item) => item.productId)
+        .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
+    );
+    setProductPickerSearch('');
+    setShowProductPicker(true);
   };
+
+  const toggleProductPickerItem = (productId: string, checked: boolean) => {
+    setProductPickerSelectedIds((current) => {
+      if (checked) return current.includes(productId) ? current : [...current, productId];
+      return current.filter((id) => id !== productId);
+    });
+  };
+
+  const applyProductPicker = () => {
+    const existingByProductId = new Map(
+      form.products
+        .filter((item) => item.productId)
+        .map((item) => [item.productId, item] as const)
+    );
+
+    const nextProducts = productPickerSelectedIds
+      .map((productId) => {
+        const selectedProduct = products.find((item) => item.id === productId);
+        if (!selectedProduct) return null;
+        const existing = existingByProductId.get(productId);
+        if (existing) {
+          return {
+            ...existing,
+            name: existing.name || selectedProduct.name,
+            unitPrice: existing.unitPrice || selectedProduct.unitPrice || selectedProduct.salePrice || 0
+          };
+        }
+        return {
+          productId,
+          name: selectedProduct.name,
+          unitPrice: selectedProduct.unitPrice || selectedProduct.salePrice || 0,
+          quantity: 1,
+          notes: ''
+        };
+      })
+      .filter((item): item is { productId: string; name: string; unitPrice: number; quantity: number; notes?: string } => Boolean(item));
+
+    setForm((prev) => ({ ...prev, products: nextProducts }));
+    setShowProductPicker(false);
+  };
+
+  const pickerFilteredProducts = useMemo(() => {
+    const needle = productPickerSearch.trim().toLowerCase();
+    if (!needle) return products;
+    return products.filter((item) => item.name.toLowerCase().includes(needle));
+  }, [products, productPickerSearch]);
+
+  const pickerSelectedProducts = useMemo(
+    () =>
+      productPickerSelectedIds
+        .map((id) => products.find((item) => item.id === id))
+        .filter((item): item is ProductItem => Boolean(item)),
+    [products, productPickerSelectedIds]
+  );
+
+  const pickerUnselectedProducts = useMemo(
+    () => pickerFilteredProducts.filter((item) => !productPickerSelectedIds.includes(item.id)),
+    [pickerFilteredProducts, productPickerSelectedIds]
+  );
 
   const openProductEditModal = (index: number) => {
     const item = form.products[index];
@@ -425,18 +498,39 @@ export const OrdersPage = () => {
     setEditProductIndex(null);
   };
 
-  const addAddition = () => {
-    setForm((prev) => ({
-      ...prev,
-      additions: [...prev.additions, { label: 'Novo ajuste', mode: 'FIXED', value: 0 }]
-    }));
+  const openPaymentModal = (index?: number) => {
+    if (typeof index === 'number') {
+      const current = form.payments[index];
+      if (!current) return;
+      setPaymentModalIndex(index);
+      setPaymentModalDate(current.date);
+      setPaymentModalAmount(current.amount);
+      setPaymentModalNote(current.note ?? '');
+    } else {
+      setPaymentModalIndex(null);
+      setPaymentModalDate(new Date().toISOString().slice(0, 10));
+      setPaymentModalAmount(0);
+      setPaymentModalNote('');
+    }
+    setPaymentModalOpen(true);
   };
 
-  const addPayment = () => {
-    setForm((prev) => ({
-      ...prev,
-      payments: [...prev.payments, { date: new Date().toISOString().slice(0, 10), amount: 0, note: '' }]
-    }));
+  const savePaymentModal = () => {
+    const nextPayment = {
+      date: paymentModalDate,
+      amount: paymentModalAmount,
+      note: paymentModalNote
+    };
+    if (paymentModalIndex === null) {
+      setForm((prev) => ({ ...prev, payments: [...prev.payments, nextPayment] }));
+    } else {
+      setForm((prev) => {
+        const next = [...prev.payments];
+        next[paymentModalIndex] = nextPayment;
+        return { ...prev, payments: next };
+      });
+    }
+    setPaymentModalOpen(false);
   };
 
   const handleUploadImages = async (files: FileList | null) => {
@@ -670,6 +764,72 @@ export const OrdersPage = () => {
     }
   };
 
+  const openValueModal = (type: ValueConfigType, additionIndex?: number) => {
+    setShowValueTypeMenu(false);
+    setValueModalType(type);
+    if (type === 'ADDITION') {
+      if (typeof additionIndex === 'number') {
+        const current = form.additions[additionIndex];
+        if (!current) return;
+        setValueModalAdditionIndex(additionIndex);
+        setValueModalLabel(current.label);
+        setValueModalMode(current.mode);
+        setValueModalAmount(current.value);
+      } else {
+        setValueModalAdditionIndex(null);
+        setValueModalLabel('Adicional');
+        setValueModalMode('FIXED');
+        setValueModalAmount(0);
+      }
+    } else if (type === 'DISCOUNT') {
+      setValueModalAdditionIndex(null);
+      setValueModalLabel('Desconto');
+      setValueModalMode(form.discountMode);
+      setValueModalAmount(form.discountValue);
+    } else {
+      setValueModalAdditionIndex(null);
+      setValueModalLabel('Frete');
+      setValueModalMode('FIXED');
+      setValueModalAmount(form.shippingValue);
+    }
+    setValueModalOpen(true);
+  };
+
+  const saveValueModal = () => {
+    if (valueModalType === 'ADDITION') {
+      if (!valueModalLabel.trim()) return;
+      if (valueModalAdditionIndex === null) {
+        setForm((prev) => ({
+          ...prev,
+          additions: [...prev.additions, { label: valueModalLabel.trim(), mode: valueModalMode, value: valueModalAmount }]
+        }));
+      } else {
+        setForm((prev) => {
+          const next = [...prev.additions];
+          next[valueModalAdditionIndex] = { label: valueModalLabel.trim(), mode: valueModalMode, value: valueModalAmount };
+          return { ...prev, additions: next };
+        });
+      }
+    } else if (valueModalType === 'DISCOUNT') {
+      setForm((prev) => ({ ...prev, discountMode: valueModalMode, discountValue: valueModalAmount }));
+    } else {
+      setForm((prev) => ({ ...prev, shippingValue: valueModalAmount }));
+    }
+    setValueModalOpen(false);
+  };
+
+  const removeDiscountValue = () => {
+    setForm((prev) => ({ ...prev, discountValue: 0 }));
+  };
+
+  const removeShippingValue = () => {
+    setForm((prev) => ({ ...prev, shippingValue: 0 }));
+  };
+
+  const formatValueModeLabel = (mode: 'PERCENT' | 'FIXED') => (mode === 'PERCENT' ? '%' : 'R$');
+  const formatValueAmount = (mode: 'PERCENT' | 'FIXED', amount: number) =>
+    mode === 'PERCENT' ? `${amount}%` : formatCurrency(amount);
+
   return (
     <div className="page">
       {!isFormRoute && (
@@ -678,7 +838,7 @@ export const OrdersPage = () => {
           title="Pedidos e orcamentos"
           searchValue={search}
           onSearch={setSearch}
-          actionLabel="Novo pedido"
+          actionLabel="+"
           onAction={handleNew}
         />
         {ordersQuery.isFetching && !(ordersQuery.loading && orders.length === 0) ? <p className="muted">Atualizando pedidos...</p> : null}
@@ -832,36 +992,24 @@ export const OrdersPage = () => {
                 <div className="panel form-box">
                   <h4>Produtos</h4>
                   <div className="ingredients">
-                    {form.products.map((item, index) => (
-                      <div key={index} className="order-product-row">
-                        <SearchableSelect
-                          value={item.productId}
-                          onChange={(value) => {
-                            const selected = products.find((p) => p.id === value);
-                            const next = [...form.products];
-                            next[index] = {
-                              ...next[index],
-                              productId: value,
-                              name: selected?.name ?? next[index].name,
-                              unitPrice: selected?.unitPrice ?? selected?.salePrice ?? next[index].unitPrice
-                            };
-                            setForm({ ...form, products: next });
-                          }}
-                          options={productOptions}
-                          placeholder="Selecione o produto"
-                        />
-                        <input
-                          className="order-product-qty"
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const next = [...form.products];
-                            next[index] = { ...next[index], quantity: Number(e.target.value || 1) };
-                            setForm({ ...form, products: next });
-                          }}
-                        />
-                        <div className="order-product-actions">
+                      {form.products.map((item, index) => (
+                        <div key={index} className="order-product-row">
+                          <span className="order-product-label">{item.name || 'Produto sem nome'}</span>
+                          <label className="add-item-qty-field">
+                            <span>Quantidade</span>
+                            <input
+                              className="order-product-qty"
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const next = [...form.products];
+                                next[index] = { ...next[index], quantity: Number(e.target.value || 1) };
+                                setForm({ ...form, products: next });
+                              }}
+                            />
+                          </label>
+                          <div className="order-product-actions">
                           <button
                             type="button"
                             className="icon-button tiny"
@@ -881,108 +1029,86 @@ export const OrdersPage = () => {
                         </div>
                       </div>
                     ))}
-                    <button type="button" className="ghost" onClick={addProductLine}>+ Adicionar produto</button>
+                    <button type="button" className="ghost" onClick={openProductPicker}>+ Adicionar produto</button>
                   </div>
                 </div>
 
                 <div className="panel form-box">
                   <h4>Valores</h4>
-                  <div className="ingredients">
+                  <div className="values-toolbar">
+                    <button type="button" className="ghost" onClick={() => setShowValueTypeMenu((prev) => !prev)}>+ Adicionar valor</button>
+                    {showValueTypeMenu ? (
+                      <div className="values-type-menu">
+                        <button type="button" onClick={() => openValueModal('SHIPPING')}>Frete</button>
+                        <button type="button" onClick={() => openValueModal('DISCOUNT')}>Desconto</button>
+                        <button type="button" onClick={() => openValueModal('ADDITION')}>Adicionais</button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="values-config-list">
                     {form.additions.map((item, index) => (
-                      <div key={index} className="values-item">
-                        <label>
-                          Nome
-                          <input
-                            value={item.label}
-                            onChange={(e) => {
-                              const next = [...form.additions];
-                              next[index] = { ...next[index], label: e.target.value };
-                              setForm({ ...form, additions: next });
-                            }}
-                          />
-                        </label>
-                        <div className="values-row">
-                          <label>
-                            Tipo
-                            <SelectField
-                              className="value-type-select"
-                              value={item.mode}
-                              onChange={(value) => {
-                                const next = [...form.additions];
-                                next[index] = { ...next[index], mode: value as 'PERCENT' | 'FIXED' };
-                                setForm({ ...form, additions: next });
-                              }}
-                              options={[
-                                { value: 'FIXED', label: 'R$' },
-                                { value: 'PERCENT', label: '%' }
-                              ]}
-                            />
-                          </label>
-                          <label>
-                            Valor
-                            {item.mode === 'FIXED' ? (
-                              <MoneyInput
-                                value={item.value}
-                                onChange={(value) => {
-                                  const next = [...form.additions];
-                                  next[index] = { ...next[index], value };
-                                  setForm({ ...form, additions: next });
-                                }}
-                              />
-                            ) : (
-                              <input
-                                type="number"
-                                value={item.value === 0 ? '' : item.value}
-                                onChange={(e) => {
-                                  const next = [...form.additions];
-                                  next[index] = { ...next[index], value: Number(e.target.value || 0) };
-                                  setForm({ ...form, additions: next });
-                                }}
-                              />
-                            )}
-                          </label>
+                      <div key={`${item.label}-${index}`} className="values-config-row">
+                        <div>
+                          <strong>{item.label}</strong>
+                          <span className="muted">{formatValueAmount(item.mode, item.value)}</span>
+                        </div>
+                        <div className="values-config-actions">
+                          <span className="value-mode-badge">{formatValueModeLabel(item.mode)}</span>
+                          <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openValueModal('ADDITION', index)}>
+                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                          </button>
                           <button
                             type="button"
                             className="icon-button tiny"
-                            aria-label="Remover valor"
-                            onClick={() => setForm({ ...form, additions: form.additions.filter((_, i) => i !== index) })}
+                            aria-label="Remover"
+                            onClick={() => setForm((prev) => ({ ...prev, additions: prev.additions.filter((_, i) => i !== index) }))}
                           >
                             <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                           </button>
                         </div>
                       </div>
                     ))}
-                    <button type="button" className="ghost" onClick={addAddition}>+ Adicionar valor</button>
-                  </div>
-                  <div className="values-main-row">
-                    <label>
-                      tipo
-                      <SelectField
-                        className="value-type-select"
-                        value={form.discountMode}
-                        onChange={(value) => setForm({ ...form, discountMode: value as 'PERCENT' | 'FIXED' })}
-                        options={[
-                          { value: 'FIXED', label: 'R$' },
-                          { value: 'PERCENT', label: '%' }
-                        ]}
-                      />
-                    </label>
-                    <label>
-                      Desconto
-                      {form.discountMode === 'FIXED' ? (
-                        <MoneyInput value={form.discountValue} onChange={(value) => setForm({ ...form, discountValue: value })} />
-                      ) : (
-                        <input
-                          type="number"
-                          value={form.discountValue === 0 ? '' : form.discountValue}
-                          onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value || 0) })}
-                        />
-                      )}
-                    </label>
-                    <label className="shipping-field">
-                      Frete
-                      <MoneyInput value={form.shippingValue} onChange={(value) => setForm({ ...form, shippingValue: value })} />
-                    </label>
+
+                    {form.discountValue > 0 ? (
+                      <div className="values-config-row">
+                        <div>
+                          <strong>Desconto</strong>
+                          <span className="muted">{formatValueAmount(form.discountMode, form.discountValue)}</span>
+                        </div>
+                        <div className="values-config-actions">
+                          <span className="value-mode-badge">{formatValueModeLabel(form.discountMode)}</span>
+                          <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openValueModal('DISCOUNT')}>
+                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                          </button>
+                          <button type="button" className="icon-button tiny" aria-label="Remover" onClick={removeDiscountValue}>
+                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {form.shippingValue > 0 ? (
+                      <div className="values-config-row">
+                        <div>
+                          <strong>Frete</strong>
+                          <span className="muted">{formatCurrency(form.shippingValue)}</span>
+                        </div>
+                        <div className="values-config-actions">
+                          <span className="value-mode-badge">R$</span>
+                          <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openValueModal('SHIPPING')}>
+                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                          </button>
+                          <button type="button" className="icon-button tiny" aria-label="Remover" onClick={removeShippingValue}>
+                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {form.additions.length === 0 && form.discountValue <= 0 && form.shippingValue <= 0 ? (
+                      <p className="muted">Nenhum valor adicional configurado.</p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -990,9 +1116,9 @@ export const OrdersPage = () => {
                   <h4>Resumo geral</h4>
                   <div className="summary">
                     <div><span>Produtos</span><strong>{formatCurrency(totals.productsTotal)}</strong></div>
-                    <div><span>Adicionais</span><strong>{formatCurrency(totals.additionsTotal)}</strong></div>
-                    <div><span>Desconto</span><strong>{formatCurrency(totals.discountTotal)}</strong></div>
-                    <div><span>Frete</span><strong>{formatCurrency(form.shippingValue)}</strong></div>
+                    {form.additions.length > 0 ? <div><span>Adicionais</span><strong>{formatCurrency(totals.additionsTotal)}</strong></div> : null}
+                    {form.discountValue > 0 ? <div><span>Desconto</span><strong>{formatCurrency(totals.discountTotal)}</strong></div> : null}
+                    {form.shippingValue > 0 ? <div><span>Frete</span><strong>{formatCurrency(form.shippingValue)}</strong></div> : null}
                     <div className="summary-total"><span>Total pedido</span><strong>{formatCurrency(totals.total)}</strong></div>
                   </div>
                 </div>
@@ -1016,29 +1142,37 @@ export const OrdersPage = () => {
                 <div className="summary">
                   <div><span>Total pedido</span><strong>{formatCurrency(totals.total)}</strong></div>
                 </div>
-                <button type="button" className="ghost" onClick={addPayment}>+ Adicionar pagamento</button>
-                <div className="ingredients">
+                <div className="values-toolbar">
+                  <button type="button" className="ghost" onClick={() => openPaymentModal()}>+ Adicionar pagamento</button>
+                </div>
+                <div className="values-config-list">
                   {form.payments.map((payment, index) => (
-                    <div key={index} className="grid-3">
-                      <label>Data<input type="date" value={payment.date} onChange={(e) => {
-                        const next = [...form.payments];
-                        next[index] = { ...next[index], date: e.target.value };
-                        setForm({ ...form, payments: next });
-                      }} /></label>
-                      <label>Valor<MoneyInput value={payment.amount} onChange={(value) => {
-                        const next = [...form.payments];
-                        next[index] = { ...next[index], amount: value };
-                        setForm({ ...form, payments: next });
-                      }} /></label>
-                      <label>Obs<input value={payment.note ?? ''} onChange={(e) => {
-                        const next = [...form.payments];
-                        next[index] = { ...next[index], note: e.target.value };
-                        setForm({ ...form, payments: next });
-                      }} /></label>
+                    <div key={index} className="values-config-row">
+                      <div>
+                        <strong>Pagamento {index + 1}</strong>
+                        <span className="muted">
+                          {formatDateBr(payment.date)} • {formatCurrency(payment.amount)}
+                          {payment.note ? ` • ${payment.note}` : ''}
+                        </span>
+                      </div>
+                      <div className="values-config-actions">
+                        <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openPaymentModal(index)}>
+                          <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button tiny"
+                          aria-label="Remover"
+                          onClick={() => setForm((prev) => ({ ...prev, payments: prev.payments.filter((_, i) => i !== index) }))}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                        </button>
+                      </div>
                     </div>
                   ))}
+                  {form.payments.length === 0 ? <p className="muted">Nenhum pagamento adicionado.</p> : null}
                 </div>
-                <div className="summary">
+                <div className="summary payments-summary">
                   <div><span>Total pago</span><strong>{formatCurrency(totals.paid)}</strong></div>
                   <div className="summary-total"><span>Falta receber</span><strong>{formatCurrency(totals.pending)}</strong></div>
                 </div>
@@ -1156,6 +1290,163 @@ export const OrdersPage = () => {
           </div>
         </div>
       )}
+
+      {valueModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div className="modal-icon">
+                <span className="material-symbols-outlined" aria-hidden="true">calculate</span>
+              </div>
+              <div>
+                <h4>{valueModalType === 'ADDITION' ? 'Adicionar valor' : valueModalType === 'DISCOUNT' ? 'Configurar desconto' : 'Configurar frete'}</h4>
+                <p>Defina o tipo e o valor que sera aplicado no pedido.</p>
+              </div>
+            </div>
+            <div className="form">
+              {valueModalType === 'ADDITION' ? (
+                <label>
+                  Nome
+                  <input value={valueModalLabel} onChange={(e) => setValueModalLabel(e.target.value)} />
+                </label>
+              ) : (
+                <label>
+                  Tipo
+                  <input value={valueModalType === 'DISCOUNT' ? 'Desconto' : 'Frete'} disabled />
+                </label>
+              )}
+              <label>
+                Modo
+                <SelectField
+                  value={valueModalType === 'SHIPPING' ? 'FIXED' : valueModalMode}
+                  onChange={(value) => setValueModalMode(value as 'PERCENT' | 'FIXED')}
+                  disabled={valueModalType === 'SHIPPING'}
+                  options={[
+                    { value: 'FIXED', label: 'R$' },
+                    { value: 'PERCENT', label: '%' }
+                  ]}
+                />
+              </label>
+              <label>
+                Valor
+                {valueModalMode === 'FIXED' || valueModalType === 'SHIPPING' ? (
+                  <MoneyInput value={valueModalAmount} onChange={setValueModalAmount} />
+                ) : (
+                  <input
+                    type="number"
+                    value={valueModalAmount === 0 ? '' : valueModalAmount}
+                    onChange={(e) => setValueModalAmount(Number(e.target.value || 0))}
+                  />
+                )}
+              </label>
+            </div>
+            <div className="modal-actions values-modal-actions">
+              <button type="button" className="ghost" onClick={() => setValueModalOpen(false)}>Cancelar</button>
+              <button type="button" onClick={saveValueModal}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {paymentModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal">
+            <div className="modal-header">
+              <div className="modal-icon">
+                <span className="material-symbols-outlined" aria-hidden="true">payments</span>
+              </div>
+              <div>
+                <h4>{paymentModalIndex === null ? 'Adicionar pagamento' : 'Editar pagamento'}</h4>
+                <p>Defina os dados do pagamento do pedido.</p>
+              </div>
+            </div>
+            <div className="form">
+              <label>
+                Data
+                <input type="date" value={paymentModalDate} onChange={(e) => setPaymentModalDate(e.target.value)} />
+              </label>
+              <label>
+                Valor
+                <MoneyInput value={paymentModalAmount} onChange={setPaymentModalAmount} />
+              </label>
+              <label>
+                Observacao
+                <input value={paymentModalNote} onChange={(e) => setPaymentModalNote(e.target.value)} />
+              </label>
+            </div>
+            <div className="modal-actions values-modal-actions">
+              <button type="button" className="ghost" onClick={() => setPaymentModalOpen(false)}>Cancelar</button>
+              <button type="button" onClick={savePaymentModal}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showProductPicker ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal product-picker-modal">
+            <div className="product-picker-head">
+              <h4>Selecionar produtos</h4>
+              <div className="product-picker-head-right">
+                <strong className="product-picker-count">{productPickerSelectedIds.length} selecionado(s)</strong>
+                <button type="button" className="icon-button small" onClick={() => setShowProductPicker(false)} aria-label="Fechar">
+                  <span className="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+              </div>
+            </div>
+            <input
+              className="product-picker-search"
+              type="search"
+              value={productPickerSearch}
+              onChange={(e) => setProductPickerSearch(e.target.value)}
+              placeholder="Buscar produto..."
+            />
+            <div className="product-picker-list">
+              {pickerSelectedProducts.map((product) => {
+                const checked = productPickerSelectedIds.includes(product.id);
+                return (
+                  <label key={product.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{product.name}</strong>
+                      <span className="muted">{formatCurrency(product.unitPrice || product.salePrice || 0)}</span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleProductPickerItem(product.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+              {pickerSelectedProducts.length > 0 && pickerUnselectedProducts.length > 0 ? (
+                <div className="product-picker-divider" aria-hidden="true" />
+              ) : null}
+              {pickerUnselectedProducts.map((product) => {
+                const checked = productPickerSelectedIds.includes(product.id);
+                return (
+                  <label key={product.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{product.name}</strong>
+                      <span className="muted">{formatCurrency(product.unitPrice || product.salePrice || 0)}</span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleProductPickerItem(product.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => setShowProductPicker(false)}>Cancelar</button>
+              <button type="button" onClick={applyProductPicker}>Salvar selecao</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {pdfPreviewHtml ? (
         <div className="tasks-modal-backdrop" role="dialog" aria-modal="true">

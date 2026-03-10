@@ -6,13 +6,14 @@ import type { RecipeItem } from '../recipes/RecipesPage.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
-import { SearchableSelect } from '../shared/SearchableSelect.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
+
+type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'PACKAGING';
 
 export type ProductItem = {
   id: string;
@@ -67,6 +68,10 @@ export const ProductsPage = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerType, setPickerType] = useState<ProductPickerType>('EXTRA_RECIPE');
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
   const lastEditedRef = useRef<'profit' | 'unitPrice' | null>(null);
@@ -170,18 +175,6 @@ export const ProductsPage = () => {
     navigate('/app/produtos/novo');
   };
 
-  const addExtraRecipe = () => {
-    setForm({ ...form, extraRecipes: [...form.extraRecipes, { recipeId: '', quantity: 0 }] });
-  };
-
-  const addExtraProduct = () => {
-    setForm({ ...form, extraProducts: [...form.extraProducts, { productId: '', quantity: 0 }] });
-  };
-
-  const addPackaging = () => {
-    setForm({ ...form, packagingInputs: [...form.packagingInputs, { inputId: '', quantity: 0, unit: 'un' }] });
-  };
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -238,32 +231,115 @@ export const ProductsPage = () => {
     product.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const recipeOptions = useMemo(
-    () =>
-      recipes.map((recipe) => ({
-        value: recipe.id,
-        label: `${recipe.name} • ${recipe.yield} ${recipe.yieldUnit}`
-      })),
-    [recipes]
-  );
   const recipesById = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const inputsById = useMemo(() => new Map(inputs.map((input) => [input.id, input])), [inputs]);
-
-  const productOptions = useMemo(
-    () => products.filter((p) => p.id !== editingId).map((p) => ({ value: p.id, label: `${p.name} • un` })),
+  const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+  const packagingCandidates = useMemo(
+    () => inputs.filter((input) => input.category === 'embalagem'),
+    [inputs]
+  );
+  const productCandidates = useMemo(
+    () => products.filter((product) => product.id !== editingId),
     [products, editingId]
   );
 
-  const packagingOptions = useMemo(
+  const openPicker = (type: ProductPickerType) => {
+    setPickerType(type);
+    setPickerSearch('');
+    if (type === 'EXTRA_RECIPE') {
+      setPickerSelectedIds(
+        form.extraRecipes
+          .map((item) => item.recipeId)
+          .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
+      );
+    } else if (type === 'EXTRA_PRODUCT') {
+      setPickerSelectedIds(
+        form.extraProducts
+          .map((item) => item.productId)
+          .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
+      );
+    } else {
+      setPickerSelectedIds(
+        form.packagingInputs
+          .map((item) => item.inputId)
+          .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
+      );
+    }
+    setPickerOpen(true);
+  };
+
+  const togglePickerItem = (id: string, checked: boolean) => {
+    setPickerSelectedIds((current) => {
+      if (checked) return current.includes(id) ? current : [...current, id];
+      return current.filter((itemId) => itemId !== id);
+    });
+  };
+
+  const pickerAllItems = useMemo(() => {
+    if (pickerType === 'EXTRA_RECIPE') return recipes as Array<{ id: string; name: string }>;
+    if (pickerType === 'EXTRA_PRODUCT') return productCandidates as Array<{ id: string; name: string }>;
+    return packagingCandidates as Array<{ id: string; name: string }>;
+  }, [pickerType, recipes, productCandidates, packagingCandidates]);
+
+  const pickerFilteredItems = useMemo(() => {
+    const needle = pickerSearch.trim().toLowerCase();
+    if (!needle) return pickerAllItems;
+    return pickerAllItems.filter((item) => item.name.toLowerCase().includes(needle));
+  }, [pickerAllItems, pickerSearch]);
+
+  const pickerSelectedItems = useMemo(
     () =>
-      inputs
-        .filter((input) => input.category === 'embalagem')
-        .map((input) => ({
-          value: input.id,
-          label: `${input.name} • ${formatCurrency(input.packagePrice)} / ${input.packageSize} ${input.unit}`
-        })),
-    [inputs]
+      pickerSelectedIds
+        .map((id) => pickerAllItems.find((item) => item.id === id))
+        .filter((item): item is { id: string; name: string } => Boolean(item)),
+    [pickerAllItems, pickerSelectedIds]
   );
+
+  const pickerUnselectedItems = useMemo(
+    () => pickerFilteredItems.filter((item) => !pickerSelectedIds.includes(item.id)),
+    [pickerFilteredItems, pickerSelectedIds]
+  );
+
+  const applyPickerSelection = () => {
+    if (pickerType === 'EXTRA_RECIPE') {
+      const existingById = new Map(form.extraRecipes.map((item) => [item.recipeId, item] as const));
+      const next = pickerSelectedIds
+        .map((id) => {
+          const existing = existingById.get(id);
+          if (existing) return existing;
+          const recipe = recipesById.get(id);
+          if (!recipe) return null;
+          return { recipeId: id, quantity: 0 };
+        })
+        .filter((item): item is { recipeId: string; quantity: number } => Boolean(item));
+      setForm((prev) => ({ ...prev, extraRecipes: next }));
+    } else if (pickerType === 'EXTRA_PRODUCT') {
+      const existingById = new Map(form.extraProducts.map((item) => [item.productId, item] as const));
+      const next = pickerSelectedIds
+        .map((id) => {
+          const existing = existingById.get(id);
+          if (existing) return existing;
+          const product = productsById.get(id);
+          if (!product) return null;
+          return { productId: id, quantity: 0 };
+        })
+        .filter((item): item is { productId: string; quantity: number } => Boolean(item));
+      setForm((prev) => ({ ...prev, extraProducts: next }));
+    } else {
+      const existingById = new Map(form.packagingInputs.map((item) => [item.inputId, item] as const));
+      const next = pickerSelectedIds
+        .map((id) => {
+          const existing = existingById.get(id);
+          if (existing) return existing;
+          const input = inputsById.get(id);
+          if (!input) return null;
+          return { inputId: id, quantity: 0, unit: input.unit as 'kg' | 'g' | 'l' | 'ml' | 'un' };
+        })
+        .filter((item): item is { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' } => Boolean(item));
+      setForm((prev) => ({ ...prev, packagingInputs: next }));
+    }
+    setPickerOpen(false);
+  };
 
   const costSummary = useMemo(() => {
     const inputsMap = new Map(inputs.map((input) => [input.id, input]));
@@ -401,7 +477,7 @@ export const ProductsPage = () => {
           title="Produtos cadastrados"
           searchValue={search}
           onSearch={setSearch}
-          actionLabel="Novo produto"
+          actionLabel="+"
           onAction={handleNew}
         />
         {productsQuery.loading && products.length === 0 ? (
@@ -568,29 +644,25 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.extraRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row">
-                  <SearchableSelect
-                    value={item.recipeId}
-                    onChange={(value) => {
-                      const next = [...form.extraRecipes];
-                      next[index] = { ...next[index], recipeId: value };
-                      setForm({ ...form, extraRecipes: next });
-                    }}
-                    options={recipeOptions}
-                    placeholder="Selecione a receita"
-                  />
-                  <input
-                    className="add-item-qty-input"
-                    type="number"
-                    value={item.quantity === 0 ? '' : item.quantity}
-                    onChange={(e) => {
-                      const next = [...form.extraRecipes];
-                      next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
-                      setForm({ ...form, extraRecipes: next });
-                    }}
-                    min={0}
-                    step="0.01"
-                    aria-label="Quantidade"
-                  />
+                  <span className="order-product-label">
+                    {recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}
+                  </span>
+                  <label className="add-item-qty-field">
+                    <span>Quantidade</span>
+                    <input
+                      className="add-item-qty-input"
+                      type="number"
+                      value={item.quantity === 0 ? '' : item.quantity}
+                      onChange={(e) => {
+                        const next = [...form.extraRecipes];
+                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
+                        setForm({ ...form, extraRecipes: next });
+                      }}
+                      min={0}
+                      step="0.01"
+                      aria-label="Quantidade"
+                    />
+                  </label>
                   <button
                     type="button"
                     className="icon-button tiny"
@@ -606,7 +678,7 @@ export const ProductsPage = () => {
                   </button>
                 </div>
               ))}
-              <button type="button" className="ghost" onClick={addExtraRecipe}>
+              <button type="button" className="ghost" onClick={() => openPicker('EXTRA_RECIPE')}>
                 + Adicionar receita
               </button>
             </div>
@@ -617,29 +689,25 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.extraProducts.map((item, index) => (
                 <div key={`${item.productId}-${index}`} className="add-item-row">
-                  <SearchableSelect
-                    value={item.productId}
-                    onChange={(value) => {
-                      const next = [...form.extraProducts];
-                      next[index] = { ...next[index], productId: value };
-                      setForm({ ...form, extraProducts: next });
-                    }}
-                    options={productOptions}
-                    placeholder="Selecione o produto"
-                  />
-                  <input
-                    className="add-item-qty-input"
-                    type="number"
-                    value={item.quantity === 0 ? '' : item.quantity}
-                    onChange={(e) => {
-                      const next = [...form.extraProducts];
-                      next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
-                      setForm({ ...form, extraProducts: next });
-                    }}
-                    min={0}
-                    step="0.01"
-                    aria-label="Quantidade"
-                  />
+                  <span className="order-product-label">
+                    {productsById.get(item.productId)?.name ?? 'Produto nao encontrado'}
+                  </span>
+                  <label className="add-item-qty-field">
+                    <span>Quantidade</span>
+                    <input
+                      className="add-item-qty-input"
+                      type="number"
+                      value={item.quantity === 0 ? '' : item.quantity}
+                      onChange={(e) => {
+                        const next = [...form.extraProducts];
+                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
+                        setForm({ ...form, extraProducts: next });
+                      }}
+                      min={0}
+                      step="0.01"
+                      aria-label="Quantidade"
+                    />
+                  </label>
                   <button
                     type="button"
                     className="icon-button tiny"
@@ -655,7 +723,7 @@ export const ProductsPage = () => {
                   </button>
                 </div>
               ))}
-              <button type="button" className="ghost" onClick={addExtraProduct}>
+              <button type="button" className="ghost" onClick={() => openPicker('EXTRA_PRODUCT')}>
                 + Adicionar produto
               </button>
             </div>
@@ -666,30 +734,25 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.packagingInputs.map((item, index) => (
                 <div key={`${item.inputId}-${index}`} className="add-item-row">
-                  <SearchableSelect
-                    value={item.inputId}
-                    onChange={(value) => {
-                      const next = [...form.packagingInputs];
-                      const input = inputsById.get(value);
-                      next[index] = { ...next[index], inputId: value, unit: (input?.unit as 'kg' | 'g' | 'l' | 'ml' | 'un') ?? 'un' };
-                      setForm({ ...form, packagingInputs: next });
-                    }}
-                    options={packagingOptions}
-                    placeholder="Selecione embalagem"
-                  />
-                  <input
-                    className="add-item-qty-input"
-                    type="number"
-                    value={item.quantity === 0 ? '' : item.quantity}
-                    onChange={(e) => {
-                      const next = [...form.packagingInputs];
-                      next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
-                      setForm({ ...form, packagingInputs: next });
-                    }}
-                    min={0}
-                    step="0.01"
-                    aria-label="Quantidade"
-                  />
+                  <span className="order-product-label">
+                    {inputsById.get(item.inputId)?.name ?? 'Embalagem nao encontrada'}
+                  </span>
+                  <label className="add-item-qty-field">
+                    <span>Quantidade</span>
+                    <input
+                      className="add-item-qty-input"
+                      type="number"
+                      value={item.quantity === 0 ? '' : item.quantity}
+                      onChange={(e) => {
+                        const next = [...form.packagingInputs];
+                        next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
+                        setForm({ ...form, packagingInputs: next });
+                      }}
+                      min={0}
+                      step="0.01"
+                      aria-label="Quantidade"
+                    />
+                  </label>
                   <button
                     type="button"
                     className="icon-button tiny"
@@ -705,7 +768,7 @@ export const ProductsPage = () => {
                   </button>
                 </div>
               ))}
-              <button type="button" className="ghost" onClick={addPackaging}>
+              <button type="button" className="ghost" onClick={() => openPicker('PACKAGING')}>
                 + Adicionar embalagem
               </button>
             </div>
@@ -734,6 +797,114 @@ export const ProductsPage = () => {
           </div>
         </>
       )}
+
+      {pickerOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal product-picker-modal">
+            <div className="product-picker-head">
+              <h4>
+                {pickerType === 'EXTRA_RECIPE'
+                  ? 'Selecionar receitas'
+                  : pickerType === 'EXTRA_PRODUCT'
+                    ? 'Selecionar produtos'
+                    : 'Selecionar embalagens'}
+              </h4>
+              <div className="product-picker-head-right">
+                <strong className="product-picker-count">{pickerSelectedIds.length} selecionado(s)</strong>
+                <button type="button" className="icon-button small" onClick={() => setPickerOpen(false)} aria-label="Fechar">
+                  <span className="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+              </div>
+            </div>
+            <input
+              className="product-picker-search"
+              type="search"
+              value={pickerSearch}
+              onChange={(e) => setPickerSearch(e.target.value)}
+              placeholder={
+                pickerType === 'EXTRA_RECIPE'
+                  ? 'Buscar receita...'
+                  : pickerType === 'EXTRA_PRODUCT'
+                    ? 'Buscar produto...'
+                    : 'Buscar embalagem...'
+              }
+            />
+            <div className="product-picker-list">
+              {pickerSelectedItems.map((item) => {
+                const checked = pickerSelectedIds.includes(item.id);
+                return (
+                  <label key={item.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{item.name}</strong>
+                      <span className="muted">
+                        {pickerType === 'EXTRA_RECIPE'
+                          ? (() => {
+                              const recipe = recipesById.get(item.id);
+                              return recipe ? `Rendimento ${recipe.yield} ${recipe.yieldUnit}` : '';
+                            })()
+                          : pickerType === 'EXTRA_PRODUCT'
+                            ? (() => {
+                                const product = productsById.get(item.id);
+                                return product ? formatCurrency(product.unitPrice || product.salePrice || 0) : '';
+                              })()
+                            : (() => {
+                                const input = inputsById.get(item.id);
+                                return input ? `${formatCurrency(input.packagePrice)} / ${input.packageSize} ${input.unit}` : '';
+                              })()}
+                      </span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => togglePickerItem(item.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+              {pickerSelectedItems.length > 0 && pickerUnselectedItems.length > 0 ? (
+                <div className="product-picker-divider" aria-hidden="true" />
+              ) : null}
+              {pickerUnselectedItems.map((item) => {
+                const checked = pickerSelectedIds.includes(item.id);
+                return (
+                  <label key={item.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{item.name}</strong>
+                      <span className="muted">
+                        {pickerType === 'EXTRA_RECIPE'
+                          ? (() => {
+                              const recipe = recipesById.get(item.id);
+                              return recipe ? `Rendimento ${recipe.yield} ${recipe.yieldUnit}` : '';
+                            })()
+                          : pickerType === 'EXTRA_PRODUCT'
+                            ? (() => {
+                                const product = productsById.get(item.id);
+                                return product ? formatCurrency(product.unitPrice || product.salePrice || 0) : '';
+                              })()
+                            : (() => {
+                                const input = inputsById.get(item.id);
+                                return input ? `${formatCurrency(input.packagePrice)} / ${input.packageSize} ${input.unit}` : '';
+                              })()}
+                      </span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => togglePickerItem(item.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => setPickerOpen(false)}>Cancelar</button>
+              <button type="button" onClick={applyPickerSelection}>Salvar selecao</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmOpen}

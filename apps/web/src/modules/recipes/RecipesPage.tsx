@@ -6,7 +6,6 @@ import type { InputItem } from '../inputs/InputsPage.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
-import { SearchableSelect } from '../shared/SearchableSelect.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
@@ -76,6 +75,12 @@ export const RecipesPage = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RecipeItem | null>(null);
+  const [showInputPicker, setShowInputPicker] = useState(false);
+  const [inputPickerSearch, setInputPickerSearch] = useState('');
+  const [inputPickerSelectedIds, setInputPickerSelectedIds] = useState<string[]>([]);
+  const [showSubRecipePicker, setShowSubRecipePicker] = useState(false);
+  const [subRecipePickerSearch, setSubRecipePickerSearch] = useState('');
+  const [subRecipePickerSelectedIds, setSubRecipePickerSelectedIds] = useState<string[]>([]);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -170,20 +175,6 @@ export const RecipesPage = () => {
     });
   };
 
-  const addIngredient = () => {
-    setForm({
-      ...form,
-      ingredients: [...form.ingredients, { inputId: '', quantity: 0, unit: 'g' }]
-    });
-  };
-
-  const addSubRecipe = () => {
-    setForm({
-      ...form,
-      subRecipes: [...form.subRecipes, { recipeId: '', quantity: 0 }]
-    });
-  };
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -235,15 +226,6 @@ export const RecipesPage = () => {
     return haystack.includes(search.toLowerCase());
   });
 
-  const inputOptions = useMemo(
-    () =>
-      inputs.map((input) => ({
-        value: input.id,
-        label: `${input.name} • ${formatCurrency(input.packagePrice)} / ${input.packageSize} ${input.unit}`
-      })),
-    [inputs]
-  );
-
   const inputsMap = useMemo(() => new Map(inputs.map((input) => [input.id, input])), [inputs]);
 
   const unitOptionsForInput = (inputId: string) => {
@@ -265,15 +247,123 @@ export const RecipesPage = () => {
     return units.map((unit) => ({ value: unit, label: unit }));
   };
 
-  const recipeOptions = useMemo(
-    () =>
-      recipes
-        .filter((recipe) => recipe.id !== editingId)
-        .map((recipe) => ({
-          value: recipe.id,
-          label: `${recipe.name} • ${recipe.yield} ${recipe.yieldUnit}`
-        })),
+  const subRecipeCandidates = useMemo(
+    () => recipes.filter((recipe) => recipe.id !== editingId),
     [recipes, editingId]
+  );
+
+  const openInputPicker = () => {
+    setInputPickerSelectedIds(
+      form.ingredients
+        .map((item) => item.inputId)
+        .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
+    );
+    setInputPickerSearch('');
+    setShowInputPicker(true);
+  };
+
+  const toggleInputPickerItem = (inputId: string, checked: boolean) => {
+    setInputPickerSelectedIds((current) => {
+      if (checked) return current.includes(inputId) ? current : [...current, inputId];
+      return current.filter((id) => id !== inputId);
+    });
+  };
+
+  const applyInputPicker = () => {
+    const existingByInputId = new Map(
+      form.ingredients
+        .filter((item) => item.inputId)
+        .map((item) => [item.inputId, item] as const)
+    );
+
+    const nextIngredients = inputPickerSelectedIds
+      .map((inputId) => {
+        const input = inputsMap.get(inputId);
+        if (!input) return null;
+        const existing = existingByInputId.get(inputId);
+        if (existing) return existing;
+        return { inputId, quantity: 0, unit: input.unit };
+      })
+      .filter((item): item is { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' } => Boolean(item));
+
+    setForm((prev) => ({ ...prev, ingredients: nextIngredients }));
+    setShowInputPicker(false);
+  };
+
+  const inputFilteredItems = useMemo(() => {
+    const needle = inputPickerSearch.trim().toLowerCase();
+    if (!needle) return inputs;
+    return inputs.filter((item) => item.name.toLowerCase().includes(needle));
+  }, [inputs, inputPickerSearch]);
+
+  const inputSelectedItems = useMemo(
+    () =>
+      inputPickerSelectedIds
+        .map((id) => inputsMap.get(id))
+        .filter((item): item is InputItem => Boolean(item)),
+    [inputsMap, inputPickerSelectedIds]
+  );
+
+  const inputUnselectedItems = useMemo(
+    () => inputFilteredItems.filter((item) => !inputPickerSelectedIds.includes(item.id)),
+    [inputFilteredItems, inputPickerSelectedIds]
+  );
+
+  const openSubRecipePicker = () => {
+    setSubRecipePickerSelectedIds(
+      form.subRecipes
+        .map((item) => item.recipeId)
+        .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
+    );
+    setSubRecipePickerSearch('');
+    setShowSubRecipePicker(true);
+  };
+
+  const toggleSubRecipePickerItem = (recipeId: string, checked: boolean) => {
+    setSubRecipePickerSelectedIds((current) => {
+      if (checked) return current.includes(recipeId) ? current : [...current, recipeId];
+      return current.filter((id) => id !== recipeId);
+    });
+  };
+
+  const applySubRecipePicker = () => {
+    const existingByRecipeId = new Map(
+      form.subRecipes
+        .filter((item) => item.recipeId)
+        .map((item) => [item.recipeId, item] as const)
+    );
+
+    const nextSubRecipes = subRecipePickerSelectedIds
+      .map((recipeId) => {
+        const recipe = subRecipeCandidates.find((item) => item.id === recipeId);
+        if (!recipe) return null;
+        const existing = existingByRecipeId.get(recipeId);
+        if (existing) return existing;
+        return { recipeId, quantity: 0 };
+      })
+      .filter((item): item is { recipeId: string; quantity: number } => Boolean(item));
+
+    setForm((prev) => ({ ...prev, subRecipes: nextSubRecipes }));
+    setShowSubRecipePicker(false);
+  };
+
+  const subRecipeFilteredItems = useMemo(() => {
+    const needle = subRecipePickerSearch.trim().toLowerCase();
+    if (!needle) return subRecipeCandidates;
+    return subRecipeCandidates.filter((item) => item.name.toLowerCase().includes(needle));
+  }, [subRecipeCandidates, subRecipePickerSearch]);
+
+  const subRecipeSelectedItems = useMemo(
+    () =>
+      subRecipePickerSelectedIds
+        .map((id) => subRecipeCandidates.find((item) => item.id === id))
+        .filter((item): item is RecipeItem => Boolean(item)),
+    [subRecipeCandidates, subRecipePickerSelectedIds]
+  );
+
+  const subRecipeUnselectedItems = useMemo(
+    () => subRecipeFilteredItems.filter((item) => !subRecipePickerSelectedIds.includes(item.id)),
+    [subRecipeFilteredItems, subRecipePickerSelectedIds]
   );
 
   const costSummary = useMemo(() => {
@@ -353,7 +443,7 @@ export const RecipesPage = () => {
           title="Receitas cadastradas"
           searchValue={search}
           onSearch={setSearch}
-          actionLabel="Nova receita"
+          actionLabel="+"
           onAction={handleNew}
         />
         {recipesQuery.loading && recipes.length === 0 ? (
@@ -479,32 +569,21 @@ export const RecipesPage = () => {
             <div className="ingredients">
               {form.ingredients.map((ingredient, index) => (
                 <div key={`${ingredient.inputId}-${index}`} className="add-item-row recipe-add-item-row">
-                  <SearchableSelect
-                    value={ingredient.inputId}
-                    onChange={(value) => {
-                      const input = inputsMap.get(value);
-                      setForm((prev) => {
-                        const next = [...prev.ingredients];
-                        next[index] = {
-                          ...next[index],
-                          inputId: value,
-                          unit: input ? input.unit : next[index].unit
-                        };
-                        return { ...prev, ingredients: next };
-                      });
-                    }}
-                    options={inputOptions}
-                    placeholder="Selecione o insumo"
-                  />
-                  <input
-                    className="add-item-qty-input"
-                    type="number"
-                    value={ingredient.quantity === 0 ? '' : ingredient.quantity}
-                    onChange={(e) => handleIngredientChange(index, 'quantity', Number(e.target.value || 0))}
-                    min={0}
-                    step="0.01"
-                    aria-label="Quantidade"
-                  />
+                  <span className="order-product-label">
+                    {inputsMap.get(ingredient.inputId)?.name ?? 'Insumo nao encontrado'}
+                  </span>
+                  <label className="add-item-qty-field">
+                    <span>Quantidade</span>
+                    <input
+                      className="add-item-qty-input"
+                      type="number"
+                      value={ingredient.quantity === 0 ? '' : ingredient.quantity}
+                      onChange={(e) => handleIngredientChange(index, 'quantity', Number(e.target.value || 0))}
+                      min={0}
+                      step="0.01"
+                      aria-label="Quantidade"
+                    />
+                  </label>
                   <SelectField
                     className="add-item-unit-select"
                     value={ingredient.unit}
@@ -526,7 +605,7 @@ export const RecipesPage = () => {
                   </button>
                 </div>
               ))}
-              <button type="button" className="ghost" onClick={addIngredient}>
+              <button type="button" className="ghost" onClick={openInputPicker}>
                 + Adicionar insumo
               </button>
             </div>
@@ -537,21 +616,21 @@ export const RecipesPage = () => {
             <div className="ingredients">
               {form.subRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-sub-item-row">
-                  <SearchableSelect
-                    value={item.recipeId}
-                    onChange={(value) => handleSubRecipeChange(index, 'recipeId', value)}
-                    options={recipeOptions}
-                    placeholder="Selecione a receita"
-                  />
-                  <input
-                    className="add-item-qty-input"
-                    type="number"
-                    value={item.quantity === 0 ? '' : item.quantity}
-                    onChange={(e) => handleSubRecipeChange(index, 'quantity', Number(e.target.value || 0))}
-                    min={0}
-                    step="0.01"
-                    aria-label="Quantidade"
-                  />
+                  <span className="order-product-label">
+                    {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.name ?? 'Receita nao encontrada'}
+                  </span>
+                  <label className="add-item-qty-field">
+                    <span>Quantidade</span>
+                    <input
+                      className="add-item-qty-input"
+                      type="number"
+                      value={item.quantity === 0 ? '' : item.quantity}
+                      onChange={(e) => handleSubRecipeChange(index, 'quantity', Number(e.target.value || 0))}
+                      min={0}
+                      step="0.01"
+                      aria-label="Quantidade"
+                    />
+                  </label>
                   <button
                     type="button"
                     className="icon-button tiny"
@@ -567,7 +646,7 @@ export const RecipesPage = () => {
                   </button>
                 </div>
               ))}
-              <button type="button" className="ghost" onClick={addSubRecipe}>
+              <button type="button" className="ghost" onClick={openSubRecipePicker}>
                 + Adicionar receita
               </button>
             </div>
@@ -596,6 +675,138 @@ export const RecipesPage = () => {
           </div>
         </>
       )}
+
+      {showInputPicker ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal product-picker-modal">
+            <div className="product-picker-head">
+              <h4>Selecionar insumos</h4>
+              <div className="product-picker-head-right">
+                <strong className="product-picker-count">{inputPickerSelectedIds.length} selecionado(s)</strong>
+                <button type="button" className="icon-button small" onClick={() => setShowInputPicker(false)} aria-label="Fechar">
+                  <span className="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+              </div>
+            </div>
+            <input
+              className="product-picker-search"
+              type="search"
+              value={inputPickerSearch}
+              onChange={(e) => setInputPickerSearch(e.target.value)}
+              placeholder="Buscar insumo..."
+            />
+            <div className="product-picker-list">
+              {inputSelectedItems.map((input) => {
+                const checked = inputPickerSelectedIds.includes(input.id);
+                return (
+                  <label key={input.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{input.name}</strong>
+                      <span className="muted">{formatCurrency(input.packagePrice)} / {input.packageSize} {input.unit}</span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleInputPickerItem(input.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+              {inputSelectedItems.length > 0 && inputUnselectedItems.length > 0 ? (
+                <div className="product-picker-divider" aria-hidden="true" />
+              ) : null}
+              {inputUnselectedItems.map((input) => {
+                const checked = inputPickerSelectedIds.includes(input.id);
+                return (
+                  <label key={input.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{input.name}</strong>
+                      <span className="muted">{formatCurrency(input.packagePrice)} / {input.packageSize} {input.unit}</span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleInputPickerItem(input.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => setShowInputPicker(false)}>Cancelar</button>
+              <button type="button" onClick={applyInputPicker}>Salvar selecao</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showSubRecipePicker ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal product-picker-modal">
+            <div className="product-picker-head">
+              <h4>Selecionar receitas</h4>
+              <div className="product-picker-head-right">
+                <strong className="product-picker-count">{subRecipePickerSelectedIds.length} selecionado(s)</strong>
+                <button type="button" className="icon-button small" onClick={() => setShowSubRecipePicker(false)} aria-label="Fechar">
+                  <span className="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+              </div>
+            </div>
+            <input
+              className="product-picker-search"
+              type="search"
+              value={subRecipePickerSearch}
+              onChange={(e) => setSubRecipePickerSearch(e.target.value)}
+              placeholder="Buscar receita..."
+            />
+            <div className="product-picker-list">
+              {subRecipeSelectedItems.map((recipe) => {
+                const checked = subRecipePickerSelectedIds.includes(recipe.id);
+                return (
+                  <label key={recipe.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{recipe.name}</strong>
+                      <span className="muted">Rendimento {recipe.yield} {recipe.yieldUnit}</span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleSubRecipePickerItem(recipe.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+              {subRecipeSelectedItems.length > 0 && subRecipeUnselectedItems.length > 0 ? (
+                <div className="product-picker-divider" aria-hidden="true" />
+              ) : null}
+              {subRecipeUnselectedItems.map((recipe) => {
+                const checked = subRecipePickerSelectedIds.includes(recipe.id);
+                return (
+                  <label key={recipe.id} className="product-picker-row">
+                    <div className="product-picker-main">
+                      <strong>{recipe.name}</strong>
+                      <span className="muted">Rendimento {recipe.yield} {recipe.yieldUnit}</span>
+                    </div>
+                    <input
+                      className="pretty-checkbox"
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleSubRecipePickerItem(recipe.id, event.target.checked)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => setShowSubRecipePicker(false)}>Cancelar</button>
+              <button type="button" onClick={applySubRecipePicker}>Salvar selecao</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmOpen}
