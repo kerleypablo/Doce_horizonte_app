@@ -34,6 +34,32 @@
   --shadow: 0 10px 30px rgba(25, 40, 26, 0.1);
 }
 
+:root[data-theme='branco_pop'] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-alt: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --accent: #ff8a3d;
+  --accent-strong: #0ea5a4;
+  --border: #e5e7eb;
+  --shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+}
+
+:root[data-theme='branco_pop'] body {
+  background: #ffffff;
+}
+
+:root[data-theme='branco_pop'] .card,
+:root[data-theme='branco_pop'] .home-calendar-day,
+:root[data-theme='branco_pop'] .list-row,
+:root[data-theme='branco_pop'] .table-row,
+:root[data-theme='branco_pop'] input,
+:root[data-theme='branco_pop'] textarea,
+:root[data-theme='branco_pop'] .select-trigger {
+  background: #ffffff;
+}
+
 :root[data-dark='true'] {
   --bg: #191711;
   --surface: #25221a;

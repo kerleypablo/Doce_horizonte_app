@@ -104,13 +104,12 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (!settingsQuery.data) {
-      root.setAttribute('data-theme', 'caramelo');
-      root.setAttribute('data-dark', 'false');
-      return;
-    }
-    root.setAttribute('data-theme', settingsQuery.data.appTheme ?? 'caramelo');
-    root.setAttribute('data-dark', settingsQuery.data.darkMode ? 'true' : 'false');
+    const themeOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-theme-override') : null;
+    const darkOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-dark-override') : null;
+    const themeFromApi = settingsQuery.data?.appTheme ?? 'caramelo';
+    const darkFromApi = settingsQuery.data?.darkMode ? 'true' : 'false';
+    root.setAttribute('data-theme', themeOverride || themeFromApi);
+    root.setAttribute('data-dark', darkOverride ?? darkFromApi);
   }, [settingsQuery.data]);
 
   useEffect(() => {

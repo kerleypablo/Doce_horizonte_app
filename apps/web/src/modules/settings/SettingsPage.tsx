@@ -21,7 +21,7 @@ type Settings = {
   companyEmail: string;
   pixKey: string;
   logoDataUrl: string;
-  appTheme: 'caramelo' | 'oceano' | 'floresta';
+  appTheme: 'caramelo' | 'oceano' | 'floresta' | 'branco_pop';
   darkMode: boolean;
   defaultNotesDelivery: string;
   defaultNotesGeneral: string;
@@ -39,7 +39,8 @@ type Settings = {
 const themeOptions: Array<{ value: Settings['appTheme']; label: string }> = [
   { value: 'caramelo', label: 'Caramelo' },
   { value: 'oceano', label: 'Oceano' },
-  { value: 'floresta', label: 'Floresta' }
+  { value: 'floresta', label: 'Floresta' },
+  { value: 'branco_pop', label: 'Branco Pop' }
 ];
 
 export const SettingsPage = () => {
@@ -55,7 +56,13 @@ export const SettingsPage = () => {
 
   useEffect(() => {
     if (settingsQuery.data) {
-      setSettings(settingsQuery.data);
+      const themeOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-theme-override') : null;
+      const darkOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-dark-override') : null;
+      setSettings({
+        ...settingsQuery.data,
+        appTheme: (themeOverride as Settings['appTheme'] | null) ?? settingsQuery.data.appTheme,
+        darkMode: darkOverride === null ? settingsQuery.data.darkMode : darkOverride === 'true'
+      });
     }
   }, [settingsQuery.data]);
 
@@ -79,6 +86,14 @@ export const SettingsPage = () => {
       await settingsQuery.refetch();
       document.documentElement.setAttribute('data-theme', settings.appTheme);
       document.documentElement.setAttribute('data-dark', settings.darkMode ? 'true' : 'false');
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('app-theme-override', settings.appTheme);
+        window.localStorage.setItem('app-dark-override', settings.darkMode ? 'true' : 'false');
+      }
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('app-theme-override', settings.appTheme);
+        window.localStorage.setItem('app-dark-override', settings.darkMode ? 'true' : 'false');
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar configuracoes';
       setSubmitError(message);

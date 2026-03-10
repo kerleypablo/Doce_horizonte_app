@@ -3,7 +3,7 @@ export type Role = 'master' | 'admin' | 'common';
 export type CompanySettings = {
   companyName?: string;
   logoDataUrl?: string;
-  appTheme?: 'caramelo' | 'oceano' | 'floresta';
+  appTheme?: 'caramelo' | 'oceano' | 'floresta' | 'branco_pop';
   darkMode?: boolean;
   defaultNotesDelivery?: string;
   defaultNotesGeneral?: string;

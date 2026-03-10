@@ -25,7 +25,7 @@ type Settings = {
   companyEmail: string;
   pixKey: string;
   logoDataUrl: string;
-  appTheme: 'caramelo' | 'oceano' | 'floresta';
+  appTheme: 'caramelo' | 'oceano' | 'floresta' | 'branco_pop';
   darkMode: boolean;
   defaultNotesDelivery: string;
   defaultNotesGeneral: string;
