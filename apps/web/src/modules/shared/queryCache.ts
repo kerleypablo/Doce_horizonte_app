@@ -96,10 +96,10 @@ export const useCachedQuery = <T,>(
   const refetchOnReconnect = options?.refetchOnReconnect ?? true;
   const refetchInterval = options?.refetchInterval;
   const initial = getEntry<T>(key);
-  const hasFreshInitial = Boolean(initial?.data !== undefined && isFresh(initial.updatedAt, staleTime));
+  const hasInitialData = Boolean(initial?.data !== undefined);
 
-  const [data, setData] = useState<T | undefined>(() => (hasFreshInitial ? initial?.data : undefined));
-  const [loading, setLoading] = useState(Boolean(enabled && !hasFreshInitial));
+  const [data, setData] = useState<T | undefined>(() => initial?.data);
+  const [loading, setLoading] = useState(Boolean(enabled && !hasInitialData));
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -129,10 +129,15 @@ export const useCachedQuery = <T,>(
   useEffect(() => {
     if (!enabled) return;
     const current = getEntry<T>(key);
-    if (current?.data !== undefined && isFresh(current.updatedAt, staleTime)) {
+    if (current?.data !== undefined) {
       setData(current.data);
       setLoading(false);
-      return;
+      if (isFresh(current.updatedAt, staleTime)) {
+        return;
+      }
+    } else {
+      setData(undefined);
+      setLoading(true);
     }
     run(false).catch(() => undefined);
   }, [enabled, key, run, staleTime]);
