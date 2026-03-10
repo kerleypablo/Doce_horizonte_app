@@ -38,6 +38,7 @@ export const InputsPage = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'packageSize' | 'packagePrice', string>>>({});
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -89,6 +90,16 @@ export const InputsPage = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const validationErrors: Partial<Record<'name' | 'packageSize' | 'packagePrice', string>> = {};
+    if (!form.name.trim()) validationErrors.name = 'Nome e obrigatorio.';
+    if (Number(form.packageSize) <= 0) validationErrors.packageSize = 'Informe um tamanho maior que zero.';
+    if (Number(form.packagePrice) <= 0) validationErrors.packagePrice = 'Preco do pacote e obrigatorio.';
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      return;
+    }
+
+    setFieldErrors({});
     setSaving(true);
     const payload = {
       ...form,
@@ -133,6 +144,7 @@ export const InputsPage = () => {
       tags: []
     });
     setTagDraft('');
+    setFieldErrors({});
     setEditingId(null);
   };
 
@@ -280,7 +292,16 @@ export const InputsPage = () => {
             <div className="grid-2">
               <label>
                 Nome
-                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                <input
+                  className={fieldErrors.name ? 'field-input-invalid' : ''}
+                  value={form.name}
+                  onChange={(e) => {
+                    setForm({ ...form, name: e.target.value });
+                    if (fieldErrors.name) setFieldErrors((current) => ({ ...current, name: undefined }));
+                  }}
+                  required
+                />
+                {fieldErrors.name ? <span className="field-error">{fieldErrors.name}</span> : null}
               </label>
               <label>
                 Marca
@@ -304,9 +325,13 @@ export const InputsPage = () => {
                 Tamanho pacote
                 <div className="inline-field">
                   <input
+                    className={fieldErrors.packageSize ? 'field-input-invalid' : ''}
                     type="number"
                     value={form.packageSize === 0 ? '' : form.packageSize}
-                    onChange={(e) => setForm({ ...form, packageSize: Number(e.target.value || 0) })}
+                    onChange={(e) => {
+                      setForm({ ...form, packageSize: Number(e.target.value || 0) });
+                      if (fieldErrors.packageSize) setFieldErrors((current) => ({ ...current, packageSize: undefined }));
+                    }}
                     min={0}
                     step="0.01"
                   />
@@ -323,12 +348,21 @@ export const InputsPage = () => {
                     ]}
                   />
                 </div>
+                {fieldErrors.packageSize ? <span className="field-error">{fieldErrors.packageSize}</span> : null}
               </label>
             </div>
             <div className="grid-2">
               <label>
                 Preco do pacote
-                <MoneyInput value={form.packagePrice} onChange={(value) => setForm({ ...form, packagePrice: value })} />
+                <MoneyInput
+                  className={fieldErrors.packagePrice ? 'field-input-invalid' : ''}
+                  value={form.packagePrice}
+                  onChange={(value) => {
+                    setForm({ ...form, packagePrice: value });
+                    if (fieldErrors.packagePrice) setFieldErrors((current) => ({ ...current, packagePrice: undefined }));
+                  }}
+                />
+                {fieldErrors.packagePrice ? <span className="field-error">{fieldErrors.packagePrice}</span> : null}
               </label>
               <label>
                 Observacoes

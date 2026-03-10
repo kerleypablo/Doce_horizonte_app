@@ -886,6 +886,16 @@ textarea {
   resize: vertical;
 }
 
+.field-input-invalid {
+  border-color: #cf3d3d !important;
+  box-shadow: 0 0 0 1px rgba(207, 61, 61, 0.18);
+}
+
+.field-error {
+  font-size: 12px;
+  color: #b73737;
+}
+
 .select-field {
   position: relative;
 }

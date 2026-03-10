@@ -7,6 +7,7 @@ type MoneyInputProps = {
   placeholder?: string;
   min?: number;
   disabled?: boolean;
+  className?: string;
 };
 
 const formatBRL = (value: number) => {
@@ -22,7 +23,7 @@ const parseDigitsToNumber = (digits: string) => {
   return intValue / 100;
 };
 
-export const MoneyInput = ({ value, onChange, placeholder, min = 0, disabled }: MoneyInputProps) => {
+export const MoneyInput = ({ value, onChange, placeholder, min = 0, disabled, className }: MoneyInputProps) => {
   const [text, setText] = useState(() => (value === 0 ? '' : formatBRL(value)));
 
   const formatted = useMemo(() => (value === 0 ? '' : formatBRL(value)), [value]);
@@ -33,6 +34,7 @@ export const MoneyInput = ({ value, onChange, placeholder, min = 0, disabled }: 
 
   return (
     <input
+      className={className}
       inputMode="numeric"
       value={text}
       placeholder={placeholder}
