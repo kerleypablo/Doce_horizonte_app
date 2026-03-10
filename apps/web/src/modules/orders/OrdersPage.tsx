@@ -847,7 +847,19 @@ export const OrdersPage = () => {
         ) : (
           <div className="table">
             {filtered.map((order) => (
-              <div key={order.id} className="list-row">
+              <div
+                key={order.id}
+                className="list-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/app/pedidos/${order.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/app/pedidos/${order.id}`);
+                  }
+                }}
+              >
                 <div>
                   <strong>{order.customerSnapshot?.name ?? 'Sem cliente'}</strong>
                   <span className="muted">
@@ -855,22 +867,25 @@ export const OrdersPage = () => {
                   </span>
                 </div>
                 <div className="inline-right">
-                  <button type="button" className="icon-button small pdf-action" onClick={() => handleGeneratePdf(order.id)} aria-label="PDF">
+                  <button
+                    type="button"
+                    className="icon-button small pdf-action"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleGeneratePdf(order.id);
+                    }}
+                    aria-label="PDF"
+                  >
                     <span className="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
                   </button>
                   <button
                     type="button"
                     className="icon-button"
-                    aria-label="Editar"
-                    onClick={() => navigate(`/app/pedidos/${order.id}`)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
                     aria-label="Excluir"
-                    onClick={() => setDeleteTarget(order)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteTarget(order);
+                    }}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>

@@ -530,7 +530,19 @@ export const RecipesPage = () => {
         ) : (
           <div className="table">
             {filtered.map((recipe) => (
-              <div key={recipe.id} className="list-row">
+              <div
+                key={recipe.id}
+                className="list-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/app/receitas/editar/${recipe.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/app/receitas/editar/${recipe.id}`);
+                  }
+                }}
+              >
                 <div>
                   <strong>{recipe.name}</strong>
                   <span className="muted">
@@ -542,18 +554,11 @@ export const RecipesPage = () => {
                   <button
                     type="button"
                     className="icon-button"
-                    aria-label="Editar"
-                    onClick={() => navigate(`/app/receitas/editar/${recipe.id}`)}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
                     aria-label="Excluir"
-                    onClick={() => setDeleteTarget(recipe)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteTarget(recipe);
+                    }}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>

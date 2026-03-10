@@ -192,7 +192,19 @@ export const CustomersPage = () => {
         ) : (
           <div className="table">
             {filtered.map((customer) => (
-              <div key={customer.id} className="list-row">
+              <div
+                key={customer.id}
+                className="list-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/app/clientes/editar/${customer.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/app/clientes/editar/${customer.id}`);
+                  }
+                }}
+              >
                 <div>
                   <strong>{customer.name}</strong>
                   <span className="muted">
@@ -209,27 +221,21 @@ export const CustomersPage = () => {
                       rel="noreferrer"
                       className="icon-button"
                       aria-label={`WhatsApp de ${customer.name}`}
+                      onClick={(event) => event.stopPropagation()}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 4a8 8 0 0 0-6.9 12.1L4 20l4-1.1A8 8 0 1 0 12 4zm4.3 11.5c-.2.5-1 .9-1.4 1-.4.1-.9.1-1.5-.1a11.6 11.6 0 0 1-5-4.4c-.4-.6-.8-1.6-.8-2.1s.2-.8.5-1.1.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.8 1.8c.1.2.1.4 0 .6l-.4.6c-.1.1-.2.3 0 .5.2.4.7 1.2 1.5 1.9 1.1 1 2 1.3 2.4 1.4.2.1.4 0 .5-.1l.7-.8c.2-.2.4-.3.7-.2l1.8.8c.2.1.4.2.5.4s.1 1 0 1.3z" />
                       </svg>
                     </a>
                   )}
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Editar"
-                  onClick={() => navigate(`/app/clientes/editar/${customer.id}`)}
-                >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                    </svg>
-                  </button>
                   <button
                     type="button"
                     className="icon-button"
                     aria-label="Excluir"
-                    onClick={() => setDeleteTarget(customer)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteTarget(customer);
+                    }}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>

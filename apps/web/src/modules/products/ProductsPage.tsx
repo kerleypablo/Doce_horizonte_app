@@ -684,7 +684,19 @@ export const ProductsPage = () => {
         ) : (
           <div className="table">
             {filtered.map((product) => (
-              <div key={product.id} className="list-row">
+              <div
+                key={product.id}
+                className="list-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/app/produtos/editar/${product.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/app/produtos/editar/${product.id}`);
+                  }
+                }}
+              >
                 <div>
                   <strong>{product.name}</strong>
                   <span className="muted">R$ {product.unitPrice?.toFixed(2)} un • R$ {product.salePrice.toFixed(2)}</span>
@@ -693,18 +705,11 @@ export const ProductsPage = () => {
                   <button
                     type="button"
                     className="icon-button"
-                    aria-label="Editar"
-                    onClick={() => navigate(`/app/produtos/editar/${product.id}`)}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
                     aria-label="Excluir"
-                    onClick={() => setDeleteTarget(product)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setDeleteTarget(product);
+                    }}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>

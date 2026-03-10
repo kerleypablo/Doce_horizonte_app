@@ -452,7 +452,19 @@ export const InputsPage = () => {
               <span>Preco</span>
             </div>
             {filtered.map((input) => (
-              <div key={input.id} className="list-row">
+              <div
+                key={input.id}
+                className="list-row"
+                onClick={() => navigate(`/app/insumos/editar/${input.id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/app/insumos/editar/${input.id}`);
+                  }
+                }}
+              >
                 <div>
                   <strong>{input.name}</strong>
                   <span className="muted">
@@ -464,18 +476,11 @@ export const InputsPage = () => {
                   <button
                     type="button"
                     className="icon-button"
-                    aria-label="Editar"
-                    onClick={() => navigate(`/app/insumos/editar/${input.id}`)}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
                     aria-label="Excluir"
-                    onClick={() => askDeleteInput(input)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      askDeleteInput(input);
+                    }}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>
