@@ -19,9 +19,6 @@ export const ListToolbar = ({
 }: ListToolbarProps) => {
   return (
     <div className="list-toolbar">
-      <div>
-        <h3>{title}</h3>
-      </div>
       <div className="list-toolbar-actions">
         <input
           className="search"
