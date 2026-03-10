@@ -76,10 +76,10 @@ const isPathActive = (pathname: string, path: string) => {
 };
 
 const getHeaderTitle = (pathname: string) => {
-  if (pathname === '/app') return 'Controle de Precificacao';
+  if (pathname === '/app') return 'de Precificacao';
   if (pathname === '/backoffice') return 'Backoffice';
   const matched = navItems.find((item) => isPathActive(pathname, item.path));
-  if (!matched) return 'Controle de Precificacao';
+  if (!matched) return 'de Precificacao';
   if (matched.path === '/app/pedidos' && pathname !== '/app/pedidos') return 'Pedido';
   return matched.label;
 };
