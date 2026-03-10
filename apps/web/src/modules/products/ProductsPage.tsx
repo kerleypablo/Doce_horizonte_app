@@ -65,6 +65,8 @@ export const ProductsPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
   const lastEditedRef = useRef<'profit' | 'unitPrice' | null>(null);
@@ -374,6 +376,23 @@ export const ProductsPage = () => {
     setForm({ ...form, targetProfitPercent: Number(Math.max(profitPercent, 0).toFixed(2)) });
   };
 
+  const handleDeleteProduct = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/products/${deleteTarget.id}`, {
+        method: 'DELETE',
+        token: user?.token
+      });
+      setProducts((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+      invalidateQueryCache(queryKeys.products);
+      await productsQuery.refetch();
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <div className="page">
       {!isCreateView && (
@@ -395,34 +414,44 @@ export const ProductsPage = () => {
                   <strong>{product.name}</strong>
                   <span className="muted">R$ {product.unitPrice?.toFixed(2)} un • R$ {product.salePrice.toFixed(2)}</span>
                 </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Editar"
-                  onClick={() => {
-                    setEditingId(product.id);
-                    setForm({
-                      name: product.name,
-                      prepTimeMinutes: product.prepTimeMinutes ?? 0,
-                      notes: product.notes ?? '',
-                      unitsCount: product.unitsCount ?? 1,
-                      targetProfitPercent: product.targetProfitPercent,
-                      extraPercent: product.extraPercent ?? 0,
-                      unitPrice: product.unitPrice ?? 0,
-                      channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',
-                      extraRecipes: product.extraRecipes ?? [],
-                      extraProducts: product.extraProducts ?? [],
-                      packagingInputs: product.packagingInputs ?? []
-                    });
-                    setUnitPriceInput(product.unitPrice ?? 0);
-                    lastEditedRef.current = null;
-                    setShowForm(true);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                  </svg>
-                </button>
+                <div className="inline-right">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Editar"
+                    onClick={() => {
+                      setEditingId(product.id);
+                      setForm({
+                        name: product.name,
+                        prepTimeMinutes: product.prepTimeMinutes ?? 0,
+                        notes: product.notes ?? '',
+                        unitsCount: product.unitsCount ?? 1,
+                        targetProfitPercent: product.targetProfitPercent,
+                        extraPercent: product.extraPercent ?? 0,
+                        unitPrice: product.unitPrice ?? 0,
+                        channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',
+                        extraRecipes: product.extraRecipes ?? [],
+                        extraProducts: product.extraProducts ?? [],
+                        packagingInputs: product.packagingInputs ?? []
+                      });
+                      setUnitPriceInput(product.unitPrice ?? 0);
+                      lastEditedRef.current = null;
+                      setShowForm(true);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Excluir"
+                    onClick={() => setDeleteTarget(product)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -722,7 +751,16 @@ export const ProductsPage = () => {
           setConfirmOpen(false);
         }}
       />
-      <LoadingOverlay open={saving} label="Salvando produto..." />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Excluir produto?"
+        message={`Deseja realmente excluir "${deleteTarget?.name ?? ''}"?`}
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteProduct}
+      />
+      <LoadingOverlay open={saving || deleting} label={deleting ? 'Excluindo produto...' : 'Salvando produto...'} />
     </div>
   );
 };

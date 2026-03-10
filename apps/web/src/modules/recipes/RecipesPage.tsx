@@ -74,6 +74,8 @@ export const RecipesPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<RecipeItem | null>(null);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
@@ -326,6 +328,23 @@ export const RecipesPage = () => {
     };
   }, [form, inputs, recipes, settings, editingId]);
 
+  const handleDeleteRecipe = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/recipes/${deleteTarget.id}`, {
+        method: 'DELETE',
+        token: user?.token
+      });
+      setRecipes((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+      invalidateQueryCache(queryKeys.recipes);
+      await recipesQuery.refetch();
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <div className="page recipes-page">
       {!isCreateView && (
@@ -350,29 +369,39 @@ export const RecipesPage = () => {
                     {recipe.tags?.length ? ` • ${recipe.tags.join(', ')}` : ''}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Editar"
-                  onClick={() => {
-                    setEditingId(recipe.id);
-                    setForm({
-                      name: recipe.name,
-                      description: recipe.description ?? '',
-                      prepTimeMinutes: recipe.prepTimeMinutes ?? 0,
-                      yield: recipe.yield,
-                      yieldUnit: recipe.yieldUnit ?? 'un',
-                      ingredients: recipe.ingredients ?? [],
-                      subRecipes: recipe.subRecipes ?? [],
-                      tags: recipe.tags ?? []
-                    });
-                    setShowForm(true);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                  </svg>
-                </button>
+                <div className="inline-right">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Editar"
+                    onClick={() => {
+                      setEditingId(recipe.id);
+                      setForm({
+                        name: recipe.name,
+                        description: recipe.description ?? '',
+                        prepTimeMinutes: recipe.prepTimeMinutes ?? 0,
+                        yield: recipe.yield,
+                        yieldUnit: recipe.yieldUnit ?? 'un',
+                        ingredients: recipe.ingredients ?? [],
+                        subRecipes: recipe.subRecipes ?? [],
+                        tags: recipe.tags ?? []
+                      });
+                      setShowForm(true);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Excluir"
+                    onClick={() => setDeleteTarget(recipe)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -584,7 +613,16 @@ export const RecipesPage = () => {
           setConfirmOpen(false);
         }}
       />
-      <LoadingOverlay open={saving} label="Salvando receita..." />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Excluir receita?"
+        message={`Deseja realmente excluir "${deleteTarget?.name ?? ''}"?`}
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteRecipe}
+      />
+      <LoadingOverlay open={saving || deleting} label={deleting ? 'Excluindo receita...' : 'Salvando receita...'} />
     </div>
   );
 };

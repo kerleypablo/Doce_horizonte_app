@@ -1752,7 +1752,7 @@ button:disabled {
 .tasks-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: 320;
   background: rgba(15, 12, 8, 0.5);
   display: grid;
   place-items: center;
@@ -2482,7 +2482,7 @@ button:disabled {
   background: rgba(24, 18, 10, 0.4);
   display: grid;
   place-items: center;
-  z-index: 80;
+  z-index: 340;
   padding: 16px;
 }
 

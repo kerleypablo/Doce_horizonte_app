@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
+import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
@@ -52,6 +53,8 @@ export const CustomersPage = () => {
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerItem | null>(null);
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -156,6 +159,23 @@ export const CustomersPage = () => {
     return haystack.includes(search.toLowerCase());
   });
 
+  const handleDeleteCustomer = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/customers/${deleteTarget.id}`, {
+        method: 'DELETE',
+        token: user?.token
+      });
+      setCustomers((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+      invalidateQueryCache(queryKeys.customers);
+      await customersQuery.refetch();
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
@@ -204,6 +224,14 @@ export const CustomersPage = () => {
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
                     </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Excluir"
+                    onClick={() => setDeleteTarget(customer)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>
                 </div>
               </div>
@@ -290,7 +318,16 @@ export const CustomersPage = () => {
           </form>
         </div>
       )}
-      <LoadingOverlay open={saving} label="Salvando cliente..." />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Excluir cliente?"
+        message={`Deseja realmente excluir "${deleteTarget?.name ?? ''}"?`}
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteCustomer}
+      />
+      <LoadingOverlay open={saving || deleting} label={deleting ? 'Excluindo cliente...' : 'Salvando cliente...'} />
     </div>
   );
 };

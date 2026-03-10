@@ -165,6 +165,8 @@ export const OrdersPage = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<OrderListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
   const [orderDefaults, setOrderDefaults] = useState<CompanySettings>({});
   const confirmActionRef = useRef<null | (() => void)>(null);
@@ -650,6 +652,24 @@ export const OrdersPage = () => {
     }, 250);
   };
 
+  const handleDeleteOrder = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/orders/${deleteTarget.id}`, {
+        method: 'DELETE',
+        token: user?.token
+      });
+      setOrders((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+      invalidateQueryCache(queryKeys.orders);
+      invalidateQueryCache(queryKeys.ordersSummaryCalendar);
+      await ordersQuery.refetch();
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <div className="page">
       {!isFormRoute && (
@@ -685,6 +705,14 @@ export const OrdersPage = () => {
                     onClick={() => navigate(`/app/pedidos/${order.id}`)}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Excluir"
+                    onClick={() => setDeleteTarget(order)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>
                 </div>
               </div>
@@ -1165,7 +1193,16 @@ export const OrdersPage = () => {
           setConfirmOpen(false);
         }}
       />
-      <LoadingOverlay open={saving} label="Salvando pedido..." />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Excluir pedido?"
+        message={`Deseja realmente excluir o pedido de "${deleteTarget?.customerSnapshot?.name ?? 'Sem cliente'}"?`}
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteOrder}
+      />
+      <LoadingOverlay open={saving || deleting} label={deleting ? 'Excluindo pedido...' : 'Salvando pedido...'} />
     </div>
   );
 };

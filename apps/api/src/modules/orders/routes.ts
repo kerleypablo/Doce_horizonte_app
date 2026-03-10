@@ -320,4 +320,21 @@ export const orderRoutes = async (app: FastifyInstance) => {
     if (error) return reply.status(404).send({ message: 'Pedido nao encontrado' });
     return reply.send(mapOrder(updated));
   });
+
+  app.delete('/orders/:id', pedidosGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const id = request.params as { id: string };
+
+    const { data: deleted, error } = await supabaseAdmin
+      .from('orders')
+      .delete()
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId)
+      .select('id')
+      .single();
+
+    if (error) return reply.status(400).send({ message: error.message ?? 'Erro ao excluir pedido' });
+    if (!deleted) return reply.status(404).send({ message: 'Pedido nao encontrado' });
+    return reply.status(204).send();
+  });
 };

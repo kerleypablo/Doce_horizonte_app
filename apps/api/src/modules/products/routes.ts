@@ -279,4 +279,21 @@ export const productRoutes = async (app: FastifyInstance) => {
     if (error) return reply.status(404).send({ message: 'Produto nao encontrado' });
     return reply.send({ product: mapProduct(updated), preview });
   });
+
+  app.delete('/products/:id', cadastrosGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const id = request.params as { id: string };
+
+    const { data: deleted, error } = await supabaseAdmin
+      .from('products')
+      .delete()
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId)
+      .select('id')
+      .single();
+
+    if (error) return reply.status(400).send({ message: error.message ?? 'Erro ao excluir produto' });
+    if (!deleted) return reply.status(404).send({ message: 'Produto nao encontrado' });
+    return reply.status(204).send();
+  });
 };
