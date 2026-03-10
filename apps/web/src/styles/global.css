@@ -54,7 +54,7 @@
 :root[data-theme='branco_pop'] .home-calendar-day,
 :root[data-theme='branco_pop'] .list-row,
 :root[data-theme='branco_pop'] .table-row,
-:root[data-theme='branco_pop'] input,
+:root[data-theme='branco_pop'] input:not([type='checkbox']):not([type='radio']),
 :root[data-theme='branco_pop'] textarea,
 :root[data-theme='branco_pop'] .select-trigger {
   background: #ffffff;
@@ -72,7 +72,7 @@
   --shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
 }
 
-:root[data-dark='true'] input,
+:root[data-dark='true'] input:not([type='checkbox']):not([type='radio']),
 :root[data-dark='true'] select,
 :root[data-dark='true'] textarea,
 :root[data-dark='true'] .select-trigger,
@@ -894,13 +894,17 @@ label {
   color: var(--muted);
 }
 
-input,
+input:not([type='checkbox']):not([type='radio']),
 select {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: #fffdfb;
   color: var(--text);
+}
+
+input[type='checkbox']:not(.pretty-checkbox) {
+  accent-color: var(--accent-strong);
 }
 
 textarea {
@@ -2315,6 +2319,27 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.customer-picker-row {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.customer-picker-row .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.customer-picker-row.active {
+  border-color: color-mix(in srgb, var(--accent-strong) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+}
+
+.customer-picker-row.active .material-symbols-outlined {
+  color: var(--accent-strong);
+}
+
 .pretty-checkbox {
   appearance: none;
   -webkit-appearance: none;
@@ -2440,6 +2465,20 @@ button:disabled {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.order-box-head .order-date-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
   white-space: nowrap;
 }
 
