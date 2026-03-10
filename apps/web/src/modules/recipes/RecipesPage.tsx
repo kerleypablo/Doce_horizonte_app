@@ -571,9 +571,12 @@ export const RecipesPage = () => {
             <div className="ingredients">
               {form.ingredients.map((ingredient, index) => (
                 <div key={`${ingredient.inputId}-${index}`} className="add-item-row recipe-add-item-row">
-                  <span className="order-product-label">
-                    {inputsMap.get(ingredient.inputId)?.name ?? 'Insumo nao encontrado'}
-                  </span>
+                  <div className="order-product-label">
+                    <span>{inputsMap.get(ingredient.inputId)?.name ?? 'Insumo nao encontrado'}</span>
+                    <small className="order-product-meta">
+                      {inputsMap.get(ingredient.inputId)?.packageSize ?? 0} {inputsMap.get(ingredient.inputId)?.unit ?? '-'}
+                    </small>
+                  </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
                     <input
@@ -618,9 +621,12 @@ export const RecipesPage = () => {
             <div className="ingredients">
               {form.subRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-sub-item-row">
-                  <span className="order-product-label">
-                    {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.name ?? 'Receita nao encontrada'}
-                  </span>
+                  <div className="order-product-label">
+                    <span>{subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
+                    <small className="order-product-meta">
+                      {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.yield ?? 0} {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.yieldUnit ?? '-'} 
+                    </small>
+                  </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
                     <input

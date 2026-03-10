@@ -23,6 +23,37 @@ export type InputItem = {
   notes?: string;
 };
 
+type RecipeDependencyItem = {
+  id: string;
+  name: string;
+  description?: string;
+  prepTimeMinutes: number;
+  yield: number;
+  yieldUnit: 'kg' | 'g' | 'l' | 'ml' | 'un';
+  notes?: string;
+  ingredients: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
+  subRecipes: { recipeId: string; quantity: number }[];
+  tags: string[];
+};
+
+type CompanySettingsCost = {
+  laborCostPerHour?: number;
+  fixedCostPerHour?: number;
+};
+
+const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
+
+const normalizeQuantity = (quantity: number, unit: string, target: string) => {
+  if (unit === 'un' || target === 'un') return quantity;
+  const weight = { kg: 1000, g: 1 } as Record<string, number>;
+  const volume = { l: 1000, ml: 1 } as Record<string, number>;
+  const isWeight = unit in weight && target in weight;
+  const isVolume = unit in volume && target in volume;
+  if (isWeight) return (quantity * weight[unit]) / weight[target];
+  if (isVolume) return (quantity * volume[unit]) / volume[target];
+  return quantity;
+};
+
 export const InputsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +67,12 @@ export const InputsPage = () => {
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [linkedModalOpen, setLinkedModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<InputItem | null>(null);
+  const [linkedRecipes, setLinkedRecipes] = useState<RecipeDependencyItem[]>([]);
+  const [deleteActionLoading, setDeleteActionLoading] = useState(false);
+  const [deleteActionError, setDeleteActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'packageSize' | 'packagePrice', string>>>({});
@@ -55,6 +92,16 @@ export const InputsPage = () => {
     queryKeys.inputs,
     () => apiFetch<InputItem[]>('/inputs', { token: user?.token }),
     { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const recipesQuery = useCachedQuery(
+    queryKeys.recipes,
+    () => apiFetch<RecipeDependencyItem[]>('/recipes', { token: user?.token }),
+    { staleTime: 60_000, enabled: Boolean(user?.token) }
+  );
+  const settingsQuery = useCachedQuery(
+    queryKeys.companySettings,
+    () => apiFetch<CompanySettingsCost>('/company/settings', { token: user?.token }),
+    { staleTime: 60_000, enabled: Boolean(user?.token) }
   );
 
   useEffect(() => {
@@ -160,6 +207,109 @@ export const InputsPage = () => {
     navigate('/app/insumos/novo');
   };
 
+  const executeDeleteInput = async (input: InputItem) => {
+    setDeleteActionLoading(true);
+    setDeleteActionError(null);
+    try {
+      await apiFetch(`/inputs/${input.id}`, {
+        method: 'DELETE',
+        token: user?.token
+      });
+      invalidateQueryCache(queryKeys.inputs);
+      await inputsQuery.refetch();
+      if (editingId === input.id) {
+        resetForm();
+        navigate('/app/insumos');
+      }
+      setDeleteConfirmOpen(false);
+      setLinkedModalOpen(false);
+      setDeleteTarget(null);
+      setLinkedRecipes([]);
+    } catch (error) {
+      setDeleteActionError(error instanceof Error ? error.message : 'Nao foi possivel excluir o insumo.');
+    } finally {
+      setDeleteActionLoading(false);
+    }
+  };
+
+  const askDeleteInput = (input: InputItem) => {
+    const linked = (recipesQuery.data ?? []).filter((recipe) =>
+      (recipe.ingredients ?? []).some((ingredient) => ingredient.inputId === input.id)
+    );
+    setDeleteTarget(input);
+    setDeleteActionError(null);
+    if (linked.length > 0) {
+      setLinkedRecipes(linked);
+      setLinkedModalOpen(true);
+      return;
+    }
+    setDeleteConfirmOpen(true);
+  };
+
+  const removeInputFromRecipe = async (recipe: RecipeDependencyItem, inputId: string) => {
+    const nextIngredients = (recipe.ingredients ?? []).filter((item) => item.inputId !== inputId);
+    setDeleteActionLoading(true);
+    setDeleteActionError(null);
+    try {
+      await apiFetch(`/recipes/${recipe.id}`, {
+        method: 'PUT',
+        token: user?.token,
+        body: JSON.stringify({
+          name: recipe.name,
+          description: recipe.description ?? '',
+          prepTimeMinutes: Number(recipe.prepTimeMinutes ?? 0),
+          yield: Number(recipe.yield ?? 1),
+          yieldUnit: recipe.yieldUnit,
+          ingredients: nextIngredients,
+          subRecipes: recipe.subRecipes ?? [],
+          tags: recipe.tags ?? [],
+          notes: recipe.notes ?? ''
+        })
+      });
+      invalidateQueryCache(queryKeys.recipes);
+      const refreshed = await recipesQuery.refetch();
+      const updatedRecipes = refreshed.data ?? [];
+      const pendingLinks = updatedRecipes.filter((item) =>
+        (item.ingredients ?? []).some((ingredient) => ingredient.inputId === inputId)
+      );
+      setLinkedRecipes(pendingLinks);
+      if (pendingLinks.length === 0) {
+        setLinkedModalOpen(false);
+        if (deleteTarget) setDeleteConfirmOpen(true);
+      }
+    } catch (error) {
+      setDeleteActionError(error instanceof Error ? error.message : 'Nao foi possivel remover o insumo da receita.');
+    } finally {
+      setDeleteActionLoading(false);
+    }
+  };
+
+  const deleteLinkedRecipe = async (recipeId: string, inputId: string) => {
+    setDeleteActionLoading(true);
+    setDeleteActionError(null);
+    try {
+      await apiFetch(`/recipes/${recipeId}`, {
+        method: 'DELETE',
+        token: user?.token
+      });
+      invalidateQueryCache(queryKeys.recipes);
+      const refreshed = await recipesQuery.refetch();
+      const updatedRecipes = refreshed.data ?? [];
+      const pendingLinks = updatedRecipes.filter((item) =>
+        (item.ingredients ?? []).some((ingredient) => ingredient.inputId === inputId)
+      );
+      setLinkedRecipes(pendingLinks);
+      if (pendingLinks.length === 0) {
+        setLinkedModalOpen(false);
+        if (deleteTarget) setDeleteConfirmOpen(true);
+      }
+    } catch (error) {
+      setDeleteActionError(error instanceof Error ? error.message : 'Nao foi possivel apagar a receita.');
+    } finally {
+      setDeleteActionLoading(false);
+    }
+  };
+
   const listTagOptions = useMemo(() => {
     const unique = new Map<string, string>();
     inputs.forEach((item) => {
@@ -209,6 +359,53 @@ export const InputsPage = () => {
     if (alreadyExists) return;
     setForm((current) => ({ ...current, tags: [...current.tags, clean] }));
   };
+
+  const recipeValuePreviewMap = useMemo(() => {
+    const recipesById = new Map((recipesQuery.data ?? []).map((recipe) => [recipe.id, recipe]));
+    const inputsById = new Map((inputsQuery.data ?? []).map((input) => [input.id, input]));
+
+    const calcRecipeIngredientsCost = (recipe: RecipeDependencyItem, visited = new Set<string>()): number => {
+      if (visited.has(recipe.id)) return 0;
+      visited.add(recipe.id);
+
+      const ingredientsCost = (recipe.ingredients ?? []).reduce((sum, item) => {
+        const input = inputsById.get(item.inputId);
+        if (!input || Number(input.packageSize) <= 0) return sum;
+        const unitCost = Number(input.packagePrice) / Number(input.packageSize);
+        const normalized = normalizeQuantity(Number(item.quantity ?? 0), item.unit, input.unit);
+        return sum + unitCost * normalized;
+      }, 0);
+
+      const subRecipesCost = (recipe.subRecipes ?? []).reduce((sum, item) => {
+        const sub = recipesById.get(item.recipeId);
+        if (!sub || Number(sub.yield) <= 0) return sum;
+        const subTotal = calcRecipeIngredientsCost(sub, new Set(visited));
+        return sum + (subTotal / Number(sub.yield)) * Number(item.quantity ?? 0);
+      }, 0);
+
+      return ingredientsCost + subRecipesCost;
+    };
+
+    const calcRecipeTotal = (recipe: RecipeDependencyItem) => {
+      const ingredientsTotal = calcRecipeIngredientsCost(recipe);
+      const hours = Number(recipe.prepTimeMinutes ?? 0) / 60;
+      const laborTotal = Number(settingsQuery.data?.laborCostPerHour ?? 0) * hours;
+      const fixedTotal = Number(settingsQuery.data?.fixedCostPerHour ?? 0) * hours;
+      return ingredientsTotal + laborTotal + fixedTotal;
+    };
+
+    const result = new Map<string, { current: number; withoutInput: number }>();
+    for (const recipe of linkedRecipes) {
+      const current = calcRecipeTotal(recipe);
+      const withoutInputRecipe: RecipeDependencyItem = {
+        ...recipe,
+        ingredients: (recipe.ingredients ?? []).filter((item) => item.inputId !== deleteTarget?.id)
+      };
+      const withoutInput = calcRecipeTotal(withoutInputRecipe);
+      result.set(recipe.id, { current, withoutInput });
+    }
+    return result;
+  }, [linkedRecipes, deleteTarget?.id, recipesQuery.data, inputsQuery.data, settingsQuery.data]);
 
   return (
     <div className="page">
@@ -263,16 +460,26 @@ export const InputsPage = () => {
                     {input.tags?.length ? ` • ${input.tags.join(', ')}` : ''}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Editar"
-                  onClick={() => navigate(`/app/insumos/editar/${input.id}`)}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
-                  </svg>
-                </button>
+                <div className="inline-right">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Editar"
+                    onClick={() => navigate(`/app/insumos/editar/${input.id}`)}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Excluir"
+                    onClick={() => askDeleteInput(input)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -449,6 +656,100 @@ export const InputsPage = () => {
           setConfirmOpen(false);
         }}
       />
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Excluir insumo"
+        message={`Deseja excluir o insumo "${deleteTarget?.name ?? ''}"?`}
+        confirmLabel={deleteActionLoading ? 'Excluindo...' : 'Excluir'}
+        cancelLabel="Cancelar"
+        onCancel={() => {
+          if (deleteActionLoading) return;
+          setDeleteConfirmOpen(false);
+          setDeleteTarget(null);
+          setDeleteActionError(null);
+        }}
+        onConfirm={() => {
+          if (!deleteTarget || deleteActionLoading) return;
+          executeDeleteInput(deleteTarget);
+        }}
+      />
+      {linkedModalOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal input-linked-modal">
+            <div className="modal-header">
+              <div className="modal-icon">
+                <span className="material-symbols-outlined" aria-hidden="true">link</span>
+              </div>
+              <div>
+                <h4>Insumo vinculado a receitas</h4>
+                <p>
+                  O insumo <strong>{deleteTarget?.name}</strong> esta em {linkedRecipes.length} receita(s). Resolva os vinculos antes de excluir.
+                </p>
+              </div>
+            </div>
+            <div className="input-linked-list">
+              {linkedRecipes.map((recipe) => (
+                <div key={recipe.id} className="input-linked-item">
+                  <div>
+                    <strong>{recipe.name}</strong>
+                    <span className="muted">
+                      Valor atual: {formatCurrency(recipeValuePreviewMap.get(recipe.id)?.current ?? 0)} •
+                      Sem este insumo: {formatCurrency(recipeValuePreviewMap.get(recipe.id)?.withoutInput ?? 0)}
+                    </span>
+                  </div>
+                  <div className="input-linked-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => navigate(`/app/receitas/editar/${recipe.id}`)}
+                    >
+                      Editar receita
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={deleteActionLoading}
+                      onClick={() => deleteTarget && removeInputFromRecipe(recipe, deleteTarget.id)}
+                    >
+                      Remover insumo
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deleteActionLoading}
+                      onClick={() => deleteTarget && deleteLinkedRecipe(recipe.id, deleteTarget.id)}
+                    >
+                      Apagar receita
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {deleteActionError ? <p className="error">{deleteActionError}</p> : null}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  if (deleteActionLoading) return;
+                  setLinkedModalOpen(false);
+                  setDeleteTarget(null);
+                  setLinkedRecipes([]);
+                  setDeleteActionError(null);
+                }}
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                disabled={linkedRecipes.length > 0 || deleteActionLoading || !deleteTarget}
+                onClick={() => deleteTarget && executeDeleteInput(deleteTarget)}
+              >
+                {deleteActionLoading ? 'Excluindo...' : 'Excluir insumo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <LoadingOverlay open={saving} label="Salvando insumo..." />
     </div>
   );

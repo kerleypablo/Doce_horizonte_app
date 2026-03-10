@@ -2182,6 +2182,22 @@ button:disabled {
   white-space: nowrap;
 }
 
+.order-product-label > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-product-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .product-picker-screen {
   display: grid;
   gap: 10px;
@@ -2866,6 +2882,46 @@ button:disabled {
   gap: 12px;
 }
 
+.input-linked-modal {
+  width: min(760px, 100%);
+}
+
+.input-linked-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  margin-bottom: 12px;
+}
+
+.input-linked-item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--surface-alt) 55%, white);
+}
+
+.input-linked-item strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.input-linked-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.input-linked-actions button {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 @media (max-width: 960px) {
   input,
   select,
@@ -3038,7 +3094,7 @@ button:disabled {
   }
 
   .home-shortcut-card {
-    min-height: 132px;
+    min-height: 100px;
   }
 
   .home-calendar-title-actions {

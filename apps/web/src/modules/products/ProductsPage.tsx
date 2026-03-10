@@ -646,9 +646,12 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.extraRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row">
-                  <span className="order-product-label">
-                    {recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}
-                  </span>
+                  <div className="order-product-label">
+                    <span>{recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
+                    <small className="order-product-meta">
+                      {recipesById.get(item.recipeId)?.yield ?? 0} {recipesById.get(item.recipeId)?.yieldUnit ?? '-'}
+                    </small>
+                  </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
                     <input
