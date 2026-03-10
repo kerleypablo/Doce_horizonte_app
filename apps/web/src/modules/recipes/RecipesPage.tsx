@@ -80,6 +80,19 @@ export const RecipesPage = () => {
   const [showInputPicker, setShowInputPicker] = useState(false);
   const [inputPickerSearch, setInputPickerSearch] = useState('');
   const [inputPickerSelectedIds, setInputPickerSelectedIds] = useState<string[]>([]);
+  const [showQuickInputCreate, setShowQuickInputCreate] = useState(false);
+  const [quickInputSaving, setQuickInputSaving] = useState(false);
+  const [quickInputError, setQuickInputError] = useState<string | null>(null);
+  const [quickInputForm, setQuickInputForm] = useState({
+    name: '',
+    brand: '',
+    category: 'producao' as 'embalagem' | 'producao' | 'outros',
+    packageSize: 1,
+    unit: 'kg' as 'kg' | 'g' | 'l' | 'ml' | 'un',
+    packagePrice: 0,
+    notes: '',
+    tags: [] as string[]
+  });
   const [showSubRecipePicker, setShowSubRecipePicker] = useState(false);
   const [subRecipePickerSearch, setSubRecipePickerSearch] = useState('');
   const [subRecipePickerSelectedIds, setSubRecipePickerSelectedIds] = useState<string[]>([]);
@@ -277,6 +290,55 @@ export const RecipesPage = () => {
     );
     setInputPickerSearch('');
     setShowInputPicker(true);
+  };
+
+  const openQuickInputCreate = () => {
+    setQuickInputError(null);
+    setQuickInputForm({
+      name: '',
+      brand: '',
+      category: 'producao',
+      packageSize: 1,
+      unit: 'kg',
+      packagePrice: 0,
+      notes: '',
+      tags: []
+    });
+    setShowQuickInputCreate(true);
+  };
+
+  const saveQuickInput = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!quickInputForm.name.trim() || quickInputForm.packageSize <= 0 || quickInputForm.packagePrice <= 0) {
+      setQuickInputError('Preencha nome, tamanho e preco do pacote.');
+      return;
+    }
+    setQuickInputSaving(true);
+    setQuickInputError(null);
+    try {
+      const created = await apiFetch<InputItem>('/inputs', {
+        method: 'POST',
+        token: user?.token,
+        body: JSON.stringify({
+          name: quickInputForm.name.trim(),
+          brand: quickInputForm.brand.trim() || undefined,
+          category: quickInputForm.category,
+          unit: quickInputForm.unit,
+          packageSize: Number(quickInputForm.packageSize),
+          packagePrice: Number(quickInputForm.packagePrice),
+          notes: quickInputForm.notes.trim() || undefined,
+          tags: quickInputForm.tags
+        })
+      });
+      invalidateQueryCache(queryKeys.inputs);
+      await inputsQuery.refetch();
+      setInputPickerSelectedIds((current) => (current.includes(created.id) ? current : [...current, created.id]));
+      setShowQuickInputCreate(false);
+    } catch (error) {
+      setQuickInputError(error instanceof Error ? error.message : 'Nao foi possivel criar o insumo.');
+    } finally {
+      setQuickInputSaving(false);
+    }
   };
 
   const toggleInputPickerItem = (inputId: string, checked: boolean) => {
@@ -696,13 +758,18 @@ export const RecipesPage = () => {
                 </button>
               </div>
             </div>
-            <input
-              className="product-picker-search"
-              type="search"
-              value={inputPickerSearch}
-              onChange={(e) => setInputPickerSearch(e.target.value)}
-              placeholder="Buscar insumo..."
-            />
+            <div className="product-picker-search-row">
+              <input
+                className="product-picker-search"
+                type="search"
+                value={inputPickerSearch}
+                onChange={(e) => setInputPickerSearch(e.target.value)}
+                placeholder="Buscar insumo..."
+              />
+              <button type="button" className="icon-button" onClick={openQuickInputCreate} aria-label="Novo insumo">
+                <span className="material-symbols-outlined" aria-hidden="true">add</span>
+              </button>
+            </div>
             <div className="product-picker-list">
               {inputSelectedItems.map((input) => {
                 const checked = inputPickerSelectedIds.includes(input.id);
@@ -746,6 +813,113 @@ export const RecipesPage = () => {
               <button type="button" className="ghost" onClick={() => setShowInputPicker(false)}>Cancelar</button>
               <button type="button" onClick={applyInputPicker}>Salvar selecao</button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showQuickInputCreate ? (
+        <div className="modal-backdrop quick-input-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal quick-input-modal">
+            <div className="modal-header">
+              <div className="modal-icon">
+                <span className="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+              </div>
+              <div>
+                <h4>Novo insumo</h4>
+                <p>Cadastre sem sair da selecao de insumos.</p>
+              </div>
+            </div>
+            <form className="form" onSubmit={saveQuickInput}>
+              <label>
+                Nome
+                <input
+                  value={quickInputForm.name}
+                  onChange={(event) => setQuickInputForm((current) => ({ ...current, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Marca
+                <input
+                  value={quickInputForm.brand}
+                  onChange={(event) => setQuickInputForm((current) => ({ ...current, brand: event.target.value }))}
+                />
+              </label>
+              <div className="grid-2">
+                <label>
+                  Categoria
+                  <SelectField
+                    value={quickInputForm.category}
+                    onChange={(value) =>
+                      setQuickInputForm((current) => ({ ...current, category: value as 'embalagem' | 'producao' | 'outros' }))
+                    }
+                    options={[
+                      { value: 'producao', label: 'Producao' },
+                      { value: 'embalagem', label: 'Embalagem' },
+                      { value: 'outros', label: 'Outros' }
+                    ]}
+                  />
+                </label>
+                <label>
+                  Preco pacote
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={quickInputForm.packagePrice === 0 ? '' : quickInputForm.packagePrice}
+                    onChange={(event) =>
+                      setQuickInputForm((current) => ({ ...current, packagePrice: Number(event.target.value || 0) }))
+                    }
+                    required
+                  />
+                </label>
+              </div>
+              <label>
+                Tamanho pacote
+                <div className="inline-field">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={quickInputForm.packageSize === 0 ? '' : quickInputForm.packageSize}
+                    onChange={(event) =>
+                      setQuickInputForm((current) => ({ ...current, packageSize: Number(event.target.value || 0) }))
+                    }
+                    required
+                  />
+                  <SelectField
+                    className="unit-select"
+                    value={quickInputForm.unit}
+                    onChange={(value) => setQuickInputForm((current) => ({ ...current, unit: value as InputItem['unit'] }))}
+                    options={units.map((unit) => ({ value: unit, label: unit }))}
+                  />
+                </div>
+              </label>
+              <label>
+                Observacoes
+                <input
+                  value={quickInputForm.notes}
+                  onChange={(event) => setQuickInputForm((current) => ({ ...current, notes: event.target.value }))}
+                />
+              </label>
+              <label>
+                Tags
+                <TagInput
+                  value={quickInputForm.tags}
+                  onChange={(tags) => setQuickInputForm((current) => ({ ...current, tags }))}
+                  placeholder="Ex: doce, natal"
+                />
+              </label>
+              {quickInputError ? <p className="error">{quickInputError}</p> : null}
+              <div className="modal-actions">
+                <button type="button" className="ghost" onClick={() => setShowQuickInputCreate(false)} disabled={quickInputSaving}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={quickInputSaving}>
+                  {quickInputSaving ? 'Salvando...' : 'Salvar insumo'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
