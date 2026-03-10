@@ -87,7 +87,7 @@ export const DashboardPage = () => {
   const today = useMemo(() => new Date(), []);
   const [monthDate, setMonthDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(toDateKey(today));
-  const [calendarCompact, setCalendarCompact] = useState(false);
+  const [calendarCompact, setCalendarCompact] = useState(true);
   const [showRevenue, setShowRevenue] = useState(true);
   const ordersQuery = useCachedQuery(
     queryKeys.ordersSummaryCalendar,

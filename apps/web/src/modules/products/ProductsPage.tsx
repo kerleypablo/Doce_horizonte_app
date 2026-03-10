@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import type { RecipeItem } from '../recipes/RecipesPage.tsx';
@@ -56,14 +56,16 @@ export const ProductsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const isCreateView = pathname === '/app/produtos/novo';
+  const params = useParams<{ productId?: string }>();
+  const isCreateView = pathname.endsWith('/novo');
+  const editingRouteId = pathname.includes('/editar/') ? params.productId ?? null : null;
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
+  const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -134,16 +136,36 @@ export const ProductsPage = () => {
   }, [inputsQuery.data]);
 
   useEffect(() => {
-    if (!isCreateView) return;
-    resetForm();
-    setShowForm(true);
-  }, [isCreateView]);
-
-  useEffect(() => {
-    if (!isCreateView && !editingId) {
-      setShowForm(false);
+    if (isCreateView) {
+      resetForm();
+      setShowForm(true);
+      return;
     }
-  }, [isCreateView, editingId]);
+    if (editingRouteId) {
+      const current = (productsQuery.data ?? []).find((item) => item.id === editingRouteId);
+      if (!current) return;
+      setEditingId(current.id);
+      setForm({
+        name: current.name,
+        prepTimeMinutes: current.prepTimeMinutes ?? 0,
+        notes: current.notes ?? '',
+        unitsCount: current.unitsCount ?? 1,
+        targetProfitPercent: current.targetProfitPercent,
+        extraPercent: current.extraPercent ?? 0,
+        unitPrice: current.unitPrice ?? 0,
+        channelId: current.channelId ?? settings?.salesChannels[0]?.id ?? '',
+        extraRecipes: current.extraRecipes ?? [],
+        extraProducts: current.extraProducts ?? [],
+        packagingInputs: current.packagingInputs ?? []
+      });
+      setUnitPriceInput(current.unitPrice ?? 0);
+      lastEditedRef.current = null;
+      setShowForm(true);
+      return;
+    }
+    setEditingId(null);
+    setShowForm(false);
+  }, [isCreateView, editingRouteId, productsQuery.data, settings]);
 
   const resetForm = () => {
     setForm({
@@ -221,7 +243,7 @@ export const ProductsPage = () => {
       resetForm();
       setShowForm(false);
       lastEditedRef.current = null;
-      if (isCreateView) navigate('/app/produtos');
+      navigate('/app/produtos');
     } finally {
       setSaving(false);
     }
@@ -471,7 +493,7 @@ export const ProductsPage = () => {
 
   return (
     <div className="page">
-      {!isCreateView && (
+      {!isCreateView && !editingRouteId ? (
       <div className="panel">
         <ListToolbar
           title="Produtos cadastrados"
@@ -495,25 +517,7 @@ export const ProductsPage = () => {
                     type="button"
                     className="icon-button"
                     aria-label="Editar"
-                    onClick={() => {
-                      setEditingId(product.id);
-                      setForm({
-                        name: product.name,
-                        prepTimeMinutes: product.prepTimeMinutes ?? 0,
-                        notes: product.notes ?? '',
-                        unitsCount: product.unitsCount ?? 1,
-                        targetProfitPercent: product.targetProfitPercent,
-                        extraPercent: product.extraPercent ?? 0,
-                        unitPrice: product.unitPrice ?? 0,
-                        channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',
-                        extraRecipes: product.extraRecipes ?? [],
-                        extraProducts: product.extraProducts ?? [],
-                        packagingInputs: product.packagingInputs ?? []
-                      });
-                      setUnitPriceInput(product.unitPrice ?? 0);
-                      lastEditedRef.current = null;
-                      setShowForm(true);
-                    }}
+                    onClick={() => navigate(`/app/produtos/editar/${product.id}`)}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
@@ -533,17 +537,15 @@ export const ProductsPage = () => {
           </div>
         )}
       </div>
-      )}
+      ) : null}
 
       {showForm && (
         <>
           <div className="panel">
             <div className="panel-title-row">
-              {isCreateView && (
                 <button type="button" className="icon-button small" onClick={() => navigate('/app/produtos')} aria-label="Voltar">
                   <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
                 </button>
-              )}
               <h3>{editingId ? 'Editar produto' : 'Novo produto'}</h3>
             </div>
             <form className="form" onSubmit={handleSubmit}>
@@ -567,7 +569,7 @@ export const ProductsPage = () => {
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
               </label>
               <div className="actions">
-                <button type="button" className="ghost" onClick={() => (isCreateView ? navigate('/app/produtos') : setShowForm(false))}>
+                <button type="button" className="ghost" onClick={() => navigate('/app/produtos')}>
                   Cancelar
                 </button>
                 <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar produto'}</button>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';
@@ -64,13 +64,15 @@ export const RecipesPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const isCreateView = pathname === '/app/receitas/novo';
+  const params = useParams<{ recipeId?: string }>();
+  const isCreateView = pathname.endsWith('/novo');
+  const editingRouteId = pathname.includes('/editar/') ? params.recipeId ?? null : null;
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
+  const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -122,16 +124,31 @@ export const RecipesPage = () => {
   }, [settingsQuery.data]);
 
   useEffect(() => {
-    if (!isCreateView) return;
-    resetForm();
-    setShowForm(true);
-  }, [isCreateView]);
-
-  useEffect(() => {
-    if (!isCreateView && !editingId) {
-      setShowForm(false);
+    if (isCreateView) {
+      resetForm();
+      setShowForm(true);
+      return;
     }
-  }, [isCreateView, editingId]);
+    if (editingRouteId) {
+      const current = (recipesQuery.data ?? []).find((item) => item.id === editingRouteId);
+      if (!current) return;
+      setEditingId(current.id);
+      setForm({
+        name: current.name,
+        description: current.description ?? '',
+        prepTimeMinutes: current.prepTimeMinutes ?? 0,
+        yield: current.yield,
+        yieldUnit: current.yieldUnit ?? 'un',
+        ingredients: current.ingredients ?? [],
+        subRecipes: current.subRecipes ?? [],
+        tags: current.tags ?? []
+      });
+      setShowForm(true);
+      return;
+    }
+    setEditingId(null);
+    setShowForm(false);
+  }, [isCreateView, editingRouteId, recipesQuery.data]);
 
   const resetForm = () => {
     setForm({
@@ -215,7 +232,7 @@ export const RecipesPage = () => {
       setShowForm(false);
       invalidateQueryCache(queryKeys.recipes);
       await recipesQuery.refetch();
-      if (isCreateView) navigate('/app/receitas');
+      navigate('/app/receitas');
     } finally {
       setSaving(false);
     }
@@ -437,7 +454,7 @@ export const RecipesPage = () => {
 
   return (
     <div className="page recipes-page">
-      {!isCreateView && (
+      {!isCreateView && !editingRouteId ? (
       <div className="panel">
         <ListToolbar
           title="Receitas cadastradas"
@@ -464,20 +481,7 @@ export const RecipesPage = () => {
                     type="button"
                     className="icon-button"
                     aria-label="Editar"
-                    onClick={() => {
-                      setEditingId(recipe.id);
-                      setForm({
-                        name: recipe.name,
-                        description: recipe.description ?? '',
-                        prepTimeMinutes: recipe.prepTimeMinutes ?? 0,
-                        yield: recipe.yield,
-                        yieldUnit: recipe.yieldUnit ?? 'un',
-                        ingredients: recipe.ingredients ?? [],
-                        subRecipes: recipe.subRecipes ?? [],
-                        tags: recipe.tags ?? []
-                      });
-                      setShowForm(true);
-                    }}
+                    onClick={() => navigate(`/app/receitas/editar/${recipe.id}`)}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
@@ -497,17 +501,15 @@ export const RecipesPage = () => {
           </div>
         )}
       </div>
-      )}
+      ) : null}
 
       {showForm && (
         <>
           <div className="panel">
             <div className="panel-title-row">
-              {isCreateView && (
                 <button type="button" className="icon-button small" onClick={() => navigate('/app/receitas')} aria-label="Voltar">
                   <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
                 </button>
-              )}
               <h3>{editingId ? 'Editar receita' : 'Nova receita'}</h3>
             </div>
             <form className="form" onSubmit={handleSubmit}>
@@ -556,7 +558,7 @@ export const RecipesPage = () => {
                 <TagInput value={form.tags} onChange={(tags) => setForm({ ...form, tags })} placeholder="Ex: doce, natal" />
               </label>
               <div className="actions">
-                <button type="button" className="ghost" onClick={() => (isCreateView ? navigate('/app/receitas') : setShowForm(false))}>
+                <button type="button" className="ghost" onClick={() => navigate('/app/receitas')}>
                   Cancelar
                 </button>
                 <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar receita'}</button>

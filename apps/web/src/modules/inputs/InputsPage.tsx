@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
@@ -28,11 +28,13 @@ export const InputsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const isCreateView = pathname === '/app/insumos/novo';
+  const params = useParams<{ inputId?: string }>();
+  const isCreateView = pathname.endsWith('/novo');
+  const editingRouteId = pathname.includes('/editar/') ? params.inputId ?? null : null;
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
+  const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const confirmActionRef = useRef<null | (() => void)>(null);
@@ -58,16 +60,31 @@ export const InputsPage = () => {
   }, [inputsQuery.data]);
 
   useEffect(() => {
-    if (!isCreateView) return;
-    resetForm();
-    setShowForm(true);
-  }, [isCreateView]);
-
-  useEffect(() => {
-    if (!isCreateView && !editingId) {
-      setShowForm(false);
+    if (isCreateView) {
+      resetForm();
+      setShowForm(true);
+      return;
     }
-  }, [isCreateView, editingId]);
+    if (editingRouteId) {
+      const current = (inputsQuery.data ?? []).find((item) => item.id === editingRouteId);
+      if (!current) return;
+      setEditingId(current.id);
+      setForm({
+        name: current.name,
+        brand: current.brand ?? '',
+        category: current.category,
+        unit: current.unit,
+        packageSize: current.packageSize,
+        packagePrice: current.packagePrice,
+        notes: current.notes ?? '',
+        tags: current.tags ?? []
+      });
+      setShowForm(true);
+      return;
+    }
+    setEditingId(null);
+    setShowForm(false);
+  }, [isCreateView, editingRouteId, inputsQuery.data]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -97,7 +114,7 @@ export const InputsPage = () => {
       setShowForm(false);
       invalidateQueryCache(queryKeys.inputs);
       await inputsQuery.refetch();
-      if (isCreateView) navigate('/app/insumos');
+      navigate('/app/insumos');
     } finally {
       setSaving(false);
     }
@@ -136,13 +153,13 @@ export const InputsPage = () => {
 
   return (
     <div className="page">
-      {!isCreateView && (
+      {!isCreateView && !editingRouteId ? (
       <div className="panel">
         <ListToolbar
           title="Insumos cadastrados"
           searchValue={search}
           onSearch={setSearch}
-          actionLabel="Novo insumo"
+          actionLabel="+"
           onAction={handleNew}
         />
         {inputsQuery.loading && inputs.length === 0 ? (
@@ -168,20 +185,7 @@ export const InputsPage = () => {
                   type="button"
                   className="icon-button"
                   aria-label="Editar"
-                  onClick={() => {
-                    setEditingId(input.id);
-                    setForm({
-                      name: input.name,
-                      brand: input.brand ?? '',
-                      category: input.category,
-                      unit: input.unit,
-                      packageSize: input.packageSize,
-                      packagePrice: input.packagePrice,
-                      notes: input.notes ?? '',
-                      tags: input.tags ?? []
-                    });
-                    setShowForm(true);
-                  }}
+                  onClick={() => navigate(`/app/insumos/editar/${input.id}`)}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M4 20h4l10-10-4-4L4 16v4zm12-12 4 4" />
@@ -192,16 +196,14 @@ export const InputsPage = () => {
           </div>
         )}
       </div>
-      )}
+      ) : null}
 
       {showForm && (
         <div className="panel">
-          <div className="panel-title-row">
-            {isCreateView && (
+            <div className="panel-title-row">
               <button type="button" className="icon-button small" onClick={() => navigate('/app/insumos')} aria-label="Voltar">
                 <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
               </button>
-            )}
             <h3>{editingId ? 'Editar insumo' : 'Novo insumo'}</h3>
           </div>
           <form className="form" onSubmit={handleSubmit}>
@@ -268,7 +270,7 @@ export const InputsPage = () => {
               <TagInput value={form.tags} onChange={(tags) => setForm({ ...form, tags })} placeholder="Ex: doce, natal" />
             </label>
             <div className="actions">
-              <button type="button" className="ghost" onClick={() => (isCreateView ? navigate('/app/insumos') : setShowForm(false))}>
+              <button type="button" className="ghost" onClick={() => navigate('/app/insumos')}>
                 Cancelar
               </button>
               <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar insumo'}</button>

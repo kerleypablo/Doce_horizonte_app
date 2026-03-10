@@ -34,10 +34,13 @@ const App = () => {
         <Route path="/app" element={<DashboardPage />} />
         <Route path="/app/insumos" element={<InputsPage />} />
         <Route path="/app/insumos/novo" element={<InputsPage />} />
+        <Route path="/app/insumos/editar/:inputId" element={<InputsPage />} />
         <Route path="/app/receitas" element={<RecipesPage />} />
         <Route path="/app/receitas/novo" element={<RecipesPage />} />
+        <Route path="/app/receitas/editar/:recipeId" element={<RecipesPage />} />
         <Route path="/app/produtos" element={<ProductsPage />} />
         <Route path="/app/produtos/novo" element={<ProductsPage />} />
+        <Route path="/app/produtos/editar/:productId" element={<ProductsPage />} />
         <Route path="/app/clientes" element={<CustomersPage />} />
         <Route path="/app/clientes/novo" element={<CustomersPage />} />
         <Route path="/app/clientes/editar/:customerId" element={<CustomersPage />} />
