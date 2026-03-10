@@ -7,9 +7,14 @@ import { prefetchWithCache, useCachedQuery } from '../shared/queryCache.ts';
 
 const cards = [
   {
-    title: 'Pedido',
+    title: 'Pedidos',
     icon: 'receipt_long',
     path: '/app/pedidos'
+  },
+  {
+    title: 'Insumos',
+    icon: 'inventory_2',
+    path: '/app/insumos'
   },
   {
     title: 'Receita',
@@ -25,6 +30,11 @@ const cards = [
     title: 'Cliente',
     icon: 'groups',
     path: '/app/clientes'
+  },
+  {
+    title: 'Empresa',
+    icon: 'domain',
+    path: '/app/empresa'
   }
 ];
 

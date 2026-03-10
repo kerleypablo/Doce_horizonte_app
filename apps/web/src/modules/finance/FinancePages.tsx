@@ -382,6 +382,8 @@ export const FinanceDashboardPage = () => {
             </button>
             {actionsOpen ? (
               <div className="finance-actions-popover">
+                <Link to="/app/pedidos" className="finance-action-item" onClick={() => setActionsOpen(false)}>Pedidos</Link>
+                <Link to="/app/insumos" className="finance-action-item" onClick={() => setActionsOpen(false)}>Insumos</Link>
                 <Link to="/app/financeiro/contas" className="finance-action-item" onClick={() => setActionsOpen(false)}>Contas e saldos</Link>
                 <Link to="/app/financeiro/regras" className="finance-action-item" onClick={() => setActionsOpen(false)}>Regras de metodo</Link>
                 <Link to="/app/financeiro/vendas-manuais" className="finance-action-item" onClick={() => setActionsOpen(false)}>Venda de balcao</Link>
