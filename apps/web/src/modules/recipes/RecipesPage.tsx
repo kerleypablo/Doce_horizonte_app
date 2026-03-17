@@ -28,6 +28,17 @@ export type RecipeItem = {
   tags: string[];
 };
 
+type RecipeFormState = {
+  name: string;
+  description: string;
+  prepTimeMinutes: number;
+  yield: number;
+  yieldUnit: RecipeItem['yieldUnit'];
+  ingredients: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
+  subRecipes: { recipeId: string; quantity: number }[];
+  tags: string[];
+};
+
 type Settings = {
   overheadMethod: 'PERCENT_DIRECT' | 'PER_UNIT';
   overheadPercent: number;
@@ -63,10 +74,12 @@ const normalizeQuantity = (quantity: number, unit: string, target: string) => {
 export const RecipesPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname, state } = location;
   const params = useParams<{ recipeId?: string }>();
   const isCreateView = pathname.endsWith('/novo');
   const editingRouteId = pathname.includes('/editar/') ? params.recipeId ?? null : null;
+  const duplicateDraft = (state as { duplicateDraft?: RecipeFormState } | null)?.duplicateDraft ?? null;
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -108,6 +121,17 @@ export const RecipesPage = () => {
     tags: [] as string[]
   });
 
+  const createEmptyForm = (): RecipeFormState => ({
+    name: '',
+    description: '',
+    prepTimeMinutes: 0,
+    yield: 1,
+    yieldUnit: 'un',
+    ingredients: [],
+    subRecipes: [],
+    tags: []
+  });
+
   const inputsQuery = useCachedQuery(
     queryKeys.inputs,
     () => apiFetch<InputItem[]>('/inputs', { token: user?.token }),
@@ -138,7 +162,17 @@ export const RecipesPage = () => {
 
   useEffect(() => {
     if (isCreateView) {
-      resetForm();
+      setForm(
+        duplicateDraft
+          ? {
+              ...duplicateDraft,
+              ingredients: duplicateDraft.ingredients.map((item) => ({ ...item })),
+              subRecipes: duplicateDraft.subRecipes.map((item) => ({ ...item })),
+              tags: [...duplicateDraft.tags]
+            }
+          : createEmptyForm()
+      );
+      setEditingId(null);
       setShowForm(true);
       return;
     }
@@ -161,19 +195,10 @@ export const RecipesPage = () => {
     }
     setEditingId(null);
     setShowForm(false);
-  }, [isCreateView, editingRouteId, recipesQuery.data]);
+  }, [isCreateView, editingRouteId, recipesQuery.data, duplicateDraft]);
 
   const resetForm = () => {
-    setForm({
-      name: '',
-      description: '',
-      prepTimeMinutes: 0,
-      yield: 1,
-      yieldUnit: 'un',
-      ingredients: [],
-      subRecipes: [],
-      tags: []
-    });
+    setForm(createEmptyForm());
     setEditingId(null);
   };
 
@@ -551,6 +576,30 @@ export const RecipesPage = () => {
                   </span>
                 </div>
                 <div className="inline-right">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Duplicar"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate('/app/receitas/novo', {
+                        state: {
+                          duplicateDraft: {
+                            name: `${recipe.name} copia`,
+                            description: recipe.description ?? '',
+                            prepTimeMinutes: recipe.prepTimeMinutes ?? 0,
+                            yield: recipe.yield,
+                            yieldUnit: recipe.yieldUnit ?? 'un',
+                            ingredients: (recipe.ingredients ?? []).map((item) => ({ ...item })),
+                            subRecipes: (recipe.subRecipes ?? []).map((item) => ({ ...item })),
+                            tags: [...(recipe.tags ?? [])]
+                          } satisfies RecipeFormState
+                        }
+                      });
+                    }}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                  </button>
                   <button
                     type="button"
                     className="icon-button"

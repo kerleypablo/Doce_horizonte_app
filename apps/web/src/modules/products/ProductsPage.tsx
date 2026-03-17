@@ -33,6 +33,20 @@ export type ProductItem = {
   packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
 };
 
+type ProductFormState = {
+  name: string;
+  prepTimeMinutes: number;
+  notes: string;
+  unitsCount: number;
+  targetProfitPercent: number;
+  extraPercent: number;
+  unitPrice: number;
+  channelId: string;
+  extraRecipes: { recipeId: string; quantity: number }[];
+  extraProducts: { productId: string; quantity: number }[];
+  packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
+};
+
 type Settings = {
   overheadMethod: 'PERCENT_DIRECT' | 'PER_UNIT';
   overheadPercent: number;
@@ -57,10 +71,14 @@ const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
 export const ProductsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname, state } = location;
   const params = useParams<{ productId?: string }>();
   const isCreateView = pathname.endsWith('/novo');
   const editingRouteId = pathname.includes('/editar/') ? params.productId ?? null : null;
+  const duplicateState = (state as { duplicateDraft?: ProductFormState; unitPriceInput?: number } | null) ?? null;
+  const duplicateDraft = duplicateState?.duplicateDraft ?? null;
+  const duplicateUnitPriceInput = duplicateState?.unitPriceInput ?? 0;
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -126,6 +144,20 @@ export const ProductsPage = () => {
     packagingInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[]
   });
 
+  const createEmptyForm = (): ProductFormState => ({
+    name: '',
+    prepTimeMinutes: 0,
+    notes: '',
+    unitsCount: 1,
+    targetProfitPercent: settings?.defaultProfitPercent ?? 30,
+    extraPercent: 0,
+    unitPrice: 0,
+    channelId: settings?.salesChannels[0]?.id ?? '',
+    extraRecipes: [],
+    extraProducts: [],
+    packagingInputs: []
+  });
+
   const recipesQuery = useCachedQuery(
     queryKeys.recipes,
     () => apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
@@ -158,12 +190,6 @@ export const ProductsPage = () => {
   useEffect(() => {
     if (!settingsQuery.data) return;
     setSettings(settingsQuery.data);
-    setForm((current) => ({
-      ...current,
-      targetProfitPercent: settingsQuery.data.defaultProfitPercent,
-      channelId: settingsQuery.data.salesChannels[0]?.id ?? ''
-    }));
-    setUnitPriceInput(0);
   }, [settingsQuery.data]);
 
   useEffect(() => {
@@ -181,7 +207,19 @@ export const ProductsPage = () => {
 
   useEffect(() => {
     if (isCreateView) {
-      resetForm();
+      setForm(
+        duplicateDraft
+          ? {
+              ...duplicateDraft,
+              extraRecipes: duplicateDraft.extraRecipes.map((item) => ({ ...item })),
+              extraProducts: duplicateDraft.extraProducts.map((item) => ({ ...item })),
+              packagingInputs: duplicateDraft.packagingInputs.map((item) => ({ ...item }))
+            }
+          : createEmptyForm()
+      );
+      setEditingId(null);
+      setUnitPriceInput(duplicateDraft ? duplicateUnitPriceInput : 0);
+      lastEditedRef.current = duplicateDraft ? 'unitPrice' : null;
       setShowForm(true);
       return;
     }
@@ -209,22 +247,10 @@ export const ProductsPage = () => {
     }
     setEditingId(null);
     setShowForm(false);
-  }, [isCreateView, editingRouteId, productsQuery.data, settings]);
+  }, [isCreateView, editingRouteId, productsQuery.data, duplicateDraft, duplicateUnitPriceInput]);
 
   const resetForm = () => {
-    setForm({
-      name: '',
-      prepTimeMinutes: 0,
-      notes: '',
-      unitsCount: 1,
-      targetProfitPercent: settings?.defaultProfitPercent ?? 30,
-      extraPercent: 0,
-      unitPrice: 0,
-      channelId: settings?.salesChannels[0]?.id ?? '',
-      extraRecipes: [],
-      extraProducts: [],
-      packagingInputs: []
-    });
+    setForm(createEmptyForm());
     setEditingId(null);
     setUnitPriceInput(0);
   };
@@ -702,6 +728,34 @@ export const ProductsPage = () => {
                   <span className="muted">R$ {product.unitPrice?.toFixed(2)} un • R$ {product.salePrice.toFixed(2)}</span>
                 </div>
                 <div className="inline-right">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Duplicar"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate('/app/produtos/novo', {
+                        state: {
+                          duplicateDraft: {
+                            name: `${product.name} copia`,
+                            prepTimeMinutes: product.prepTimeMinutes ?? 0,
+                            notes: product.notes ?? '',
+                            unitsCount: product.unitsCount ?? 1,
+                            targetProfitPercent: product.targetProfitPercent ?? (settings?.defaultProfitPercent ?? 30),
+                            extraPercent: product.extraPercent ?? 0,
+                            unitPrice: product.unitPrice ?? 0,
+                            channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',
+                            extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })),
+                            extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })),
+                            packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item }))
+                          } satisfies ProductFormState,
+                          unitPriceInput: product.unitPrice ?? 0
+                        }
+                      });
+                    }}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                  </button>
                   <button
                     type="button"
                     className="icon-button"

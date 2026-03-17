@@ -23,6 +23,17 @@ export type InputItem = {
   notes?: string;
 };
 
+type InputFormState = {
+  name: string;
+  brand: string;
+  category: InputItem['category'];
+  unit: InputItem['unit'];
+  packageSize: number;
+  packagePrice: number;
+  notes: string;
+  tags: string[];
+};
+
 type RecipeDependencyItem = {
   id: string;
   name: string;
@@ -57,10 +68,12 @@ const normalizeQuantity = (quantity: number, unit: string, target: string) => {
 export const InputsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname, state } = location;
   const params = useParams<{ inputId?: string }>();
   const isCreateView = pathname.endsWith('/novo');
   const editingRouteId = pathname.includes('/editar/') ? params.inputId ?? null : null;
+  const duplicateDraft = (state as { duplicateDraft?: InputFormState } | null)?.duplicateDraft ?? null;
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [search, setSearch] = useState('');
   const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]);
@@ -88,6 +101,17 @@ export const InputsPage = () => {
     tags: [] as string[]
   });
 
+  const createEmptyForm = (): InputFormState => ({
+    name: '',
+    brand: '',
+    category: 'producao',
+    unit: 'kg',
+    packageSize: 1,
+    packagePrice: 0,
+    notes: '',
+    tags: []
+  });
+
   const inputsQuery = useCachedQuery(
     queryKeys.inputs,
     () => apiFetch<InputItem[]>('/inputs', { token: user?.token }),
@@ -110,7 +134,10 @@ export const InputsPage = () => {
 
   useEffect(() => {
     if (isCreateView) {
-      resetForm();
+      setForm(duplicateDraft ? { ...duplicateDraft, tags: [...duplicateDraft.tags] } : createEmptyForm());
+      setTagDraft('');
+      setFieldErrors({});
+      setEditingId(null);
       setShowForm(true);
       return;
     }
@@ -133,7 +160,7 @@ export const InputsPage = () => {
     }
     setEditingId(null);
     setShowForm(false);
-  }, [isCreateView, editingRouteId, inputsQuery.data]);
+  }, [isCreateView, editingRouteId, inputsQuery.data, duplicateDraft]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -180,16 +207,7 @@ export const InputsPage = () => {
   };
 
   const resetForm = () => {
-    setForm({
-      name: '',
-      brand: '',
-      category: 'producao',
-      unit: 'kg',
-      packageSize: 1,
-      packagePrice: 0,
-      notes: '',
-      tags: []
-    });
+    setForm(createEmptyForm());
     setTagDraft('');
     setFieldErrors({});
     setEditingId(null);
@@ -473,6 +491,30 @@ export const InputsPage = () => {
                   </span>
                 </div>
                 <div className="inline-right">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Duplicar"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate('/app/insumos/novo', {
+                        state: {
+                          duplicateDraft: {
+                            name: `${input.name} copia`,
+                            brand: input.brand ?? '',
+                            category: input.category,
+                            unit: input.unit,
+                            packageSize: input.packageSize,
+                            packagePrice: input.packagePrice,
+                            notes: input.notes ?? '',
+                            tags: [...(input.tags ?? [])]
+                          } satisfies InputFormState
+                        }
+                      });
+                    }}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                  </button>
                   <button
                     type="button"
                     className="icon-button"

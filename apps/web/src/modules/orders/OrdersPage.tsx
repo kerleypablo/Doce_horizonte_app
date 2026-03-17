@@ -156,6 +156,8 @@ const newOrderForm = (defaults?: CompanySettings) => ({
   ] as { label: string; enabled: boolean }[]
 });
 
+type OrderFormState = ReturnType<typeof newOrderForm>;
+
 export const OrdersPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -204,6 +206,7 @@ export const OrdersPage = () => {
   const [editProductUnitPrice, setEditProductUnitPrice] = useState(0);
   const [pdfPreviewHtml, setPdfPreviewHtml] = useState<string | null>(null);
   const createRouteInitRef = useRef<string>('');
+  const detailRouteInitRef = useRef<string>('');
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
@@ -281,6 +284,10 @@ export const OrdersPage = () => {
     setTab('pessoa');
   };
 
+  const updateFormField = <Key extends keyof OrderFormState>(field: Key, value: OrderFormState[Key]) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
   const handleNew = () => {
     if (user?.token) {
       prefetchWithCache(
@@ -329,6 +336,10 @@ export const OrdersPage = () => {
     if (!selectedOrder) {
       return;
     }
+    if (detailRouteInitRef.current === selectedOrder.id) {
+      setShowForm(true);
+      return;
+    }
     setEditingId(selectedOrder.id);
     setForm({
       ...newOrderForm(orderDefaults),
@@ -337,7 +348,13 @@ export const OrdersPage = () => {
       customerId: selectedOrder.customerId ?? ''
     });
     setShowForm(true);
-  }, [isDetailView, detailQuery.data, navigate, orderDefaults]);
+    detailRouteInitRef.current = selectedOrder.id;
+  }, [isDetailView, detailQuery.data, orderDefaults]);
+
+  useEffect(() => {
+    if (isDetailView) return;
+    detailRouteInitRef.current = '';
+  }, [isDetailView, orderId]);
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const selectedCustomer = useMemo(() => customerMap.get(form.customerId), [customerMap, form.customerId]);
@@ -526,13 +543,15 @@ export const OrdersPage = () => {
 
   const applyProductEditModal = () => {
     if (editProductIndex === null) return;
-    const next = [...form.products];
-    next[editProductIndex] = {
-      ...next[editProductIndex],
-      name: editProductName,
-      unitPrice: editProductUnitPrice
-    };
-    setForm({ ...form, products: next });
+    setForm((prev) => {
+      const next = [...prev.products];
+      next[editProductIndex] = {
+        ...next[editProductIndex],
+        name: editProductName,
+        unitPrice: editProductUnitPrice
+      };
+      return { ...prev, products: next };
+    });
     setEditProductIndex(null);
   };
 
@@ -974,7 +993,7 @@ export const OrdersPage = () => {
                       Tipo
                       <SelectField
                         value={form.type}
-                        onChange={(value) => setForm({ ...form, type: value as 'PEDIDO' | 'ORCAMENTO' })}
+                        onChange={(value) => updateFormField('type', value as 'PEDIDO' | 'ORCAMENTO')}
                         options={[
                           { value: 'PEDIDO', label: 'Pedido' },
                           { value: 'ORCAMENTO', label: 'Orcamento' }
@@ -1010,7 +1029,7 @@ export const OrdersPage = () => {
                       Entrega ou retirada
                       <SelectField
                         value={form.deliveryType}
-                        onChange={(value) => setForm({ ...form, deliveryType: value as 'ENTREGA' | 'RETIRADA' })}
+                        onChange={(value) => updateFormField('deliveryType', value as 'ENTREGA' | 'RETIRADA')}
                         options={[
                           { value: 'ENTREGA', label: 'Entrega' },
                           { value: 'RETIRADA', label: 'Retirada' }
@@ -1019,7 +1038,7 @@ export const OrdersPage = () => {
                     </label>
                     <label>
                       Data de entrega
-                      <input type="date" value={form.deliveryDate} onChange={(e) => setForm({ ...form, deliveryDate: e.target.value })} />
+                      <input type="date" value={form.deliveryDate} onChange={(e) => updateFormField('deliveryDate', e.target.value)} />
                     </label>
                   </div>
                 </div>
@@ -1028,7 +1047,7 @@ export const OrdersPage = () => {
                   <h4>Status</h4>
                   <SelectField
                     value={form.status}
-                    onChange={(value) => setForm({ ...form, status: value as 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO' })}
+                    onChange={(value) => updateFormField('status', value as 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO')}
                     options={[
                       { value: 'AGUARDANDO_RETORNO', label: 'Aguardando retorno' },
                       { value: 'CONFIRMADO', label: 'Confirmado' },
@@ -1056,9 +1075,11 @@ export const OrdersPage = () => {
                               min={1}
                               value={item.quantity}
                               onChange={(e) => {
-                                const next = [...form.products];
-                                next[index] = { ...next[index], quantity: Number(e.target.value || 1) };
-                                setForm({ ...form, products: next });
+                                setForm((prev) => {
+                                  const next = [...prev.products];
+                                  next[index] = { ...next[index], quantity: Number(e.target.value || 1) };
+                                  return { ...prev, products: next };
+                                });
                               }}
                             />
                           </label>
@@ -1075,7 +1096,7 @@ export const OrdersPage = () => {
                             type="button"
                             className="icon-button tiny"
                             aria-label="Remover"
-                            onClick={() => setForm({ ...form, products: form.products.filter((_, i) => i !== index) })}
+                            onClick={() => setForm((prev) => ({ ...prev, products: prev.products.filter((_, i) => i !== index) }))}
                           >
                             <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                           </button>
@@ -1181,11 +1202,11 @@ export const OrdersPage = () => {
             {tab === 'observacoes' && (
               <div className="panel form-box">
                 <h4>Observacoes</h4>
-                <label>Obs entrega/retirada<textarea value={form.notesDelivery} onChange={(e) => setForm({ ...form, notesDelivery: e.target.value })} rows={3} /></label>
-                <label>Obs gerais<textarea value={form.notesGeneral} onChange={(e) => setForm({ ...form, notesGeneral: e.target.value })} rows={3} /></label>
-                <label>Obs pagamento<textarea value={form.notesPayment} onChange={(e) => setForm({ ...form, notesPayment: e.target.value })} rows={3} /></label>
-                <label>PIX<textarea value={form.pix} onChange={(e) => setForm({ ...form, pix: e.target.value })} rows={2} /></label>
-                <label>Termos<textarea value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} rows={3} /></label>
+                <label>Obs entrega/retirada<textarea value={form.notesDelivery} onChange={(e) => updateFormField('notesDelivery', e.target.value)} rows={3} /></label>
+                <label>Obs gerais<textarea value={form.notesGeneral} onChange={(e) => updateFormField('notesGeneral', e.target.value)} rows={3} /></label>
+                <label>Obs pagamento<textarea value={form.notesPayment} onChange={(e) => updateFormField('notesPayment', e.target.value)} rows={3} /></label>
+                <label>PIX<textarea value={form.pix} onChange={(e) => updateFormField('pix', e.target.value)} rows={2} /></label>
+                <label>Termos<textarea value={form.terms} onChange={(e) => updateFormField('terms', e.target.value)} rows={3} /></label>
               </div>
             )}
 
@@ -1272,9 +1293,11 @@ export const OrdersPage = () => {
                         type="checkbox"
                         checked={alert.enabled}
                         onChange={(e) => {
-                          const next = [...form.alerts];
-                          next[index] = { ...next[index], enabled: e.target.checked };
-                          setForm({ ...form, alerts: next });
+                          setForm((prev) => {
+                            const next = [...prev.alerts];
+                            next[index] = { ...next[index], enabled: e.target.checked };
+                            return { ...prev, alerts: next };
+                          });
                         }}
                       />
                       <span>{alert.label}</span>
