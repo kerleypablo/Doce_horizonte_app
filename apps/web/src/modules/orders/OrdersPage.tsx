@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
+import { formatDateBr } from '../shared/date.ts';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
@@ -93,12 +94,6 @@ type ValueConfigType = 'ADDITION' | 'DISCOUNT' | 'SHIPPING';
 
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
-const formatDateBr = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('pt-BR');
-};
 const formatDateTimeBr = (value?: string) => {
   if (!value) return '-';
   const date = new Date(value);

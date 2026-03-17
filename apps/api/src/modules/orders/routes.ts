@@ -206,8 +206,9 @@ export const orderRoutes = async (app: FastifyInstance) => {
       .eq('company_id', auth.companyId)
       .order('created_at', { ascending: false });
 
-    if (query.from) q = q.gte('order_datetime', query.from);
-    if (query.to) q = q.lte('order_datetime', query.to);
+    q = q.not('delivery_date', 'is', null);
+    if (query.from) q = q.gte('delivery_date', query.from);
+    if (query.to) q = q.lte('delivery_date', query.to);
 
     const { data } = await q;
     return (data ?? []).map(mapOrderSummary);

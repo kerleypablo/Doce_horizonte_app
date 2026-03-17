@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
+import { normalizeDateKey, toDateKey } from '../shared/date.ts';
 import { useCachedQuery } from '../shared/queryCache.ts';
 
 type TaskOrder = {
@@ -31,15 +32,6 @@ type TaskStateMap = Record<string, TaskOrderState>;
 type PeriodMode = 'week' | 'month';
 
 const STORAGE_KEY = 'confeitaria.tasks.progress.v1';
-
-const parseDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-const normalizeDateKey = (value?: string) => {
-  if (!value) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parseDateKey(parsed);
-};
 
 const toOrderDateKeys = (order: TaskOrder) => {
   const deliveryKey = normalizeDateKey(order.deliveryDate);
@@ -98,15 +90,15 @@ export const TasksBoardPage = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [newStepText, setNewStepText] = useState('');
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
-  const todayKey = parseDateKey(new Date());
+  const todayKey = toDateKey(new Date());
 
   const range = useMemo(() => getPeriodRange(baseDate, mode), [baseDate, mode]);
 
   const tasksQuery = useCachedQuery(
-    `tasks-board:${mode}:${parseDateKey(range.start)}`,
+    `tasks-board:${mode}:${toDateKey(range.start)}`,
     () =>
       apiFetch<TaskOrder[]>(
-        `/orders/summary-calendar?from=${encodeURIComponent(range.start.toISOString())}&to=${encodeURIComponent(range.end.toISOString())}`,
+        `/orders/summary-calendar?from=${encodeURIComponent(toDateKey(range.start))}&to=${encodeURIComponent(toDateKey(range.end))}`,
         { token: user?.token }
       ),
     { enabled: Boolean(user?.token), staleTime: 60_000, refetchInterval: 90_000 }
@@ -234,7 +226,7 @@ export const TasksBoardPage = () => {
         {!tasksQuery.loading && orders.length === 0 ? <p>Nenhum pedido no periodo.</p> : null}
         <div className="tasks-kanban">
           {dateColumns.map((date) => {
-            const key = parseDateKey(date);
+            const key = toDateKey(date);
             const dayOrders = ordersByDate.get(key) ?? [];
             return (
               <div key={key} className={`tasks-column ${key === todayKey ? 'today' : ''}`}>

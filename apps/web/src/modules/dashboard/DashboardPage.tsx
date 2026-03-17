@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
+import { normalizeDateKey, toDateKey } from '../shared/date.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { prefetchWithCache, useCachedQuery } from '../shared/queryCache.ts';
 
@@ -56,21 +57,6 @@ type OrderItem = {
 type CompanySettings = {
   companyName?: string;
   logoDataUrl?: string;
-};
-
-const toDateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const normalizeDateKey = (value?: string) => {
-  if (!value) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return toDateKey(parsed);
 };
 
 const getOrderDateKeys = (order: OrderItem) => {
@@ -160,6 +146,32 @@ export const DashboardPage = () => {
     });
   }, [calendarCells, calendarCompact, selectedDate]);
 
+  const calendarTitle = useMemo(() => {
+    if (!calendarCompact) return monthLabel.format(monthDate);
+    const selected = new Date(`${selectedDate}T12:00:00`);
+    if (Number.isNaN(selected.getTime())) return monthLabel.format(monthDate);
+    const weekStart = new Date(selected);
+    weekStart.setDate(selected.getDate() - selected.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const startLabel = weekStart.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const endLabel = weekEnd.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    return `${startLabel} - ${endLabel}`;
+  }, [calendarCompact, monthDate, selectedDate]);
+
+  const shiftCalendar = (direction: -1 | 1) => {
+    if (calendarCompact) {
+      const selected = new Date(`${selectedDate}T12:00:00`);
+      if (Number.isNaN(selected.getTime())) return;
+      selected.setDate(selected.getDate() + direction * 7);
+      const nextDateKey = toDateKey(selected);
+      setSelectedDate(nextDateKey);
+      setMonthDate(new Date(selected.getFullYear(), selected.getMonth(), 1));
+      return;
+    }
+    setMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + direction, 1));
+  };
+
   const selectedOrders = ordersByDate.get(selectedDate) ?? [];
   const confirmedRevenue = useMemo(() => {
     const calcTotal = (order: OrderItem) => {
@@ -238,17 +250,17 @@ export const DashboardPage = () => {
             <button
               type="button"
               className="icon-button"
-              aria-label="Mes anterior"
-              onClick={() => setMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+              aria-label={calendarCompact ? 'Semana anterior' : 'Mes anterior'}
+              onClick={() => shiftCalendar(-1)}
             >
               ‹
             </button>
-            <strong>{monthLabel.format(monthDate)}</strong>
+            <strong>{calendarTitle}</strong>
             <button
               type="button"
               className="icon-button"
-              aria-label="Proximo mes"
-              onClick={() => setMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+              aria-label={calendarCompact ? 'Proxima semana' : 'Proximo mes'}
+              onClick={() => shiftCalendar(1)}
             >
               ›
             </button>
