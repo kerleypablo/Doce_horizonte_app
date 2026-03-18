@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
-import { formatDateBr } from '../shared/date.ts';
+import { formatDateBr, normalizeDateKey, toDateKey } from '../shared/date.ts';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
@@ -91,6 +91,8 @@ const orderTabs: Array<{ key: 'pessoa' | 'produtos' | 'observacoes' | 'pagamento
 ];
 
 type ValueConfigType = 'ADDITION' | 'DISCOUNT' | 'SHIPPING';
+type OrderStatus = 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO';
+type OrderStatusFilter = 'ALL' | 'AGUARDANDO_RETORNO' | 'CONFIRMADO' | 'CANCELADO';
 
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
@@ -130,6 +132,27 @@ const toDateTimeLocal = (iso?: string) => {
 };
 
 const currentDateTimeLocal = () => toDateTimeLocal(new Date().toISOString());
+const statusLabelMap: Record<OrderStatus, string> = {
+  AGUARDANDO_RETORNO: 'Aguardando',
+  CONCLUIDO: 'Concluido',
+  CONFIRMADO: 'Confirmado',
+  CANCELADO: 'Cancelado'
+};
+
+const getStatusLabel = (status: OrderStatus) => statusLabelMap[status] ?? status;
+
+const getCurrentWeekRange = () => {
+  const today = new Date();
+  const day = today.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const start = new Date(today);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(today.getDate() + diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start: toDateKey(start), end: toDateKey(end) };
+};
 
 const newOrderForm = (defaults?: CompanySettings) => ({
   type: 'PEDIDO' as 'PEDIDO' | 'ORCAMENTO',
@@ -178,6 +201,8 @@ export const OrdersPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<OrderListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('ALL');
+  const [currentWeekOnly, setCurrentWeekOnly] = useState(false);
   const [orderDefaults, setOrderDefaults] = useState<CompanySettings>({});
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [tab, setTab] = useState<'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'>('pessoa');
@@ -359,11 +384,19 @@ export const OrdersPage = () => {
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const selectedCustomer = useMemo(() => customerMap.get(form.customerId), [customerMap, form.customerId]);
 
-  const filtered = orders.filter((order) => {
-    const customerName = order.customerSnapshot?.name ?? '';
-    const haystack = `${order.number} ${order.type} ${customerName} ${order.status}`.toLowerCase();
-    return haystack.includes(search.toLowerCase());
-  });
+  const currentWeekRange = useMemo(() => getCurrentWeekRange(), []);
+  const filtered = useMemo(() => {
+    const searchTerm = search.toLowerCase().trim();
+    return orders.filter((order) => {
+      const customerName = order.customerSnapshot?.name ?? '';
+      const haystack = `${order.number} ${order.type} ${customerName} ${getStatusLabel(order.status)}`.toLowerCase();
+      if (searchTerm && !haystack.includes(searchTerm)) return false;
+      if (statusFilter !== 'ALL' && order.status !== statusFilter) return false;
+      if (!currentWeekOnly) return true;
+      const deliveryDate = normalizeDateKey(order.deliveryDate);
+      return Boolean(deliveryDate && deliveryDate >= currentWeekRange.start && deliveryDate <= currentWeekRange.end);
+    });
+  }, [orders, search, statusFilter, currentWeekOnly, currentWeekRange]);
   const activeTabIndex = orderTabs.findIndex((item) => item.key === tab);
 
   const totals = useMemo(() => {
@@ -899,6 +932,27 @@ export const OrdersPage = () => {
           actionLabel="+"
           onAction={handleNew}
         />
+        <div className="orders-filters">
+          <SelectField
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value as OrderStatusFilter)}
+            options={[
+              { value: 'ALL', label: 'Todos os status' },
+              { value: 'AGUARDANDO_RETORNO', label: 'Aguardando' },
+              { value: 'CONFIRMADO', label: 'Confirmado' },
+              { value: 'CANCELADO', label: 'Cancelado' }
+            ]}
+            placeholder="Filtrar status"
+            className="orders-filter-select"
+          />
+          <button
+            type="button"
+            className={currentWeekOnly ? 'ghost active' : 'ghost'}
+            onClick={() => setCurrentWeekOnly((current) => !current)}
+          >
+            Desta semana
+          </button>
+        </div>
         {ordersQuery.isFetching && !(ordersQuery.loading && orders.length === 0) ? <p className="muted">Atualizando pedidos...</p> : null}
         {ordersQuery.loading && orders.length === 0 ? (
           <ListSkeleton />
@@ -921,7 +975,7 @@ export const OrdersPage = () => {
                 <div>
                   <strong>{order.customerSnapshot?.name ?? 'Sem cliente'}</strong>
                   <span className="muted">
-                    Entrega: {order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'} • {order.status}
+                    Entrega: {order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'} • {getStatusLabel(order.status)}
                   </span>
                 </div>
                 <div className="inline-right">

@@ -886,6 +886,25 @@ main {
   min-width: 180px;
 }
 
+.orders-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.orders-filter-select {
+  min-width: 220px;
+}
+
+button.ghost.active {
+  border-style: solid;
+  border-color: var(--accent-strong);
+  background: rgba(173, 87, 42, 0.08);
+  color: var(--accent-strong);
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -3102,6 +3121,16 @@ button:disabled {
   }
 
   .list-toolbar-actions {
+    width: 100%;
+  }
+
+  .orders-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .orders-filter-select {
+    min-width: 0;
     width: 100%;
   }
 
