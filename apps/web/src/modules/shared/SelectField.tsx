@@ -39,7 +39,10 @@ export const SelectField = ({ value, onChange, options, placeholder, disabled, c
       if (!ref.current) return;
       const rect = ref.current.getBoundingClientRect();
       const estimatedMenuHeight = Math.min(options.length * 42 + 12, 220) + 12;
-      const spaceBelow = window.innerHeight - rect.bottom;
+      const bottomNav = document.querySelector('.bottom-nav');
+      const bottomNavRect = bottomNav instanceof HTMLElement ? bottomNav.getBoundingClientRect() : null;
+      const viewportBottomLimit = bottomNavRect ? bottomNavRect.top - 8 : window.innerHeight;
+      const spaceBelow = viewportBottomLimit - rect.bottom;
       const spaceAbove = rect.top;
       setOpenUpward(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow);
     };
