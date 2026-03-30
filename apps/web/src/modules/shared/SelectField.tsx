@@ -16,6 +16,7 @@ type SelectFieldProps = {
 
 export const SelectField = ({ value, onChange, options, placeholder, disabled, className }: SelectFieldProps) => {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
   const selected = options.find((option) => option.value === value);
@@ -32,13 +33,36 @@ export const SelectField = ({ value, onChange, options, placeholder, disabled, c
   }, []);
 
   useEffect(() => {
+    if (!open || !ref.current) return;
+
+    const updateDirection = () => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const estimatedMenuHeight = Math.min(options.length * 42 + 12, 220) + 12;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setOpenUpward(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow);
+    };
+
+    updateDirection();
+    window.addEventListener('resize', updateDirection);
+    window.addEventListener('scroll', updateDirection, true);
+
+    return () => {
+      window.removeEventListener('resize', updateDirection);
+      window.removeEventListener('scroll', updateDirection, true);
+    };
+  }, [open, options.length]);
+
+  useEffect(() => {
     if (open) {
       setOpen(false);
     }
+    setOpenUpward(false);
   }, [value]);
 
   return (
-    <div className={`select-field ${open ? 'open' : ''} ${className ?? ''}`} ref={ref}>
+    <div className={`select-field ${open ? 'open' : ''} ${openUpward ? 'open-upward' : ''} ${className ?? ''}`} ref={ref}>
       <button
         type="button"
         className="select-trigger"
