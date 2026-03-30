@@ -100,6 +100,7 @@ export type Order = {
   type: 'PEDIDO' | 'ORCAMENTO';
   orderDateTime: string;
   customerId?: string;
+  deliveryAddress?: string;
   customerSnapshot?: Record<string, unknown>;
   deliveryType: 'ENTREGA' | 'RETIRADA';
   deliveryDate?: string;

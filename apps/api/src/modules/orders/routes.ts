@@ -31,6 +31,7 @@ const orderSchema = z.object({
   type: z.enum(['PEDIDO', 'ORCAMENTO']),
   orderDateTime: z.string().min(1),
   customerId: z.string().optional(),
+  deliveryAddress: z.string().optional(),
   customerSnapshot: z
     .object({
       name: z.string().min(1),
@@ -41,7 +42,8 @@ const orderSchema = z.object({
       number: z.string().optional(),
       city: z.string().optional(),
       neighborhood: z.string().optional(),
-      zipCode: z.string().optional()
+      zipCode: z.string().optional(),
+      deliveryAddress: z.string().optional()
     })
     .optional(),
   deliveryType: z.enum(['ENTREGA', 'RETIRADA']),
@@ -125,6 +127,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     type: row.type,
     orderDateTime: row.order_datetime,
     customerId: row.customer_id ?? undefined,
+    deliveryAddress: row.customer_snapshot?.deliveryAddress ?? undefined,
     customerSnapshot: row.customer_snapshot ?? undefined,
     deliveryType: row.delivery_type,
     deliveryDate: row.delivery_date ?? undefined,
@@ -247,6 +250,9 @@ export const orderRoutes = async (app: FastifyInstance) => {
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const number = formatOrderNumber(nextSeq + attempt);
+      const customerSnapshot = data.customerSnapshot
+        ? { ...data.customerSnapshot, deliveryAddress: data.deliveryAddress ?? undefined }
+        : (data.deliveryAddress ? { deliveryAddress: data.deliveryAddress } : null);
       const { data: created, error } = await supabaseAdmin
         .from('orders')
         .insert({
@@ -255,7 +261,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
           type: data.type,
           order_datetime: data.orderDateTime,
           customer_id: data.customerId ?? null,
-          customer_snapshot: data.customerSnapshot ?? null,
+          customer_snapshot: customerSnapshot,
           delivery_type: data.deliveryType,
           delivery_date: data.deliveryDate ?? null,
           status: data.status,
@@ -288,6 +294,9 @@ export const orderRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
     const data = orderSchema.parse(request.body);
+    const customerSnapshot = data.customerSnapshot
+      ? { ...data.customerSnapshot, deliveryAddress: data.deliveryAddress ?? undefined }
+      : (data.deliveryAddress ? { deliveryAddress: data.deliveryAddress } : null);
 
     const { data: updated, error } = await supabaseAdmin
       .from('orders')
@@ -295,7 +304,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
         type: data.type,
         order_datetime: data.orderDateTime,
         customer_id: data.customerId ?? null,
-        customer_snapshot: data.customerSnapshot ?? null,
+        customer_snapshot: customerSnapshot,
         delivery_type: data.deliveryType,
         delivery_date: data.deliveryDate ?? null,
         status: data.status,

@@ -27,6 +27,10 @@ type CustomerItem = {
   notes?: string;
 };
 
+type OrderCustomerSnapshot = Partial<CustomerItem> & {
+  deliveryAddress?: string;
+};
+
 type ProductItem = {
   id: string;
   name: string;
@@ -40,7 +44,8 @@ type OrderItem = {
   type: 'PEDIDO' | 'ORCAMENTO';
   orderDateTime: string;
   customerId?: string;
-  customerSnapshot?: CustomerItem;
+  deliveryAddress?: string;
+  customerSnapshot?: OrderCustomerSnapshot;
   deliveryType: 'ENTREGA' | 'RETIRADA';
   deliveryDate?: string;
   status: 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO';
@@ -92,7 +97,7 @@ const orderTabs: Array<{ key: 'pessoa' | 'produtos' | 'observacoes' | 'pagamento
 
 type ValueConfigType = 'ADDITION' | 'DISCOUNT' | 'SHIPPING';
 type OrderStatus = 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO';
-type OrderStatusFilter = 'ALL' | 'AGUARDANDO_RETORNO' | 'CONFIRMADO' | 'CANCELADO';
+type OrderStatusFilter = 'OPEN' | 'AGUARDANDO_RETORNO' | 'CONFIRMADO' | 'CONCLUIDO' | 'CANCELADO';
 
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
@@ -140,6 +145,12 @@ const statusLabelMap: Record<OrderStatus, string> = {
 };
 
 const getStatusLabel = (status: OrderStatus) => statusLabelMap[status] ?? status;
+const getStatusClassName = (status: OrderStatus) => {
+  if (status === 'CONFIRMADO') return 'is-confirmado';
+  if (status === 'CANCELADO') return 'is-cancelado';
+  if (status === 'CONCLUIDO') return 'is-concluido';
+  return 'is-aguardando';
+};
 
 const getCurrentWeekRange = () => {
   const today = new Date();
@@ -158,6 +169,7 @@ const newOrderForm = (defaults?: CompanySettings) => ({
   type: 'PEDIDO' as 'PEDIDO' | 'ORCAMENTO',
   orderDateTime: currentDateTimeLocal(),
   customerId: '',
+  deliveryAddress: '',
   deliveryType: 'ENTREGA' as 'ENTREGA' | 'RETIRADA',
   deliveryDate: '',
   status: 'AGUARDANDO_RETORNO' as 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO',
@@ -201,7 +213,7 @@ export const OrdersPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<OrderListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('OPEN');
   const [currentWeekOnly, setCurrentWeekOnly] = useState(false);
   const [orderDefaults, setOrderDefaults] = useState<CompanySettings>({});
   const confirmActionRef = useRef<null | (() => void)>(null);
@@ -370,7 +382,8 @@ export const OrdersPage = () => {
       ...newOrderForm(orderDefaults),
       ...selectedOrder,
       orderDateTime: toDateTimeLocal(selectedOrder.orderDateTime),
-      customerId: selectedOrder.customerId ?? ''
+      customerId: selectedOrder.customerId ?? '',
+      deliveryAddress: selectedOrder.deliveryAddress ?? ''
     });
     setShowForm(true);
     detailRouteInitRef.current = selectedOrder.id;
@@ -391,7 +404,8 @@ export const OrdersPage = () => {
       const customerName = order.customerSnapshot?.name ?? '';
       const haystack = `${order.number} ${order.type} ${customerName} ${getStatusLabel(order.status)}`.toLowerCase();
       if (searchTerm && !haystack.includes(searchTerm)) return false;
-      if (statusFilter !== 'ALL' && order.status !== statusFilter) return false;
+      if (statusFilter === 'OPEN' && (order.status === 'CONCLUIDO' || order.status === 'CANCELADO')) return false;
+      if (statusFilter !== 'OPEN' && order.status !== statusFilter) return false;
       if (!currentWeekOnly) return true;
       const deliveryDate = normalizeDateKey(order.deliveryDate);
       return Boolean(deliveryDate && deliveryDate >= currentWeekRange.start && deliveryDate <= currentWeekRange.end);
@@ -425,6 +439,7 @@ export const OrdersPage = () => {
         ...form,
         orderDateTime: new Date(form.orderDateTime).toISOString(),
         customerId: form.customerId || undefined,
+        deliveryAddress: form.deliveryType === 'ENTREGA' ? form.deliveryAddress.trim() || undefined : undefined,
         customerSnapshot: selectedCustomer
           ? {
               name: selectedCustomer.name,
@@ -664,6 +679,7 @@ export const OrdersPage = () => {
 
   const buildPdfHtml = (order: OrderItem) => {
     const customer = order.customerSnapshot;
+    const deliveryAddress = order.deliveryAddress ?? customer?.deliveryAddress ?? '';
     const companyName = settingsQuery.data?.companyName ?? 'Controle Precificacao';
     const companyPhone = settingsQuery.data?.companyPhone ?? '';
     const companyEmail = settingsQuery.data?.companyEmail ?? '';
@@ -694,6 +710,10 @@ export const OrdersPage = () => {
         return `<div class="summary-line"><span>${escapeHtml(item.label)}${suffix}</span><strong>${formatCurrency(value)}</strong></div>`;
       })
       .join('');
+    const deliveryTitle = order.deliveryType === 'ENTREGA' ? 'Endereco de entrega' : 'Retirada';
+    const deliveryContent = order.deliveryType === 'ENTREGA'
+      ? note(deliveryAddress)
+      : note(order.notesDelivery);
 
     const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${order.type} ${order.number}</title>
       <style>
@@ -780,8 +800,8 @@ export const OrdersPage = () => {
               <p class="pix">PIX: ${escapeHtml(pixKey || order.pix || '-')}</p>
             </div>
             <div class="box">
-              <h4>Entrega</h4>
-              <p>${escapeHtml(note(order.notesDelivery))}</p>
+              <h4>${deliveryTitle}</h4>
+              <p>${escapeHtml(deliveryContent)}</p>
             </div>
           </div>
           <div class="box">
@@ -920,6 +940,31 @@ export const OrdersPage = () => {
   const formatValueModeLabel = (mode: 'PERCENT' | 'FIXED') => (mode === 'PERCENT' ? '%' : 'R$');
   const formatValueAmount = (mode: 'PERCENT' | 'FIXED', amount: number) =>
     mode === 'PERCENT' ? `${amount}%` : formatCurrency(amount);
+  const updateProductQuantity = (index: number, rawValue: string) => {
+    setForm((prev) => {
+      const next = [...prev.products];
+      const quantity = rawValue === '' ? 0 : Number(rawValue);
+      next[index] = { ...next[index], quantity: Number.isFinite(quantity) ? quantity : 0 };
+      return { ...prev, products: next };
+    });
+  };
+  const normalizeProductQuantity = (index: number) => {
+    setForm((prev) => {
+      const next = [...prev.products];
+      const current = next[index];
+      if (!current) return prev;
+      if (current.quantity > 0) return prev;
+      next[index] = { ...current, quantity: 1 };
+      return { ...prev, products: next };
+    });
+  };
+  const statusFilterButtons: Array<{ value: OrderStatusFilter; label: string }> = [
+    { value: 'OPEN', label: 'Em aberto' },
+    { value: 'AGUARDANDO_RETORNO', label: 'Aguardando' },
+    { value: 'CONFIRMADO', label: 'Confirmados' },
+    { value: 'CONCLUIDO', label: 'Concluidos' },
+    { value: 'CANCELADO', label: 'Cancelados' }
+  ];
 
   return (
     <div className="page">
@@ -933,18 +978,19 @@ export const OrdersPage = () => {
           onAction={handleNew}
         />
         <div className="orders-filters">
-          <SelectField
-            value={statusFilter}
-            onChange={(value) => setStatusFilter(value as OrderStatusFilter)}
-            options={[
-              { value: 'ALL', label: 'Todos os status' },
-              { value: 'AGUARDANDO_RETORNO', label: 'Aguardando' },
-              { value: 'CONFIRMADO', label: 'Confirmado' },
-              { value: 'CANCELADO', label: 'Cancelado' }
-            ]}
-            placeholder="Filtrar status"
-            className="orders-filter-select"
-          />
+          <div className="orders-status-filters" role="tablist" aria-label="Filtrar pedidos por status">
+            {statusFilterButtons.map((filterOption) => (
+              <button
+                key={filterOption.value}
+                type="button"
+                className={statusFilter === filterOption.value ? 'ghost active' : 'ghost'}
+                onClick={() => setStatusFilter(filterOption.value)}
+                aria-pressed={statusFilter === filterOption.value}
+              >
+                {filterOption.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className={currentWeekOnly ? 'ghost active' : 'ghost'}
@@ -961,7 +1007,7 @@ export const OrdersPage = () => {
             {filtered.map((order) => (
               <div
                 key={order.id}
-                className="list-row"
+                className={`list-row order-list-row ${getStatusClassName(order.status)}`}
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate(`/app/pedidos/${order.id}`)}
@@ -974,7 +1020,7 @@ export const OrdersPage = () => {
               >
                 <div>
                   <strong>{order.customerSnapshot?.name ?? 'Sem cliente'}</strong>
-                  <span className="muted">
+                  <span className="muted order-list-status-text">
                     Entrega: {order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'} • {getStatusLabel(order.status)}
                   </span>
                 </div>
@@ -1095,6 +1141,17 @@ export const OrdersPage = () => {
                       <input type="date" value={form.deliveryDate} onChange={(e) => updateFormField('deliveryDate', e.target.value)} />
                     </label>
                   </div>
+                  {form.deliveryType === 'ENTREGA' ? (
+                    <label>
+                      Endereco de entrega
+                      <textarea
+                        value={form.deliveryAddress}
+                        onChange={(e) => updateFormField('deliveryAddress', e.target.value)}
+                        rows={3}
+                        placeholder="Digite o endereco completo da entrega"
+                      />
+                    </label>
+                  ) : null}
                 </div>
 
                 <div className="panel form-box">
@@ -1127,14 +1184,9 @@ export const OrdersPage = () => {
                               className="order-product-qty"
                               type="number"
                               min={1}
-                              value={item.quantity}
-                              onChange={(e) => {
-                                setForm((prev) => {
-                                  const next = [...prev.products];
-                                  next[index] = { ...next[index], quantity: Number(e.target.value || 1) };
-                                  return { ...prev, products: next };
-                                });
-                              }}
+                              value={item.quantity > 0 ? item.quantity : ''}
+                              onChange={(e) => updateProductQuantity(index, e.target.value)}
+                              onBlur={() => normalizeProductQuantity(index)}
                             />
                           </label>
                           <div className="order-product-actions">

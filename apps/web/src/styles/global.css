@@ -894,6 +894,12 @@ main {
   flex-wrap: wrap;
 }
 
+.orders-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .orders-filter-select {
   min-width: 220px;
 }
@@ -2633,6 +2639,38 @@ button:disabled {
   background: #fffdfb;
 }
 
+.order-list-row.is-confirmado {
+  border-color: #2f9e44;
+}
+
+.order-list-row.is-confirmado .order-list-status-text {
+  color: #2f9e44;
+}
+
+.order-list-row.is-cancelado {
+  border-color: #d94841;
+}
+
+.order-list-row.is-cancelado .order-list-status-text {
+  color: #d94841;
+}
+
+.order-list-row.is-aguardando {
+  border-color: #f08c00;
+}
+
+.order-list-row.is-aguardando .order-list-status-text {
+  color: #f08c00;
+}
+
+.order-list-row.is-concluido {
+  border-color: #1c7ed6;
+}
+
+.order-list-row.is-concluido .order-list-status-text {
+  color: #1c7ed6;
+}
+
 .list-row strong {
   display: block;
   font-size: 15px;
@@ -3127,6 +3165,14 @@ button:disabled {
   .orders-filters {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .orders-status-filters {
+    width: 100%;
+  }
+
+  .orders-status-filters > button {
+    flex: 1 1 calc(50% - 8px);
   }
 
   .orders-filter-select {
