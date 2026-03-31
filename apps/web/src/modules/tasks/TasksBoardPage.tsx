@@ -12,8 +12,9 @@ type TaskOrder = {
   deliveryDate?: string;
   deliveryType: 'ENTREGA' | 'RETIRADA';
   notesGeneral?: string;
-  customerSnapshot?: { name?: string };
+  customerSnapshot?: { name?: string; deliveryAddress?: string };
   products: { name: string; quantity: number }[];
+  images?: { name: string; dataUrl: string }[];
 };
 
 type ExtraStep = {
@@ -90,6 +91,7 @@ export const TasksBoardPage = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [newStepText, setNewStepText] = useState('');
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const todayKey = toDateKey(new Date());
 
   const range = useMemo(() => getPeriodRange(baseDate, mode), [baseDate, mode]);
@@ -240,6 +242,9 @@ export const TasksBoardPage = () => {
                     const orderState = stateMap[order.id] ?? { productChecks: {}, extraSteps: [] };
                     const isExpanded = isCardExpanded(order);
                     const isCompleted = isOrderCompleted(order);
+                    const customerName = order.customerSnapshot?.name ?? 'Sem cliente';
+                    const deliveryAddress = order.customerSnapshot?.deliveryAddress?.trim() ?? '';
+                    const previewThumb = order.images?.[0];
                     return (
                       <div key={order.id} className="tasks-order-card">
                         <div className="tasks-order-head">
@@ -250,9 +255,23 @@ export const TasksBoardPage = () => {
                                 <span className="material-symbols-outlined tasks-done-icon" aria-hidden="true">check_circle</span>
                               ) : null}
                             </strong>
-                            <span>{order.customerSnapshot?.name ?? 'Sem cliente'} • {order.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</span>
+                            <span className="tasks-customer-name">{customerName}</span>
+                            <span>{order.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</span>
+                            {order.deliveryType === 'ENTREGA' && deliveryAddress ? (
+                              <span className="tasks-delivery-address">{deliveryAddress}</span>
+                            ) : null}
                           </div>
                           <div className="tasks-card-actions">
+                            {previewThumb ? (
+                              <button
+                                type="button"
+                                className="tasks-image-thumb-button"
+                                aria-label="Abrir imagem do pedido"
+                                onClick={() => setPreviewImage({ src: previewThumb.dataUrl, alt: previewThumb.name || 'Imagem do pedido' })}
+                              >
+                                <img src={previewThumb.dataUrl} alt={previewThumb.name || 'Imagem do pedido'} className="tasks-image-thumb" />
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className="icon-button tiny"
@@ -320,12 +339,35 @@ export const TasksBoardPage = () => {
             <div className="tasks-modal-head">
               <div>
                 <h3>{expandedOrder.number}</h3>
-                <p>{expandedOrder.customerSnapshot?.name ?? 'Sem cliente'} • {expandedOrder.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</p>
+                <p className="tasks-customer-name">{expandedOrder.customerSnapshot?.name ?? 'Sem cliente'}</p>
+                <p>{expandedOrder.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}</p>
+                {expandedOrder.deliveryType === 'ENTREGA' && expandedOrder.customerSnapshot?.deliveryAddress?.trim() ? (
+                  <p className="tasks-delivery-address">{expandedOrder.customerSnapshot.deliveryAddress}</p>
+                ) : null}
               </div>
               <button type="button" className="icon-button" onClick={() => setExpandedOrderId(null)} aria-label="Fechar">✕</button>
             </div>
 
             <div className="tasks-modal-content">
+              {expandedOrder.images?.[0] ? (
+                <button
+                  type="button"
+                  className="tasks-modal-image-button"
+                  aria-label="Ampliar imagem do pedido"
+                  onClick={() =>
+                    setPreviewImage({
+                      src: expandedOrder.images?.[0]?.dataUrl ?? '',
+                      alt: expandedOrder.images?.[0]?.name || 'Imagem do pedido'
+                    })
+                  }
+                >
+                  <img
+                    src={expandedOrder.images[0].dataUrl}
+                    alt={expandedOrder.images[0].name || 'Imagem do pedido'}
+                    className="tasks-modal-image"
+                  />
+                </button>
+              ) : null}
               <h4>Produtos</h4>
               {(expandedOrder.products ?? []).map((item, index) => {
                 const key = productKey(index, item);
@@ -362,6 +404,15 @@ export const TasksBoardPage = () => {
               <h4>Observacoes gerais</h4>
               <p>{expandedOrder.notesGeneral?.trim() ? expandedOrder.notesGeneral : 'Sem observacoes.'}</p>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {previewImage ? (
+        <div className="tasks-modal-backdrop tasks-image-preview-backdrop" role="dialog" aria-modal="true">
+          <div className="tasks-image-preview-shell">
+            <button type="button" className="icon-button" onClick={() => setPreviewImage(null)} aria-label="Fechar">✕</button>
+            <img src={previewImage.src} alt={previewImage.alt} className="tasks-image-preview" />
           </div>
         </div>
       ) : null}

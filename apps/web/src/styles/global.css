@@ -1922,6 +1922,22 @@ button:disabled {
   display: block;
 }
 
+.tasks-order-head .tasks-customer-name,
+.tasks-modal-head .tasks-customer-name {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tasks-order-head .tasks-delivery-address,
+.tasks-modal-head .tasks-delivery-address {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .tasks-order-head strong {
   display: inline-flex;
   align-items: center;
@@ -1937,6 +1953,35 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.tasks-image-thumb-button,
+.tasks-modal-image-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.tasks-image-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  display: block;
+  background: #fff;
+}
+
+.tasks-modal-image {
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  display: block;
+  background: #fff;
 }
 
 .tasks-products {
@@ -2026,6 +2071,27 @@ button:disabled {
 .tasks-modal-content {
   display: grid;
   gap: 10px;
+}
+
+.tasks-image-preview-backdrop {
+  z-index: 340;
+}
+
+.tasks-image-preview-shell {
+  width: min(92vw, 900px);
+  max-height: calc(100dvh - 40px);
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.tasks-image-preview {
+  width: 100%;
+  max-height: calc(100dvh - 96px);
+  border-radius: 16px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--border);
 }
 
 .tasks-modal-content h4 {

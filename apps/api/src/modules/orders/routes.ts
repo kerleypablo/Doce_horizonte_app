@@ -167,12 +167,19 @@ export const orderRoutes = async (app: FastifyInstance) => {
     deliveryType: row.delivery_type ?? 'ENTREGA',
     notesGeneral: row.notes_general ?? '',
     customerSnapshot: row.customer_snapshot
-      ? { name: row.customer_snapshot.name ?? 'Sem cliente' }
+      ? {
+          name: row.customer_snapshot.name ?? 'Sem cliente',
+          deliveryAddress: row.customer_snapshot.deliveryAddress ?? undefined
+        }
       : { name: 'Sem cliente' },
     products: (row.products ?? []).map((item: any) => ({
       name: item.name,
       quantity: Number(item.quantity ?? 0)
     })),
+    images: (row.images ?? []).map((item: any) => ({
+      name: item.name ?? 'Imagem',
+      dataUrl: item.dataUrl ?? ''
+    })).filter((item: any) => item.dataUrl),
     total: calcOrderTotal(row)
   });
 
@@ -205,7 +212,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
 
     let q = supabaseAdmin
       .from('orders')
-      .select('id, number, status, order_datetime, delivery_date, delivery_type, notes_general, customer_snapshot, products, additions, discount_mode, discount_value, shipping_value')
+      .select('id, number, status, order_datetime, delivery_date, delivery_type, notes_general, customer_snapshot, products, images, additions, discount_mode, discount_value, shipping_value')
       .eq('company_id', auth.companyId)
       .order('created_at', { ascending: false });
 
