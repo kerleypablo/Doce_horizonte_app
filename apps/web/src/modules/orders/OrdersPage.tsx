@@ -714,6 +714,7 @@ export const OrdersPage = () => {
     const deliveryContent = order.deliveryType === 'ENTREGA'
       ? note(deliveryAddress)
       : note(order.notesDelivery);
+    const hasTerms = Boolean(order.terms && order.terms.trim().length);
 
     const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${order.type} ${order.number}</title>
       <style>
@@ -804,6 +805,11 @@ export const OrdersPage = () => {
               <p>${escapeHtml(deliveryContent)}</p>
             </div>
           </div>
+          ${hasTerms ? `
+          <div class="box">
+            <h4>Termos</h4>
+            <p>${escapeHtml(order.terms)}</p>
+          </div>` : ''}
           <div class="box">
             <h4>Contato</h4>
             <p class="contact-line">☎ ${escapeHtml(companyPhone || '-')}</p>
