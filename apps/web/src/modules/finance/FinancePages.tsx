@@ -56,6 +56,12 @@ type ManualSaleProduct = {
   quantity: number;
 };
 
+type ManualSaleFormLine = {
+  id: string;
+  paymentMethod: PaymentMethod;
+  amount: number;
+};
+
 type ManualSale = {
   id: string;
   accountId?: string;
@@ -148,6 +154,7 @@ const saleOriginLabels: Record<SaleOrigin, string> = {
 };
 
 const saleOriginKeys = Object.keys(saleOriginLabels) as SaleOrigin[];
+const manualSaleOriginKeys: SaleOrigin[] = ['balcao', 'rua', 'ifood'];
 
 const accountTypeLabels: Record<AccountType, string> = {
   BANK: 'Banco',
@@ -180,6 +187,12 @@ const stripOriginTags = (tags: string[]) => tags.filter((tag) => !isSaleOrigin(t
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+
+const createManualSaleLine = (paymentMethod: PaymentMethod = 'PIX', amount = 0): ManualSaleFormLine => ({
+  id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+  paymentMethod,
+  amount
+});
 
 const today = new Date();
 const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
@@ -492,46 +505,35 @@ export const FinanceDashboardPage = () => {
         <div className="finance-hero-head">
           <div className="finance-hero-top">
             <FinanceHeader title="Financeiro" />
-            <div className="finance-actions-menu">
-              <button
-                type="button"
-                className="finance-actions-trigger finance-actions-plus"
-                onClick={() => setActionsOpen((open) => !open)}
-                aria-label="Novo lancamento"
-                aria-expanded={actionsOpen}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">add</span>
-              </button>
-              {actionsOpen ? (
-                <div className="finance-actions-popover">
-                  <Link to="/app/pedidos/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Novo pedido</Link>
-                  <Link to="/app/insumos/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Novo insumo</Link>
-                  <Link to="/app/financeiro/vendas-manuais/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Nova venda</Link>
-                  <Link to="/app/financeiro/despesas/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Nova despesa</Link>
-                </div>
-              ) : null}
-            </div>
-            <div className="finance-range-inline">
-              <span className="finance-range-label">Periodo</span>
-              <div className="finance-range-display">
-                <button type="button" className="finance-range-date-button" onClick={() => openPicker(fromPickerRef)}>
-                  {formatRangeDate(from)}
+            <div className="finance-hero-actions">
+              <Link to="/app/financeiro/vendas-manuais" className="finance-hero-link-icon" aria-label="Ver vendas">
+                <span className="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+              </Link>
+              <Link to="/app/financeiro/despesas" className="finance-hero-link-icon" aria-label="Ver despesas">
+                <span className="material-symbols-outlined" aria-hidden="true">payments</span>
+              </Link>
+              <div className="finance-actions-menu">
+                <button
+                  type="button"
+                  className="finance-actions-trigger finance-actions-plus"
+                  onClick={() => setActionsOpen((open) => !open)}
+                  aria-label="Novo lancamento"
+                  aria-expanded={actionsOpen}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">add</span>
                 </button>
-                <span className="finance-range-divider">-</span>
-                <button type="button" className="finance-range-date-button" onClick={() => openPicker(toPickerRef)}>
-                  {formatRangeDate(to)}
-                </button>
+                {actionsOpen ? (
+                  <div className="finance-actions-popover">
+                    <Link to="/app/pedidos/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Novo pedido</Link>
+                    <Link to="/app/insumos/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Novo insumo</Link>
+                    <Link to="/app/financeiro/vendas-manuais/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Nova venda</Link>
+                    <Link to="/app/financeiro/despesas/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Nova despesa</Link>
+                  </div>
+                ) : null}
               </div>
-              <input ref={fromPickerRef} className="finance-date-hidden" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-              <input ref={toPickerRef} className="finance-date-hidden" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
             </div>
           </div>
           <p className="muted">Resumo inteligente do que esta acontecendo no caixa.</p>
-        </div>
-        <div className="finance-period-pills">
-          <button type="button" className="ghost" onClick={setTodayRange}>Hoje</button>
-          <button type="button" className="ghost" onClick={setLast7DaysRange}>Semana</button>
-          <button type="button" className="finance-pill-active" onClick={setMonthRange}>Mes</button>
         </div>
         <div className="finance-carousel-wrap">
           <div className="finance-carousel-frame" aria-label="Resumo financeiro">
@@ -572,6 +574,27 @@ export const FinanceDashboardPage = () => {
                 aria-label={`Ir para card ${index + 1}`}
               />
             ))}
+          </div>
+        </div>
+        <div className="finance-toolbar-bottom">
+          <div className="finance-period-pills">
+            <button type="button" className="ghost" onClick={setTodayRange}>Hoje</button>
+            <button type="button" className="ghost" onClick={setLast7DaysRange}>Semana</button>
+            <button type="button" className="finance-pill-active" onClick={setMonthRange}>Mes</button>
+          </div>
+          <div className="finance-range-inline">
+            <span className="finance-range-label">Periodo</span>
+            <div className="finance-range-display">
+              <button type="button" className="finance-range-date-button" onClick={() => openPicker(fromPickerRef)}>
+                {formatRangeDate(from)}
+              </button>
+              <span className="finance-range-divider">-</span>
+              <button type="button" className="finance-range-date-button" onClick={() => openPicker(toPickerRef)}>
+                {formatRangeDate(to)}
+              </button>
+            </div>
+            <input ref={fromPickerRef} className="finance-date-hidden" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+            <input ref={toPickerRef} className="finance-date-hidden" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
           </div>
         </div>
       </div>
@@ -1116,18 +1139,16 @@ export const FinanceManualSalesPage = () => {
   const [searchText, setSearchText] = useState('');
 	  const salesQuery = useManualSales(user?.token, from, to, filterTag || undefined, searchText || undefined);
 	  const tagsQuery = useManualSalesTags(user?.token);
-	  const accountsQuery = useFinanceAccounts(user?.token);
 	  const productsQuery = useFinanceProducts(user?.token);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
   const [form, setForm] = useState({
-    accountId: '',
     occurredAt: `${todayDate}T09:00`,
     description: '',
     origin: 'balcao' as SaleOrigin,
 	    tags: [] as string[],
-	    lines: [{ paymentMethod: 'PIX' as PaymentMethod, amount: 0 }],
+	    lines: [createManualSaleLine()],
 	    products: [] as ManualSaleProduct[],
 	    notes: ''
   });
@@ -1139,12 +1160,11 @@ export const FinanceManualSalesPage = () => {
       setEditingId(null);
       setShowForm(true);
       setForm({
-        accountId: '',
         occurredAt: `${todayDate}T09:00`,
         description: '',
         origin: 'balcao',
 	        tags: [],
-	        lines: [{ paymentMethod: 'PIX', amount: 0 }],
+	        lines: [createManualSaleLine()],
 	        products: [],
 	        notes: ''
       });
@@ -1158,12 +1178,11 @@ export const FinanceManualSalesPage = () => {
       const currentTags = current.tags ?? [];
       const currentOrigin = currentTags.find(isSaleOrigin) ?? 'balcao';
       setForm({
-        accountId: current.accountId ?? '',
         occurredAt: current.occurredAt.slice(0, 16),
         description: current.description,
         origin: currentOrigin,
 	        tags: stripOriginTags(currentTags),
-	        lines: [{ paymentMethod: current.paymentMethod, amount: current.amount }],
+	        lines: [createManualSaleLine(current.paymentMethod, current.amount)],
 	        products: current.products ?? [],
 	        notes: current.notes ?? ''
       });
@@ -1180,12 +1199,11 @@ export const FinanceManualSalesPage = () => {
   const resetForm = () => {
     setEditingId(null);
     setForm({
-      accountId: '',
       occurredAt: `${todayDate}T09:00`,
       description: '',
       origin: 'balcao',
 	      tags: [],
-	      lines: [{ paymentMethod: 'PIX', amount: 0 }],
+	      lines: [createManualSaleLine()],
 	      products: [],
 	      notes: ''
     });
@@ -1195,21 +1213,21 @@ export const FinanceManualSalesPage = () => {
   const addLine = () => {
     setForm((current) => ({
       ...current,
-      lines: [...current.lines, { paymentMethod: 'PIX', amount: 0 }]
+      lines: [...current.lines, createManualSaleLine()]
     }));
   };
 
-  const updateLine = (index: number, patch: Partial<{ paymentMethod: PaymentMethod; amount: number }>) => {
+  const updateLine = (lineId: string, patch: Partial<Pick<ManualSaleFormLine, 'paymentMethod' | 'amount'>>) => {
     setForm((current) => ({
       ...current,
-      lines: current.lines.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line))
+      lines: current.lines.map((line) => (line.id === lineId ? { ...line, ...patch } : line))
     }));
   };
 
-	  const removeLine = (index: number) => {
+	  const removeLine = (lineId: string) => {
 	    setForm((current) => {
 	      if (current.lines.length === 1) return current;
-	      return { ...current, lines: current.lines.filter((_, lineIndex) => lineIndex !== index) };
+	      return { ...current, lines: current.lines.filter((line) => line.id !== lineId) };
 	    });
 	  };
 
@@ -1257,7 +1275,6 @@ export const FinanceManualSalesPage = () => {
         return;
       }
       const basePayload = {
-        accountId: form.accountId || undefined,
 	        occurredAt: new Date(form.occurredAt).toISOString(),
 	        description: form.description,
 	        tags: Array.from(new Set([form.origin, ...stripOriginTags(form.tags)])),
@@ -1300,15 +1317,6 @@ export const FinanceManualSalesPage = () => {
         <form className="form" onSubmit={submit}>
           <div className="grid-2">
             <label>
-              Conta
-              <SelectField
-                value={form.accountId}
-                onChange={(value) => setForm({ ...form, accountId: value })}
-                options={(accountsQuery.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
-                placeholder="Sem conta"
-              />
-            </label>
-            <label>
               Data/hora
               <input type="datetime-local" value={form.occurredAt} onChange={(e) => setForm({ ...form, occurredAt: e.target.value })} />
             </label>
@@ -1319,7 +1327,7 @@ export const FinanceManualSalesPage = () => {
               <SelectField
                 value={form.origin}
                 onChange={(value) => setForm({ ...form, origin: value as SaleOrigin })}
-                options={saleOriginKeys.map((key) => ({ value: key, label: saleOriginLabels[key] }))}
+                options={manualSaleOriginKeys.map((key) => ({ value: key, label: saleOriginLabels[key] }))}
               />
             </label>
             <label>Descricao<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></label>
@@ -1346,20 +1354,24 @@ export const FinanceManualSalesPage = () => {
                 <strong>Formas de recebimento</strong>
                 <span className="muted">Lance o total vendido por forma de pagamento.</span>
               </div>
-              {!editingId ? <button type="button" className="finance-inline-button" onClick={addLine}>Adicionar forma</button> : null}
+              {!editingId ? (
+                <button type="button" className="finance-inline-icon-button" onClick={addLine} aria-label="Adicionar forma de pagamento">
+                  <span className="material-symbols-outlined" aria-hidden="true">add</span>
+                </button>
+              ) : null}
             </div>
             <div className="finance-lines-list">
-              {form.lines.map((line, index) => (
-                <div className="finance-line-row finance-payment-row" key={`${line.paymentMethod}-${index}`}>
+              {form.lines.map((line) => (
+                <div className="finance-line-row finance-payment-row" key={line.id}>
                   <SelectField
                     value={line.paymentMethod}
-                    onChange={(value) => updateLine(index, { paymentMethod: value as PaymentMethod })}
+                    onChange={(value) => updateLine(line.id, { paymentMethod: value as PaymentMethod })}
                     options={(Object.keys(methodLabels) as PaymentMethod[]).map((key) => ({ value: key, label: methodLabels[key] }))}
                   />
                   <div className="finance-payment-value-group">
-                    <MoneyInput value={line.amount} onChange={(value) => updateLine(index, { amount: value })} />
+                    <MoneyInput value={line.amount} onChange={(value) => updateLine(line.id, { amount: value })} />
                     {!editingId ? (
-                      <button type="button" className="icon-button" aria-label="Remover forma" onClick={() => removeLine(index)}>
+                      <button type="button" className="icon-button" aria-label="Remover forma" onClick={() => removeLine(line.id)}>
                         <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                       </button>
                     ) : null}
