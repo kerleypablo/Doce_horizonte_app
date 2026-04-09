@@ -507,10 +507,10 @@ export const FinanceDashboardPage = () => {
             <FinanceHeader title="Financeiro" />
             <div className="finance-hero-actions">
               <Link to="/app/financeiro/vendas-manuais" className="finance-hero-link-icon" aria-label="Ver vendas">
-                <span className="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                Vendas
               </Link>
               <Link to="/app/financeiro/despesas" className="finance-hero-link-icon" aria-label="Ver despesas">
-                <span className="material-symbols-outlined" aria-hidden="true">payments</span>
+                Despesas
               </Link>
               <div className="finance-actions-menu">
                 <button
