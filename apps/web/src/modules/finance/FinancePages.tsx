@@ -194,6 +194,16 @@ const createManualSaleLine = (paymentMethod: PaymentMethod = 'PIX', amount = 0):
   amount
 });
 
+const createEmptyManualSaleForm = () => ({
+  occurredAt: `${todayDate}T09:00`,
+  description: '',
+  origin: 'balcao' as SaleOrigin,
+  tags: [] as string[],
+  lines: [createManualSaleLine()],
+  products: [] as ManualSaleProduct[],
+  notes: ''
+});
+
 const today = new Date();
 const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
 const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -1143,54 +1153,41 @@ export const FinanceManualSalesPage = () => {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
-  const [form, setForm] = useState({
-    occurredAt: `${todayDate}T09:00`,
-    description: '',
-    origin: 'balcao' as SaleOrigin,
-	    tags: [] as string[],
-	    lines: [createManualSaleLine()],
-	    products: [] as ManualSaleProduct[],
-	    notes: ''
-  });
+  const [form, setForm] = useState(createEmptyManualSaleForm);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
   useEffect(() => {
-    if (isCreateView) {
-      setEditingId(null);
-      setShowForm(true);
-      setForm({
-        occurredAt: `${todayDate}T09:00`,
-        description: '',
-        origin: 'balcao',
-	        tags: [],
-	        lines: [createManualSaleLine()],
-	        products: [],
-	        notes: ''
-      });
-      return;
-    }
-    if (editingRouteId) {
-      const current = (salesQuery.data ?? []).find((item) => item.id === editingRouteId);
-      if (!current) return;
-      setEditingId(current.id);
-      setShowForm(true);
-      const currentTags = current.tags ?? [];
-      const currentOrigin = currentTags.find(isSaleOrigin) ?? 'balcao';
-      setForm({
-        occurredAt: current.occurredAt.slice(0, 16),
-        description: current.description,
-        origin: currentOrigin,
-	        tags: stripOriginTags(currentTags),
-	        lines: [createManualSaleLine(current.paymentMethod, current.amount)],
-	        products: current.products ?? [],
-	        notes: current.notes ?? ''
-      });
-      return;
-    }
+    if (!isCreateView) return;
     setEditingId(null);
-    setShowForm(false);
-  }, [isCreateView, editingRouteId, salesQuery.data]);
+    setShowForm(true);
+    setForm(createEmptyManualSaleForm());
+  }, [isCreateView]);
+
+  useEffect(() => {
+    if (!editingRouteId) {
+      if (!isCreateView) {
+        setEditingId(null);
+        setShowForm(false);
+      }
+      return;
+    }
+    const current = (salesQuery.data ?? []).find((item) => item.id === editingRouteId);
+    if (!current || editingId === current.id) return;
+    setEditingId(current.id);
+    setShowForm(true);
+    const currentTags = current.tags ?? [];
+    const currentOrigin = currentTags.find(isSaleOrigin) ?? 'balcao';
+    setForm({
+      occurredAt: current.occurredAt.slice(0, 16),
+      description: current.description,
+      origin: currentOrigin,
+      tags: stripOriginTags(currentTags),
+      lines: [createManualSaleLine(current.paymentMethod, current.amount)],
+      products: current.products ?? [],
+      notes: current.notes ?? ''
+    });
+  }, [editingRouteId, editingId, isCreateView, salesQuery.data]);
 
   const tagOptions = tagsQuery.data?.tags ?? [];
   const reusableTagOptions = tagOptions.filter((tag) => !isSaleOrigin(tag));
@@ -1198,15 +1195,7 @@ export const FinanceManualSalesPage = () => {
 
   const resetForm = () => {
     setEditingId(null);
-    setForm({
-      occurredAt: `${todayDate}T09:00`,
-      description: '',
-      origin: 'balcao',
-	      tags: [],
-	      lines: [createManualSaleLine()],
-	      products: [],
-	      notes: ''
-    });
+    setForm(createEmptyManualSaleForm());
     setShowForm(false);
   };
 
