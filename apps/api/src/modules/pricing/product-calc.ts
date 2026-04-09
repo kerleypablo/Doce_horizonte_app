@@ -5,9 +5,11 @@ import { calcRecipeDirectCost } from './calc.js';
 export type ProductPricePreview = {
   directCost: number;
   overheadCost: number;
+  totalCost: number;
   variablePercent: number;
   feeFixed: number;
   unitsCount: number;
+  unitCost: number;
   unitPrice: number;
   totalPrice: number;
   profitValue: number;
@@ -16,8 +18,54 @@ export type ProductPricePreview = {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
+const calcRecipePortionCost = (recipe: Recipe, quantity: number, inputs: Input[], recipes: Recipe[]) => {
+  if (recipe.yield <= 0) return 0;
+  const total = calcRecipeDirectCost(recipe, inputs, recipes);
+  return (total / recipe.yield) * quantity;
+};
+
+const calcPackagingCost = (
+  packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[],
+  inputs: Input[]
+) =>
+  packagingInputs.reduce((sum, item) => {
+    const input = inputs.find((i) => i.id === item.inputId);
+    if (!input) return sum;
+    const unitCost = input.packagePrice / input.packageSize;
+    const normalizedQty = normalizeQuantity(item.quantity, item.unit, input.unit);
+    return sum + unitCost * normalizedQty;
+  }, 0);
+
+const calcProductDirectCost = (
+  product: Product,
+  inputs: Input[],
+  recipes: Recipe[],
+  products: Product[],
+  visited: Set<string> = new Set()
+): number => {
+  if (visited.has(product.id)) return 0;
+  visited.add(product.id);
+
+  const recipesCost = product.extraRecipes.reduce((sum, item) => {
+    const recipe = recipes.find((r) => r.id === item.recipeId);
+    return recipe ? sum + calcRecipePortionCost(recipe, item.quantity, inputs, recipes) : sum;
+  }, 0);
+
+  const productsCost = product.extraProducts.reduce((sum, item) => {
+    const child = products.find((p) => p.id === item.productId);
+    if (!child) return sum;
+    const direct = calcProductDirectCost(child, inputs, recipes, products, visited);
+    const fallback = child.unitPrice > 0 ? child.unitPrice : child.salePrice;
+    return sum + (direct > 0 ? direct : fallback) * item.quantity;
+  }, 0);
+
+  const packagingCost = calcPackagingCost(product.packagingInputs, inputs);
+  const directCost = recipesCost + productsCost + packagingCost;
+  visited.delete(product.id);
+  return directCost;
+};
+
 export const calcProductPreview = ({
-  baseRecipe,
   unitsCount,
   prepTimeMinutes,
   targetProfitPercent,
@@ -50,33 +98,22 @@ export const calcProductPreview = ({
   feeFixed: number;
 }): ProductPricePreview => {
   const safeUnits = unitsCount > 0 ? unitsCount : 1;
-  const baseRecipeCost = baseRecipe ? calcRecipeDirectCost(baseRecipe, inputs, recipes) : 0;
-  const basePerUnit = baseRecipe ? (baseRecipe.yield > 0 ? baseRecipeCost / baseRecipe.yield : baseRecipeCost) : 0;
-
   const recipesCost = extraRecipes.reduce((sum, item) => {
     const recipe = recipes.find((r) => r.id === item.recipeId);
-    if (!recipe || recipe.yield <= 0) return sum;
-    const total = calcRecipeDirectCost(recipe, inputs, recipes);
-    const perUnit = total / recipe.yield;
-    return sum + perUnit * item.quantity;
+    return recipe ? sum + calcRecipePortionCost(recipe, item.quantity, inputs, recipes) : sum;
   }, 0);
 
   const productsCost = extraProducts.reduce((sum, item) => {
     const product = products.find((p) => p.id === item.productId);
     if (!product) return sum;
-    const perUnit = product.unitPrice > 0 ? product.unitPrice : product.salePrice;
-    return sum + perUnit * item.quantity;
+    const direct = calcProductDirectCost(product, inputs, recipes, products);
+    const fallback = product.unitPrice > 0 ? product.unitPrice : product.salePrice;
+    return sum + (direct > 0 ? direct : fallback) * item.quantity;
   }, 0);
 
-  const packagingCost = packagingInputs.reduce((sum, item) => {
-    const input = inputs.find((i) => i.id === item.inputId);
-    if (!input) return sum;
-    const unitCost = input.packagePrice / input.packageSize;
-    const normalizedQty = normalizeQuantity(item.quantity, item.unit, input.unit);
-    return sum + unitCost * normalizedQty;
-  }, 0);
+  const packagingCost = calcPackagingCost(packagingInputs, inputs);
 
-  const directCost = basePerUnit * safeUnits + recipesCost + productsCost + packagingCost;
+  const directCost = recipesCost + productsCost + packagingCost;
 
   const baseOverhead = settings.overheadMethod === 'PERCENT_DIRECT'
     ? (directCost * settings.overheadPercent) / 100
@@ -88,10 +125,10 @@ export const calcProductPreview = ({
   const overheadCost = baseOverhead + laborCost + fixedCost;
 
   const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
-  const denominator = Math.max(1 - variablePercentBase / 100, 0.001);
+  const desiredMarginPercent = targetProfitPercent + extraPercent;
+  const denominator = Math.max(1 - (variablePercentBase + desiredMarginPercent) / 100, 0.001);
   const baseCost = directCost + overheadCost + feeFixed;
-  const markupMultiplier = 1 + (targetProfitPercent + extraPercent) / 100;
-  const totalPrice = (baseCost * markupMultiplier) / denominator;
+  const totalPrice = baseCost / denominator;
   const unitPrice = totalPrice / safeUnits;
   const profitValue = totalPrice - baseCost - (totalPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
   const profitPercent = totalPrice > 0 ? (profitValue / totalPrice) * 100 : 0;
@@ -99,9 +136,11 @@ export const calcProductPreview = ({
   return {
     directCost: round2(directCost),
     overheadCost: round2(overheadCost),
+    totalCost: round2(baseCost),
     variablePercent: round2(variablePercentBase + targetProfitPercent + extraPercent),
     feeFixed: round2(feeFixed),
     unitsCount: round2(safeUnits),
+    unitCost: round2(baseCost / safeUnits),
     unitPrice: round2(unitPrice),
     totalPrice: round2(totalPrice),
     profitValue: round2(profitValue),

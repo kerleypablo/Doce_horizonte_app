@@ -4,6 +4,22 @@ import { supabaseAdmin } from '../../db/supabase.js';
 
 const paymentMethodSchema = z.enum(['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER']);
 const ruleModeSchema = z.enum(['NONE', 'PERCENT', 'FIXED_ADD', 'FIXED_SUBTRACT']);
+const accountTypeSchema = z.enum(['BANK', 'CASH', 'CARD_RECEIVABLE', 'IFOOD_RECEIVABLE', 'OTHER']);
+const expenseCategorySchema = z.enum([
+  'INSUMOS',
+  'EMBALAGENS',
+  'ALUGUEL',
+  'ENERGIA',
+  'FUNCIONARIO',
+  'ENTREGA',
+  'TAXAS',
+  'MARKETING',
+  'OUTROS'
+]);
+const originCostRuleSchema = z.object({
+  origin: z.enum(['balcao', 'rua', 'porta-a-porta', 'ifood', 'outros']),
+  costPercent: z.number().min(0).max(100)
+});
 
 const dateRangeQuerySchema = z.object({
   from: z.string().optional(),
@@ -14,10 +30,25 @@ const dateRangeQuerySchema = z.object({
 
 const accountSchema = z.object({
   name: z.string().min(2),
+  accountType: accountTypeSchema.default('BANK'),
   institution: z.string().optional(),
   balanceDate: z.string().min(1),
   balanceAmount: z.number(),
   notes: z.string().optional()
+});
+
+const closingQuerySchema = z.object({
+  date: z.string().min(1)
+});
+
+const dailyClosingSchema = z.object({
+  date: z.string().min(1),
+  checkedBalance: z.number(),
+  notes: z.string().optional()
+});
+
+const reconciledSchema = z.object({
+  reconciled: z.boolean()
 });
 
 const methodRuleSchema = z.object({
@@ -30,7 +61,18 @@ const methodRulesPayloadSchema = z.object({
   rules: z.array(methodRuleSchema)
 });
 
+const originCostRulesPayloadSchema = z.object({
+  rules: z.array(originCostRuleSchema)
+});
+
 const tagsSchema = z.array(z.string().trim().min(1).max(40)).max(12);
+
+const manualSaleProductSchema = z.object({
+  productId: z.string().min(1),
+  name: z.string().min(1),
+  unitPrice: z.number().min(0),
+  quantity: z.number().positive()
+});
 
 const manualSaleSchema = z.object({
   accountId: z.string().uuid().optional(),
@@ -38,6 +80,7 @@ const manualSaleSchema = z.object({
   description: z.string().min(2),
   paymentMethod: paymentMethodSchema,
   amount: z.number().positive(),
+  products: z.array(manualSaleProductSchema).default([]),
   tags: tagsSchema.optional(),
   notes: z.string().optional()
 });
@@ -55,6 +98,7 @@ const manualSaleCreateSchema = z.object({
   notes: z.string().optional(),
   paymentMethod: paymentMethodSchema.optional(),
   amount: z.number().positive().optional(),
+  products: z.array(manualSaleProductSchema).default([]),
   lines: z.array(manualSaleSplitLineSchema).min(1).optional()
 }).superRefine((value, context) => {
   if (!value.lines?.length && (!value.paymentMethod || !value.amount)) {
@@ -71,7 +115,8 @@ const expenseSchema = z.object({
   description: z.string().min(2),
   paymentMethod: paymentMethodSchema,
   amount: z.number().positive(),
-  category: z.string().optional(),
+  category: expenseCategorySchema.default('OUTROS'),
+  recurring: z.boolean().default(false),
   notes: z.string().optional()
 });
 
@@ -118,6 +163,42 @@ type MethodRule = {
   value: number;
 };
 
+const saleOrigins = ['balcao', 'rua', 'porta-a-porta', 'ifood', 'outros'] as const;
+type SaleOrigin = (typeof saleOrigins)[number];
+const expenseCategories = [
+  'INSUMOS',
+  'EMBALAGENS',
+  'ALUGUEL',
+  'ENERGIA',
+  'FUNCIONARIO',
+  'ENTREGA',
+  'TAXAS',
+  'MARKETING',
+  'OUTROS'
+] as const;
+
+const getSaleOrigin = (tags: unknown): SaleOrigin => {
+  const values = Array.isArray(tags) ? tags.map((tag) => String(tag)) : [];
+  return values.find((tag): tag is SaleOrigin => saleOrigins.includes(tag as SaleOrigin)) ?? 'outros';
+};
+
+const defaultOriginCostRules = () =>
+  saleOrigins.map((origin) => ({
+    origin,
+    costPercent: origin === 'ifood' ? 50 : origin === 'rua' || origin === 'porta-a-porta' ? 45 : 40
+  }));
+
+const isMissingSupabaseTableError = (error: unknown) => {
+  const maybeError = error as { code?: string; message?: string } | null;
+  const message = maybeError?.message?.toLowerCase() ?? '';
+  return (
+    maybeError?.code === 'PGRST205' ||
+    maybeError?.code === '42P01' ||
+    message.includes('schema cache') ||
+    message.includes('does not exist')
+  );
+};
+
 const calcLiquidByRule = (gross: number, rule?: MethodRule) => {
   if (!rule || rule.mode === 'NONE') return gross;
   if (rule.mode === 'PERCENT') return Math.max(gross * (1 - rule.value / 100), 0);
@@ -144,6 +225,14 @@ const calcOrderTotal = (row: any) => {
   return productsTotal + additionsTotal - discountTotal + Number(row.shipping_value ?? 0);
 };
 
+const calcOrderEstimatedProductCost = (row: any) => {
+  const products = Array.isArray(row.products) ? row.products : [];
+  return products.reduce(
+    (sum: number, item: any) => sum + Number(item?.estimatedTotalCost ?? 0),
+    0
+  );
+};
+
 const toMethodKey = (value: unknown): MethodRule['method'] =>
   paymentMethodSchema.parse(String(value));
 
@@ -153,12 +242,13 @@ const normalizeTags = (tags?: string[]) =>
 export const financeRoutes = async (app: FastifyInstance) => {
   const financeGuard = { preHandler: [app.authenticate, app.requireModule('financeiro')] };
 
-  const mapAccount = (row: any) => ({
-    id: row.id,
-    name: row.name,
-    institution: row.institution ?? '',
-    balanceDate: row.balance_date,
-    balanceAmount: Number(row.balance_amount ?? 0),
+	  const mapAccount = (row: any) => ({
+	    id: row.id,
+	    name: row.name,
+	    accountType: row.account_type ?? 'BANK',
+	    institution: row.institution ?? '',
+	    balanceDate: row.balance_date,
+	    balanceAmount: Number(row.balance_amount ?? 0),
     notes: row.notes ?? '',
     createdAt: row.created_at
   });
@@ -172,32 +262,45 @@ export const financeRoutes = async (app: FastifyInstance) => {
       occurredAt: row.occurred_at,
       description: row.description,
       paymentMethod: row.payment_method as z.infer<typeof paymentMethodSchema>,
-      amount,
-      netAmount: calcLiquidByRule(amount, rule),
-      tags: Array.isArray(row.tags) ? row.tags : [],
-      notes: row.notes ?? '',
-      createdAt: row.created_at
-    };
+	      amount,
+	      netAmount: calcLiquidByRule(amount, rule),
+	      tags: Array.isArray(row.tags) ? row.tags : [],
+	      products: Array.isArray(row.products) ? row.products : [],
+	      reconciled: row.reconciled ?? false,
+	      notes: row.notes ?? '',
+	      createdAt: row.created_at
+	    };
   };
 
   const mapExpense = (row: any, rulesMap: Map<string, MethodRule>) => {
     const amount = Number(row.amount ?? 0);
     const rule = rulesMap.get(String(row.payment_method));
     return {
-      id: row.id,
-      accountId: row.account_id ?? undefined,
-      occurredAt: row.occurred_at,
-      description: row.description,
-      category: row.category ?? '',
-      paymentMethod: row.payment_method as z.infer<typeof paymentMethodSchema>,
-      amount,
-      netAmount: calcLiquidByRule(amount, rule),
-      notes: row.notes ?? '',
-      createdAt: row.created_at
-    };
-  };
+	      id: row.id,
+	      accountId: row.account_id ?? undefined,
+	      occurredAt: row.occurred_at,
+	      description: row.description,
+	      category: row.category ?? 'OUTROS',
+	      paymentMethod: row.payment_method as z.infer<typeof paymentMethodSchema>,
+	      amount,
+	      netAmount: calcLiquidByRule(amount, rule),
+	      reconciled: row.reconciled ?? false,
+	      recurring: row.recurring ?? false,
+	      notes: row.notes ?? '',
+	      createdAt: row.created_at
+	    };
+	  };
 
-  const getRules = async (companyId: string): Promise<MethodRule[]> => {
+	  const mapClosing = (row: any) => row ? ({
+	    id: row.id,
+	    date: row.closing_date,
+	    checkedBalance: Number(row.checked_balance ?? 0),
+	    notes: row.notes ?? '',
+	    createdAt: row.created_at,
+	    updatedAt: row.updated_at
+	  }) : null;
+
+	  const getRules = async (companyId: string): Promise<MethodRule[]> => {
     const { data, error } = await supabaseAdmin
       .from('financial_method_rules')
       .select('method, mode, value')
@@ -227,8 +330,39 @@ export const financeRoutes = async (app: FastifyInstance) => {
         value: rule.value
       }))
     );
-    return defaults;
-  };
+	    return defaults;
+	  };
+
+	  const getOriginCostRules = async (companyId: string) => {
+	    const { data, error } = await supabaseAdmin
+	      .from('financial_origin_cost_rules')
+	      .select('origin, cost_percent')
+	      .eq('company_id', companyId)
+	      .order('origin', { ascending: true });
+
+	    if (error) {
+	      if (isMissingSupabaseTableError(error)) return defaultOriginCostRules();
+	      throw error;
+	    }
+	    if ((data ?? []).length > 0) {
+	      const existing = new Map((data ?? []).map((item) => [String(item.origin), Number(item.cost_percent ?? 0)]));
+	      return defaultOriginCostRules().map((rule) => ({
+	        origin: rule.origin,
+	        costPercent: existing.get(rule.origin) ?? rule.costPercent
+	      }));
+	    }
+
+	    const defaults = defaultOriginCostRules();
+	    const { error: insertError } = await supabaseAdmin.from('financial_origin_cost_rules').insert(
+	      defaults.map((rule) => ({
+	        company_id: companyId,
+	        origin: rule.origin,
+	        cost_percent: rule.costPercent
+	      }))
+	    );
+	    if (insertError && !isMissingSupabaseTableError(insertError)) throw insertError;
+	    return defaults;
+	  };
 
   app.get('/finance/accounts', financeGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
@@ -246,12 +380,13 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const body = accountSchema.parse(request.body);
     const { data, error } = await supabaseAdmin
       .from('financial_accounts')
-      .insert({
-        company_id: auth.companyId,
-        name: body.name,
-        institution: body.institution ?? null,
-        balance_date: body.balanceDate,
-        balance_amount: body.balanceAmount,
+	      .insert({
+	        company_id: auth.companyId,
+	        name: body.name,
+	        account_type: body.accountType,
+	        institution: body.institution ?? null,
+	        balance_date: body.balanceDate,
+	        balance_amount: body.balanceAmount,
         notes: body.notes ?? null
       })
       .select('*')
@@ -266,11 +401,12 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const body = accountSchema.parse(request.body);
     const { data, error } = await supabaseAdmin
       .from('financial_accounts')
-      .update({
-        name: body.name,
-        institution: body.institution ?? null,
-        balance_date: body.balanceDate,
-        balance_amount: body.balanceAmount,
+	      .update({
+	        name: body.name,
+	        account_type: body.accountType,
+	        institution: body.institution ?? null,
+	        balance_date: body.balanceDate,
+	        balance_amount: body.balanceAmount,
         notes: body.notes ?? null
       })
       .eq('id', params.id)
@@ -281,25 +417,56 @@ export const financeRoutes = async (app: FastifyInstance) => {
     return reply.send(mapAccount(data));
   });
 
-  app.delete('/finance/accounts/:id', financeGuard, async (request, reply) => {
-    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-    const params = request.params as { id: string };
+	  app.delete('/finance/accounts/:id', financeGuard, async (request, reply) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const params = request.params as { id: string };
     const { error } = await supabaseAdmin
       .from('financial_accounts')
       .delete()
       .eq('id', params.id)
       .eq('company_id', auth.companyId);
-    if (error) return reply.status(400).send({ message: 'Erro ao remover conta', detail: error.message });
-    return reply.status(204).send();
-  });
+	    if (error) return reply.status(400).send({ message: 'Erro ao remover conta', detail: error.message });
+	    return reply.status(204).send();
+	  });
 
-  app.get('/finance/method-rules', financeGuard, async (request) => {
+	  app.get('/finance/daily-closing', financeGuard, async (request) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const query = closingQuerySchema.parse(request.query ?? {});
+	    const { data, error } = await supabaseAdmin
+	      .from('financial_daily_closings')
+	      .select('*')
+	      .eq('company_id', auth.companyId)
+	      .eq('closing_date', query.date)
+	      .maybeSingle();
+	    if (error) throw error;
+	    return mapClosing(data);
+	  });
+
+	  app.put('/finance/daily-closing', financeGuard, async (request, reply) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const body = dailyClosingSchema.parse(request.body);
+	    const { data, error } = await supabaseAdmin
+	      .from('financial_daily_closings')
+	      .upsert({
+	        company_id: auth.companyId,
+	        closing_date: body.date,
+	        checked_balance: body.checkedBalance,
+	        notes: body.notes ?? null,
+	        updated_at: new Date().toISOString()
+	      }, { onConflict: 'company_id,closing_date' })
+	      .select('*')
+	      .single();
+	    if (error) return reply.status(400).send({ message: 'Erro ao salvar fechamento', detail: error.message });
+	    return reply.send(mapClosing(data));
+	  });
+
+	  app.get('/finance/method-rules', financeGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const rules = await getRules(auth.companyId);
     return { rules };
   });
 
-  app.put('/finance/method-rules', financeGuard, async (request, reply) => {
+	  app.put('/finance/method-rules', financeGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const body = methodRulesPayloadSchema.parse(request.body);
     const methods = new Set(body.rules.map((item) => item.method));
@@ -317,15 +484,46 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const { error } = await supabaseAdmin
       .from('financial_method_rules')
       .upsert(payload, { onConflict: 'company_id,method' });
-    if (error) return reply.status(400).send({ message: 'Erro ao salvar regras', detail: error.message });
-    return reply.send({ rules: body.rules });
-  });
+	    if (error) return reply.status(400).send({ message: 'Erro ao salvar regras', detail: error.message });
+	    return reply.send({ rules: body.rules });
+	  });
 
-  app.get('/finance/manual-sales', financeGuard, async (request) => {
+	  app.get('/finance/origin-cost-rules', financeGuard, async (request) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const rules = await getOriginCostRules(auth.companyId);
+	    return { rules };
+	  });
+
+	  app.put('/finance/origin-cost-rules', financeGuard, async (request, reply) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const body = originCostRulesPayloadSchema.parse(request.body);
+	    const incoming = new Map(body.rules.map((item) => [item.origin, item.costPercent]));
+	    const rules = defaultOriginCostRules().map((rule) => ({
+	      origin: rule.origin,
+	      costPercent: incoming.get(rule.origin) ?? rule.costPercent
+	    }));
+	    const payload = rules.map((rule) => ({
+	      company_id: auth.companyId,
+	      origin: rule.origin,
+	      cost_percent: rule.costPercent
+	    }));
+	    const { error } = await supabaseAdmin
+	      .from('financial_origin_cost_rules')
+	      .upsert(payload, { onConflict: 'company_id,origin' });
+	    if (error) {
+	      const message = isMissingSupabaseTableError(error)
+	        ? 'Tabela financial_origin_cost_rules nao existe no Supabase. Rode o SQL atualizado em docs/SUPABASE_FINANCE.sql.'
+	        : 'Erro ao salvar custos por origem';
+	      return reply.status(400).send({ message, detail: error.message });
+	    }
+	    return reply.send({ rules });
+	  });
+
+	  app.get('/finance/manual-sales', financeGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-    const range = parseDateRange(request.query);
-    const rules = await getRules(auth.companyId);
-    const rulesMap = new Map(rules.map((item) => [item.method, item]));
+	    const range = parseDateRange(request.query);
+	    const rules = await getRules(auth.companyId);
+	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
     let query = supabaseAdmin
       .from('financial_manual_sales')
       .select('*')
@@ -363,16 +561,17 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const lines = body.lines?.length
       ? body.lines
       : [{ paymentMethod: body.paymentMethod as z.infer<typeof paymentMethodSchema>, amount: body.amount as number }];
-    const payload = lines.map((line) => ({
-      company_id: auth.companyId,
-      account_id: body.accountId ?? null,
-      occurred_at: body.occurredAt,
-      description: body.description,
-      payment_method: line.paymentMethod,
-      amount: line.amount,
-      tags,
-      notes: body.notes ?? null
-    }));
+	    const payload = lines.map((line, index) => ({
+	      company_id: auth.companyId,
+	      account_id: body.accountId ?? null,
+	      occurred_at: body.occurredAt,
+	      description: body.description,
+	      payment_method: line.paymentMethod,
+	      amount: line.amount,
+	      products: index === 0 ? body.products : [],
+	      tags,
+	      notes: body.notes ?? null
+	    }));
     const { data, error } = await supabaseAdmin
       .from('financial_manual_sales')
       .insert(payload)
@@ -394,9 +593,10 @@ export const financeRoutes = async (app: FastifyInstance) => {
         account_id: body.accountId ?? null,
         occurred_at: body.occurredAt,
         description: body.description,
-        payment_method: body.paymentMethod,
-        amount: body.amount,
-        tags: normalizeTags(body.tags),
+	        payment_method: body.paymentMethod,
+	        amount: body.amount,
+	        products: body.products,
+	        tags: normalizeTags(body.tags),
         notes: body.notes ?? null
       })
       .eq('id', params.id)
@@ -409,23 +609,40 @@ export const financeRoutes = async (app: FastifyInstance) => {
     return reply.send(mapSale(data, rulesMap));
   });
 
-  app.delete('/finance/manual-sales/:id', financeGuard, async (request, reply) => {
-    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-    const params = request.params as { id: string };
+	  app.delete('/finance/manual-sales/:id', financeGuard, async (request, reply) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const params = request.params as { id: string };
     const { error } = await supabaseAdmin
       .from('financial_manual_sales')
       .delete()
       .eq('id', params.id)
       .eq('company_id', auth.companyId);
-    if (error) return reply.status(400).send({ message: 'Erro ao remover venda manual', detail: error.message });
-    return reply.status(204).send();
-  });
+	    if (error) return reply.status(400).send({ message: 'Erro ao remover venda manual', detail: error.message });
+	    return reply.status(204).send();
+	  });
+
+	  app.put('/finance/manual-sales/:id/reconciled', financeGuard, async (request, reply) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const params = request.params as { id: string };
+	    const body = reconciledSchema.parse(request.body);
+	    const { data, error } = await supabaseAdmin
+	      .from('financial_manual_sales')
+	      .update({ reconciled: body.reconciled, updated_at: new Date().toISOString() })
+	      .eq('id', params.id)
+	      .eq('company_id', auth.companyId)
+	      .select('*')
+	      .single();
+	    if (error) return reply.status(400).send({ message: 'Erro ao conferir venda', detail: error.message });
+	    const rules = await getRules(auth.companyId);
+	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
+	    return reply.send(mapSale(data, rulesMap));
+	  });
 
   app.get('/finance/expenses', financeGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-    const range = parseDateRange(request.query);
-    const rules = await getRules(auth.companyId);
-    const rulesMap = new Map(rules.map((item) => [item.method, item]));
+	    const range = parseDateRange(request.query);
+	    const rules = await getRules(auth.companyId);
+	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
     const { data, error } = await supabaseAdmin
       .from('financial_expenses')
       .select('*')
@@ -445,12 +662,13 @@ export const financeRoutes = async (app: FastifyInstance) => {
       .insert({
         company_id: auth.companyId,
         account_id: body.accountId ?? null,
-        occurred_at: body.occurredAt,
-        description: body.description,
-        category: body.category ?? null,
-        payment_method: body.paymentMethod,
-        amount: body.amount,
-        notes: body.notes ?? null
+	        occurred_at: body.occurredAt,
+	        description: body.description,
+	        category: body.category,
+	        payment_method: body.paymentMethod,
+	        amount: body.amount,
+	        recurring: body.recurring,
+	        notes: body.notes ?? null
       })
       .select('*')
       .single();
@@ -468,12 +686,13 @@ export const financeRoutes = async (app: FastifyInstance) => {
       .from('financial_expenses')
       .update({
         account_id: body.accountId ?? null,
-        occurred_at: body.occurredAt,
-        description: body.description,
-        category: body.category ?? null,
-        payment_method: body.paymentMethod,
-        amount: body.amount,
-        notes: body.notes ?? null
+	        occurred_at: body.occurredAt,
+	        description: body.description,
+	        category: body.category,
+	        payment_method: body.paymentMethod,
+	        amount: body.amount,
+	        recurring: body.recurring,
+	        notes: body.notes ?? null
       })
       .eq('id', params.id)
       .eq('company_id', auth.companyId)
@@ -485,29 +704,48 @@ export const financeRoutes = async (app: FastifyInstance) => {
     return reply.send(mapExpense(data, rulesMap));
   });
 
-  app.delete('/finance/expenses/:id', financeGuard, async (request, reply) => {
-    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-    const params = request.params as { id: string };
+	  app.delete('/finance/expenses/:id', financeGuard, async (request, reply) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const params = request.params as { id: string };
     const { error } = await supabaseAdmin
       .from('financial_expenses')
       .delete()
       .eq('id', params.id)
       .eq('company_id', auth.companyId);
-    if (error) return reply.status(400).send({ message: 'Erro ao remover despesa', detail: error.message });
-    return reply.status(204).send();
-  });
+	    if (error) return reply.status(400).send({ message: 'Erro ao remover despesa', detail: error.message });
+	    return reply.status(204).send();
+	  });
 
-  app.get('/finance/dashboard', financeGuard, async (request) => {
-    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-    const range = parseDateRange(request.query);
-    const rules = await getRules(auth.companyId);
-    const rulesMap = new Map(rules.map((item) => [item.method, item]));
+	  app.put('/finance/expenses/:id/reconciled', financeGuard, async (request, reply) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const params = request.params as { id: string };
+	    const body = reconciledSchema.parse(request.body);
+	    const { data, error } = await supabaseAdmin
+	      .from('financial_expenses')
+	      .update({ reconciled: body.reconciled, updated_at: new Date().toISOString() })
+	      .eq('id', params.id)
+	      .eq('company_id', auth.companyId)
+	      .select('*')
+	      .single();
+	    if (error) return reply.status(400).send({ message: 'Erro ao conferir despesa', detail: error.message });
+	    const rules = await getRules(auth.companyId);
+	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
+	    return reply.send(mapExpense(data, rulesMap));
+	  });
 
-    const [{ data: accounts }, { data: sales }, { data: expenses }, { data: orders }] = await Promise.all([
-      supabaseAdmin
-        .from('financial_accounts')
-        .select('id, name, balance_amount')
-        .eq('company_id', auth.companyId),
+	  app.get('/finance/dashboard', financeGuard, async (request) => {
+	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+	    const range = parseDateRange(request.query);
+	    const rules = await getRules(auth.companyId);
+	    const originCostRules = await getOriginCostRules(auth.companyId);
+	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
+	    const originCostMap = new Map(originCostRules.map((item) => [item.origin, item.costPercent]));
+
+		    const [{ data: accounts }, { data: sales }, { data: expenses }, { data: orders }, { data: closing }] = await Promise.all([
+	      supabaseAdmin
+	        .from('financial_accounts')
+	        .select('id, name, account_type, balance_amount')
+	        .eq('company_id', auth.companyId),
       supabaseAdmin
         .from('financial_manual_sales')
         .select('*')
@@ -525,29 +763,113 @@ export const financeRoutes = async (app: FastifyInstance) => {
         .select('order_datetime, status, type, products, additions, discount_mode, discount_value, shipping_value')
         .eq('company_id', auth.companyId)
         .in('status', ['CONFIRMADO', 'CONCLUIDO'])
-        .eq('type', 'PEDIDO')
-        .gte('order_datetime', range.fromIso)
-        .lte('order_datetime', range.toIso)
-    ]);
+	        .eq('type', 'PEDIDO')
+	        .gte('order_datetime', range.fromIso)
+	        .lte('order_datetime', range.toIso),
+	      supabaseAdmin
+	        .from('financial_daily_closings')
+	        .select('*')
+	        .eq('company_id', auth.companyId)
+	        .eq('closing_date', range.to)
+	        .maybeSingle()
+	    ]);
 
-    const accountsBalance = (accounts ?? []).reduce((sum, item) => sum + Number(item.balance_amount ?? 0), 0);
+	    const accountsBalance = (accounts ?? []).reduce((sum, item) => sum + Number(item.balance_amount ?? 0), 0);
+	    const accountsByType = new Map(
+	      ['BANK', 'CASH', 'CARD_RECEIVABLE', 'IFOOD_RECEIVABLE', 'OTHER'].map((type) => [
+	        type,
+	        { accountType: type, balanceAmount: 0, count: 0 }
+	      ])
+	    );
+	    for (const account of accounts ?? []) {
+	      const type = String(account.account_type ?? 'BANK');
+	      const entry = accountsByType.get(type) ?? accountsByType.get('OTHER');
+	      if (!entry) continue;
+	      entry.balanceAmount += Number(account.balance_amount ?? 0);
+	      entry.count += 1;
+	    }
     const manualSalesGross = (sales ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
     const manualSalesNet = (sales ?? []).reduce((sum, row) => {
       const amount = Number(row.amount ?? 0);
       const rule = rulesMap.get(toMethodKey(row.payment_method));
       return sum + calcLiquidByRule(amount, rule);
     }, 0);
+    const manualSalesFees = Math.max(manualSalesGross - manualSalesNet, 0);
 
-    const expensesGross = (expenses ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
-    const expensesNet = (expenses ?? []).reduce((sum, row) => {
+		    const salesByOrigin = new Map<SaleOrigin, { origin: SaleOrigin; gross: number; net: number; estimatedCost: number; estimatedProfit: number; count: number }>(
+		      saleOrigins.map((origin) => [origin, { origin, gross: 0, net: 0, estimatedCost: 0, estimatedProfit: 0, count: 0 }])
+		    );
+	    let manualSalesEstimatedCost = 0;
+    const salesByMethod = new Map<MethodRule['method'], { method: MethodRule['method']; gross: number; net: number; fees: number; count: number }>(
+      ['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'].map((method) => [
+        method as MethodRule['method'],
+        { method: method as MethodRule['method'], gross: 0, net: 0, fees: 0, count: 0 }
+      ])
+    );
+
+    for (const row of sales ?? []) {
       const amount = Number(row.amount ?? 0);
-      const rule = rulesMap.get(toMethodKey(row.payment_method));
-      return sum + calcLiquidByRule(amount, rule);
-    }, 0);
+      const method = toMethodKey(row.payment_method);
+      const rule = rulesMap.get(method);
+      const net = calcLiquidByRule(amount, rule);
+	      const origin = getSaleOrigin(row.tags);
+	      const estimatedCost = net * ((originCostMap.get(origin) ?? 0) / 100);
+	      manualSalesEstimatedCost += estimatedCost;
+	      const originEntry = salesByOrigin.get(origin);
+	      if (originEntry) {
+	        originEntry.gross += amount;
+	        originEntry.net += net;
+	        originEntry.estimatedCost += estimatedCost;
+	        originEntry.estimatedProfit += net - estimatedCost;
+	        originEntry.count += 1;
+	      }
+      const methodEntry = salesByMethod.get(method);
+      if (methodEntry) {
+        methodEntry.gross += amount;
+        methodEntry.net += net;
+        methodEntry.fees += Math.max(amount - net, 0);
+        methodEntry.count += 1;
+      }
+    }
 
-    const ordersTotal = (orders ?? []).reduce((sum, row) => sum + calcOrderTotal(row), 0);
-    const totalEntries = manualSalesNet + ordersTotal;
-    const projectedBalance = accountsBalance + totalEntries - expensesNet;
+	    const expensesGross = (expenses ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+	    const expensesNet = (expenses ?? []).reduce((sum, row) => {
+	      const amount = Number(row.amount ?? 0);
+	      const rule = rulesMap.get(toMethodKey(row.payment_method));
+	      return sum + calcLiquidByRule(amount, rule);
+	    }, 0);
+	    const recurringExpensesNet = (expenses ?? []).reduce((sum, row) => {
+	      if (!row.recurring) return sum;
+	      const amount = Number(row.amount ?? 0);
+	      const rule = rulesMap.get(toMethodKey(row.payment_method));
+	      return sum + calcLiquidByRule(amount, rule);
+	    }, 0);
+	    const expensesByCategory = new Map(
+	      expenseCategories.map((category) => [category, { category, amount: 0, count: 0 }])
+	    );
+	    for (const row of expenses ?? []) {
+	      const category = expenseCategories.includes(String(row.category) as (typeof expenseCategories)[number])
+	        ? String(row.category)
+	        : 'OUTROS';
+	      const entry = expensesByCategory.get(category as (typeof expenseCategories)[number]);
+	      if (!entry) continue;
+	      const amount = Number(row.amount ?? 0);
+	      const rule = rulesMap.get(toMethodKey(row.payment_method));
+	      entry.amount += calcLiquidByRule(amount, rule);
+	      entry.count += 1;
+	    }
+
+		    const ordersTotal = (orders ?? []).reduce((sum, row) => sum + calcOrderTotal(row), 0);
+		    const ordersEstimatedCost = (orders ?? []).reduce((sum, row) => sum + calcOrderEstimatedProductCost(row), 0);
+		    const ordersEstimatedProfit = ordersTotal - ordersEstimatedCost;
+		    const manualSalesEstimatedProfit = manualSalesNet - manualSalesEstimatedCost;
+		    const totalEntries = manualSalesNet + ordersTotal;
+		    const projectedBalance = accountsBalance + totalEntries - expensesNet;
+		    const estimatedGrossProfit = ordersEstimatedProfit + manualSalesEstimatedProfit;
+		    const estimatedNetProfit = estimatedGrossProfit - expensesNet;
+	    const dailyClosing = mapClosing(closing);
+	    const checkedBalance = dailyClosing?.checkedBalance;
+	    const balanceDifference = typeof checkedBalance === 'number' ? checkedBalance - projectedBalance : null;
 
     const byDay = new Map(
       eachDate(range.from, range.to).map((date) => [
@@ -590,21 +912,38 @@ export const financeRoutes = async (app: FastifyInstance) => {
         accountsBalance,
         ordersTotal,
         ordersCount: (orders ?? []).length,
-        manualSalesGross,
-        manualSalesNet,
-        expensesGross,
-        expensesNet,
-        totalEntries,
-        netResult: totalEntries - expensesNet,
-        projectedBalance
-      },
-      chart: Array.from(byDay.values()),
-      methodRules: rules,
-      accounts: (accounts ?? []).map((item) => ({
-        id: item.id,
-        name: item.name,
-        balanceAmount: Number(item.balance_amount ?? 0)
-      }))
+	        manualSalesGross,
+	        manualSalesNet,
+	        manualSalesFees,
+	        manualSalesEstimatedCost,
+	        manualSalesEstimatedProfit,
+	        ordersEstimatedCost,
+	        ordersEstimatedProfit,
+	        expensesGross,
+	        expensesNet,
+	        recurringExpensesNet,
+	        totalEntries,
+	        netResult: totalEntries - expensesNet,
+	        estimatedGrossProfit,
+	        estimatedNetProfit,
+	        projectedBalance,
+	        checkedBalance,
+	        balanceDifference
+	      },
+	      chart: Array.from(byDay.values()),
+	      salesByOrigin: Array.from(salesByOrigin.values()),
+	      salesByMethod: Array.from(salesByMethod.values()),
+	      expensesByCategory: Array.from(expensesByCategory.values()),
+	      methodRules: rules,
+	      originCostRules,
+	      dailyClosing,
+	      accountsByType: Array.from(accountsByType.values()),
+	      accounts: (accounts ?? []).map((item) => ({
+	        id: item.id,
+	        name: item.name,
+	        accountType: item.account_type ?? 'BANK',
+	        balanceAmount: Number(item.balance_amount ?? 0)
+	      }))
     };
   });
 };

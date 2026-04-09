@@ -49,6 +49,7 @@ export const calcRecipeDirectCost = (
     return sum + unitCost * item.quantity;
   }, 0);
 
+  visited.delete(recipe.id);
   return inputsCost + subRecipesCost;
 };
 
@@ -83,7 +84,7 @@ export const calcPricePreview = ({
   const variablePercent = settings.taxesPercent + feePercent + paymentFeePercent + profitPercent;
   const baseCost = directCost + overheadCost + feeFixed;
 
-  const suggestedPrice = baseCost / (1 - variablePercent / 100);
+  const suggestedPrice = baseCost / Math.max(1 - variablePercent / 100, 0.001);
   const profitValue = suggestedPrice - baseCost - (suggestedPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
 
   return {
@@ -129,7 +130,7 @@ export const calcProfitFromPrice = ({
   const variableCost = salePrice * (variablePercent / 100);
   const baseCost = directCost + overheadCost + feeFixed + variableCost;
   const profitValue = salePrice - baseCost;
-  const profitPercent = (profitValue / salePrice) * 100;
+  const profitPercent = salePrice > 0 ? (profitValue / salePrice) * 100 : 0;
 
   return {
     directCost: round2(directCost),

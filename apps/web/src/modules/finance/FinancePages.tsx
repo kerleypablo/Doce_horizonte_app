@@ -11,15 +11,20 @@ import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 const financeDashboardKey = 'finance-dashboard';
 const financeAccountsKey = 'finance-accounts';
 const financeRulesKey = 'finance-rules';
+const financeOriginCostRulesKey = 'finance-origin-cost-rules';
 const financeManualSalesKey = 'finance-manual-sales';
 const financeExpensesKey = 'finance-expenses';
 
 type PaymentMethod = 'PIX' | 'DINHEIRO' | 'CARTAO' | 'VOUCHER';
 type RuleMode = 'NONE' | 'PERCENT' | 'FIXED_ADD' | 'FIXED_SUBTRACT';
+type SaleOrigin = 'balcao' | 'rua' | 'porta-a-porta' | 'ifood' | 'outros';
+type AccountType = 'BANK' | 'CASH' | 'CARD_RECEIVABLE' | 'IFOOD_RECEIVABLE' | 'OTHER';
+type ExpenseCategory = 'INSUMOS' | 'EMBALAGENS' | 'ALUGUEL' | 'ENERGIA' | 'FUNCIONARIO' | 'ENTREGA' | 'TAXAS' | 'MARKETING' | 'OUTROS';
 
 type FinanceAccount = {
   id: string;
   name: string;
+  accountType: AccountType;
   institution?: string;
   balanceDate: string;
   balanceAmount: number;
@@ -32,6 +37,25 @@ type MethodRule = {
   value: number;
 };
 
+type OriginCostRule = {
+  origin: SaleOrigin;
+  costPercent: number;
+};
+
+type FinanceProduct = {
+  id: string;
+  name: string;
+  unitPrice: number;
+  salePrice: number;
+};
+
+type ManualSaleProduct = {
+  productId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+};
+
 type ManualSale = {
   id: string;
   accountId?: string;
@@ -41,6 +65,8 @@ type ManualSale = {
   amount: number;
   netAmount: number;
   tags: string[];
+  products: ManualSaleProduct[];
+  reconciled: boolean;
   notes?: string;
 };
 
@@ -49,10 +75,19 @@ type Expense = {
   accountId?: string;
   occurredAt: string;
   description: string;
-  category?: string;
+  category: ExpenseCategory;
   paymentMethod: PaymentMethod;
   amount: number;
   netAmount: number;
+  reconciled: boolean;
+  recurring: boolean;
+  notes?: string;
+};
+
+type DailyClosing = {
+  id: string;
+  date: string;
+  checkedBalance: number;
   notes?: string;
 };
 
@@ -61,18 +96,34 @@ type DashboardData = {
   totals: {
     accountsBalance: number;
     ordersTotal: number;
-    ordersCount: number;
-    manualSalesGross: number;
-    manualSalesNet: number;
-    expensesGross: number;
-    expensesNet: number;
-    totalEntries: number;
-    netResult: number;
-    projectedBalance: number;
-  };
-  chart: Array<{ date: string; orders: number; manualSales: number; expenses: number; net: number }>;
-  accounts: Array<{ id: string; name: string; balanceAmount: number }>;
-};
+	    ordersCount: number;
+	    manualSalesGross: number;
+	    manualSalesNet: number;
+	    manualSalesFees: number;
+	    manualSalesEstimatedCost: number;
+	    manualSalesEstimatedProfit: number;
+	    ordersEstimatedCost: number;
+	    ordersEstimatedProfit: number;
+	    expensesGross: number;
+	    expensesNet: number;
+	    recurringExpensesNet: number;
+	    totalEntries: number;
+	    netResult: number;
+	    estimatedGrossProfit: number;
+	    estimatedNetProfit: number;
+	    projectedBalance: number;
+	    checkedBalance?: number;
+	    balanceDifference: number | null;
+	  };
+	  chart: Array<{ date: string; orders: number; manualSales: number; expenses: number; net: number }>;
+	  salesByOrigin: Array<{ origin: SaleOrigin; gross: number; net: number; estimatedCost: number; estimatedProfit: number; count: number }>;
+	  salesByMethod: Array<{ method: PaymentMethod; gross: number; net: number; fees: number; count: number }>;
+	  expensesByCategory: Array<{ category: ExpenseCategory; amount: number; count: number }>;
+	  originCostRules: OriginCostRule[];
+	  dailyClosing: DailyClosing | null;
+	  accountsByType: Array<{ accountType: AccountType; balanceAmount: number; count: number }>;
+	  accounts: Array<{ id: string; name: string; accountType: AccountType; balanceAmount: number }>;
+	};
 
 const methodLabels: Record<PaymentMethod, string> = {
   PIX: 'Pix',
@@ -87,6 +138,45 @@ const modeLabels: Record<RuleMode, string> = {
   FIXED_ADD: 'Somar valor fixo',
   FIXED_SUBTRACT: 'Subtrair valor fixo'
 };
+
+const saleOriginLabels: Record<SaleOrigin, string> = {
+  balcao: 'Balcao',
+  rua: 'Rua',
+  'porta-a-porta': 'Porta a porta',
+  ifood: 'iFood',
+  outros: 'Outros'
+};
+
+const saleOriginKeys = Object.keys(saleOriginLabels) as SaleOrigin[];
+
+const accountTypeLabels: Record<AccountType, string> = {
+  BANK: 'Banco',
+  CASH: 'Caixa fisico',
+  CARD_RECEIVABLE: 'Maquininha a receber',
+  IFOOD_RECEIVABLE: 'iFood a receber',
+  OTHER: 'Outro'
+};
+
+const accountTypeKeys = Object.keys(accountTypeLabels) as AccountType[];
+
+const expenseCategoryLabels: Record<ExpenseCategory, string> = {
+  INSUMOS: 'Insumos',
+  EMBALAGENS: 'Embalagens',
+  ALUGUEL: 'Aluguel',
+  ENERGIA: 'Energia',
+  FUNCIONARIO: 'Funcionario',
+  ENTREGA: 'Entrega',
+  TAXAS: 'Taxas',
+  MARKETING: 'Marketing',
+  OUTROS: 'Outros'
+};
+
+const expenseCategoryKeys = Object.keys(expenseCategoryLabels) as ExpenseCategory[];
+
+const isSaleOrigin = (value: string): value is SaleOrigin =>
+  saleOriginKeys.includes(value as SaleOrigin);
+
+const stripOriginTags = (tags: string[]) => tags.filter((tag) => !isSaleOrigin(tag));
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -142,6 +232,13 @@ const useFinanceRules = (token?: string) =>
     { enabled: Boolean(token), staleTime: 45_000 }
   );
 
+const useFinanceOriginCostRules = (token?: string) =>
+  useCachedQuery(
+    financeOriginCostRulesKey,
+    () => apiFetch<{ rules: OriginCostRule[] }>('/finance/origin-cost-rules', { token }),
+    { enabled: Boolean(token), staleTime: 45_000 }
+  );
+
 const useManualSales = (token?: string, from?: string, to?: string, tag?: string, search?: string) =>
   useCachedQuery(
     `${financeManualSalesKey}:${from ?? ''}:${to ?? ''}:${tag ?? ''}:${search ?? ''}`,
@@ -170,6 +267,13 @@ const useExpenses = (token?: string, from?: string, to?: string) =>
     { enabled: Boolean(token && from && to), staleTime: 30_000 }
   );
 
+const useFinanceProducts = (token?: string) =>
+  useCachedQuery(
+    'finance-products',
+    () => apiFetch<FinanceProduct[]>('/products', { token }),
+    { enabled: Boolean(token), staleTime: 60_000 }
+  );
+
 export const FinanceDashboardPage = () => {
   const { user } = useAuth();
   const { from, to, setFrom, setTo } = useFinanceRange();
@@ -177,9 +281,26 @@ export const FinanceDashboardPage = () => {
   const toPickerRef = useRef<HTMLInputElement | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [closingAmount, setClosingAmount] = useState(0);
+  const [closingNotes, setClosingNotes] = useState('');
+  const [closingSaving, setClosingSaving] = useState(false);
+  const [originRules, setOriginRules] = useState<OriginCostRule[]>([]);
+  const [originRulesSaving, setOriginRulesSaving] = useState(false);
+  const [expandedFinanceSections, setExpandedFinanceSections] = useState<Record<string, boolean>>({});
   const dashboardQuery = useFinanceDashboard(user?.token, from, to);
+  const originRulesQuery = useFinanceOriginCostRules(user?.token);
   const salesQuery = useManualSales(user?.token, from, to);
   const expensesQuery = useExpenses(user?.token, from, to);
+
+  useEffect(() => {
+    if (!dashboardQuery.data) return;
+    setClosingAmount(dashboardQuery.data.dailyClosing?.checkedBalance ?? dashboardQuery.data.totals.projectedBalance ?? 0);
+    setClosingNotes(dashboardQuery.data.dailyClosing?.notes ?? '');
+  }, [dashboardQuery.data]);
+
+  useEffect(() => {
+    if (originRulesQuery.data?.rules) setOriginRules(originRulesQuery.data.rules);
+  }, [originRulesQuery.data]);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
   const data = dashboardQuery.data;
@@ -220,6 +341,61 @@ export const FinanceDashboardPage = () => {
     setTo(todayDate);
   };
 
+  const saveDailyClosing = async () => {
+    setClosingSaving(true);
+    try {
+      await apiFetch('/finance/daily-closing', {
+        method: 'PUT',
+        token: user?.token,
+        body: JSON.stringify({
+          date: to,
+          checkedBalance: closingAmount,
+          notes: closingNotes
+        })
+      });
+      invalidateQueryCache(financeDashboardKey);
+      await dashboardQuery.refetch();
+    } finally {
+      setClosingSaving(false);
+    }
+  };
+
+  const updateOriginRule = (origin: SaleOrigin, costPercent: number) => {
+    setOriginRules((current) =>
+      saleOriginKeys.map((key) => {
+        const existing = current.find((item) => item.origin === key);
+        const next = key === origin ? costPercent : existing?.costPercent ?? 0;
+        return { origin: key, costPercent: next };
+      })
+    );
+  };
+
+  const saveOriginRules = async () => {
+    setOriginRulesSaving(true);
+    try {
+      await apiFetch('/finance/origin-cost-rules', {
+        method: 'PUT',
+        token: user?.token,
+        body: JSON.stringify({ rules: originRules })
+      });
+      invalidateQueryCache(financeOriginCostRulesKey);
+      invalidateQueryCache(financeDashboardKey);
+      await originRulesQuery.refetch();
+      await dashboardQuery.refetch();
+    } finally {
+      setOriginRulesSaving(false);
+    }
+  };
+
+  const isFinanceSectionExpanded = (section: string) => Boolean(expandedFinanceSections[section]);
+
+  const toggleFinanceSection = (section: string) => {
+    setExpandedFinanceSections((current) => ({
+      ...current,
+      [section]: !current[section]
+    }));
+  };
+
   const summaryCards = useMemo(() => {
     const totals = data?.totals;
     return [
@@ -238,24 +414,29 @@ export const FinanceDashboardPage = () => {
         icon: 'shopping_bag',
         trend: '+12%'
       },
-      {
-        id: 'balcao',
-        title: 'Vendas Balcao',
-        value: formatCurrency(totals?.manualSalesNet ?? 0),
-        note: `${(salesQuery.data ?? []).length} vendas`,
-        icon: 'payments',
-        trend: '+8%'
-      },
-      {
-        id: 'despesas',
-        title: 'Despesas',
-        value: formatCurrency(totals?.expensesNet ?? 0),
-        note: `${(expensesQuery.data ?? []).length} lancamentos`,
-        icon: 'receipt_long',
-        trend: '-5%'
-      }
-    ];
-  }, [data, salesQuery.data, expensesQuery.data]);
+	      {
+	        id: 'balcao',
+	        title: 'Vendas Avulsas',
+	        value: formatCurrency(totals?.manualSalesNet ?? 0),
+	        note: `${(salesQuery.data ?? []).length} vendas`,
+	        icon: 'payments'
+	      },
+	      {
+	        id: 'taxas',
+	        title: 'Taxas Estimadas',
+	        value: formatCurrency(totals?.manualSalesFees ?? 0),
+	        note: 'Descontos por metodo',
+	        icon: 'price_check'
+	      },
+	      {
+	        id: 'despesas',
+	        title: 'Despesas',
+	        value: formatCurrency(totals?.expensesNet ?? 0),
+	        note: `${(expensesQuery.data ?? []).length} lancamentos`,
+	        icon: 'receipt_long'
+	      }
+	    ];
+	  }, [data, salesQuery.data, expensesQuery.data]);
 
   useEffect(() => {
     if (!summaryCards.length) {
@@ -311,6 +492,25 @@ export const FinanceDashboardPage = () => {
         <div className="finance-hero-head">
           <div className="finance-hero-top">
             <FinanceHeader title="Financeiro" />
+            <div className="finance-actions-menu">
+              <button
+                type="button"
+                className="finance-actions-trigger finance-actions-plus"
+                onClick={() => setActionsOpen((open) => !open)}
+                aria-label="Novo lancamento"
+                aria-expanded={actionsOpen}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">add</span>
+              </button>
+              {actionsOpen ? (
+                <div className="finance-actions-popover">
+                  <Link to="/app/pedidos/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Novo pedido</Link>
+                  <Link to="/app/insumos/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Novo insumo</Link>
+                  <Link to="/app/financeiro/vendas-manuais/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Nova venda</Link>
+                  <Link to="/app/financeiro/despesas/novo" className="finance-action-item" onClick={() => setActionsOpen(false)}>Nova despesa</Link>
+                </div>
+              ) : null}
+            </div>
             <div className="finance-range-inline">
               <span className="finance-range-label">Periodo</span>
               <div className="finance-range-display">
@@ -374,38 +574,205 @@ export const FinanceDashboardPage = () => {
             ))}
           </div>
         </div>
-        <div className="finance-toolbar finance-toolbar-bottom">
-          <div className="finance-actions-menu">
-            <button type="button" className="finance-actions-trigger" onClick={() => setActionsOpen((open) => !open)}>
-              Cadastros e configuracoes
-              <span className="material-symbols-outlined" aria-hidden="true">expand_more</span>
-            </button>
-            {actionsOpen ? (
-              <div className="finance-actions-popover">
-                <Link to="/app/pedidos" className="finance-action-item" onClick={() => setActionsOpen(false)}>Pedidos</Link>
-                <Link to="/app/insumos" className="finance-action-item" onClick={() => setActionsOpen(false)}>Insumos</Link>
-                <Link to="/app/financeiro/contas" className="finance-action-item" onClick={() => setActionsOpen(false)}>Contas e saldos</Link>
-                <Link to="/app/financeiro/regras" className="finance-action-item" onClick={() => setActionsOpen(false)}>Regras de metodo</Link>
-                <Link to="/app/financeiro/vendas-manuais" className="finance-action-item" onClick={() => setActionsOpen(false)}>Venda de balcao</Link>
-                <Link to="/app/financeiro/despesas" className="finance-action-item" onClick={() => setActionsOpen(false)}>Despesas</Link>
-              </div>
-            ) : null}
-          </div>
-        </div>
       </div>
 
-      <div className="panel finance-result-panel">
-        <div>
-          <p className="muted">Resultado Liquido</p>
-          <strong>{formatCurrency(data?.totals.netResult ?? 0)}</strong>
-        </div>
-        <div>
-          <p className="muted">Saldo Projetado</p>
-          <strong>{formatCurrency(data?.totals.projectedBalance ?? 0)}</strong>
-        </div>
-      </div>
+	      <div className="panel finance-result-panel">
+	        <div>
+	          <p className="muted">Resultado de Caixa</p>
+	          <strong>{formatCurrency(data?.totals.netResult ?? 0)}</strong>
+	        </div>
+	        <div>
+	          <p className="muted">Lucro Estimado</p>
+	          <strong>{formatCurrency(data?.totals.estimatedNetProfit ?? 0)}</strong>
+	        </div>
+	        <div>
+	          <p className="muted">Saldo Projetado</p>
+	          <strong>{formatCurrency(data?.totals.projectedBalance ?? 0)}</strong>
+	        </div>
+	        <div>
+	          <p className="muted">Diferenca Conferida</p>
+	          <strong>{data?.totals.balanceDifference === null || data?.totals.balanceDifference === undefined ? '-' : formatCurrency(data.totals.balanceDifference)}</strong>
+	        </div>
+	      </div>
 
-      <div className="panel finance-flow-panel">
+	      <div className="finance-kpi-grid">
+	        <div className="panel finance-kpi-card">
+	          <span>Lucro pedidos</span>
+	          <strong>{formatCurrency(data?.totals.ordersEstimatedProfit ?? 0)}</strong>
+	        </div>
+	        <div className="panel finance-kpi-card">
+	          <span>Custo pedidos</span>
+	          <strong>{formatCurrency(data?.totals.ordersEstimatedCost ?? 0)}</strong>
+	        </div>
+	        <div className="panel finance-kpi-card">
+	          <span>Lucro vendas avulsas</span>
+	          <strong>{formatCurrency(data?.totals.manualSalesEstimatedProfit ?? 0)}</strong>
+	        </div>
+	        <div className="panel finance-kpi-card">
+	          <span>Custo vendas avulsas</span>
+	          <strong>{formatCurrency(data?.totals.manualSalesEstimatedCost ?? 0)}</strong>
+	        </div>
+	      </div>
+
+	      <div className="panel finance-closing-panel">
+	        <div>
+	          <h3>Fechamento do dia</h3>
+	          <p className="muted">Informe o saldo real conferido em {formatRangeDate(to)} para comparar com a projecao.</p>
+	        </div>
+	        <div className="finance-closing-form">
+	          <label>
+	            Saldo conferido
+	            <MoneyInput value={closingAmount} onChange={setClosingAmount} />
+	          </label>
+	          <label>
+	            Observacoes
+	            <input value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} placeholder="Ex: caixa fechado as 18h" />
+	          </label>
+	          <button type="button" onClick={saveDailyClosing} disabled={closingSaving}>
+	            {closingSaving ? 'Salvando...' : 'Salvar fechamento'}
+	          </button>
+	        </div>
+	      </div>
+
+	      <div className="finance-kpi-grid">
+	        <div className="panel finance-kpi-card">
+	          <span>Pedidos do app</span>
+	          <strong>{formatCurrency(data?.totals.ordersTotal ?? 0)}</strong>
+	        </div>
+	        <div className="panel finance-kpi-card">
+	          <span>Vendas avulsas</span>
+	          <strong>{formatCurrency(data?.totals.manualSalesNet ?? 0)}</strong>
+	        </div>
+	        <div className="panel finance-kpi-card">
+	          <span>Despesas</span>
+	          <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
+	        </div>
+	        <div className="panel finance-kpi-card">
+	          <span>Despesas recorrentes</span>
+	          <strong>{formatCurrency(data?.totals.recurringExpensesNet ?? 0)}</strong>
+	        </div>
+	      </div>
+
+	      <div className="panel">
+	        <div className="finance-transactions-head">
+	          <h3>Saldos por tipo de conta</h3>
+	          <Link to="/app/financeiro/contas" className="ghost">Gerenciar contas</Link>
+	        </div>
+	        <div className="table">
+	          {(data?.accountsByType ?? []).map((item) => (
+	            <div key={item.accountType} className="list-row finance-compact-row">
+	              <div>
+	                <strong>{accountTypeLabels[item.accountType]}</strong>
+	                <span className="muted">{item.count} conta(s)</span>
+	              </div>
+	              <strong>{formatCurrency(item.balanceAmount)}</strong>
+	            </div>
+	          ))}
+	        </div>
+	      </div>
+
+	      <div className="panel">
+	        <div className="finance-transactions-head">
+	          <h3>Despesas por categoria</h3>
+	          <div className="finance-section-actions">
+	            <Link to="/app/financeiro/despesas" className="finance-link-button">Ver despesas</Link>
+	            <button
+	              type="button"
+	              className="finance-section-toggle"
+	              onClick={() => toggleFinanceSection('expensesByCategory')}
+	              aria-label={isFinanceSectionExpanded('expensesByCategory') ? 'Recolher despesas por categoria' : 'Expandir despesas por categoria'}
+	              aria-expanded={isFinanceSectionExpanded('expensesByCategory')}
+	              aria-controls="finance-expenses-by-category"
+	            >
+	              <span className="material-symbols-outlined" aria-hidden="true">
+	                {isFinanceSectionExpanded('expensesByCategory') ? 'expand_less' : 'expand_more'}
+	              </span>
+	            </button>
+	          </div>
+	        </div>
+	        {isFinanceSectionExpanded('expensesByCategory') ? (
+	          <div id="finance-expenses-by-category" className="table">
+	            {(data?.expensesByCategory ?? []).map((item) => (
+	              <div key={item.category} className="list-row finance-compact-row">
+	                <div>
+	                  <strong>{expenseCategoryLabels[item.category]}</strong>
+	                  <span className="muted">{item.count} lancamento(s)</span>
+	                </div>
+	                <strong>{formatCurrency(item.amount)}</strong>
+	              </div>
+	            ))}
+	          </div>
+	        ) : null}
+	      </div>
+
+	      <div className="finance-breakdown-grid">
+	        <div className="panel">
+	          <div className="finance-transactions-head">
+	            <h3>Vendas por origem</h3>
+	            <div className="finance-section-actions">
+	              <button
+	                type="button"
+	                className="finance-section-toggle"
+	                onClick={() => toggleFinanceSection('salesByOrigin')}
+	                aria-label={isFinanceSectionExpanded('salesByOrigin') ? 'Recolher vendas por origem' : 'Expandir vendas por origem'}
+	                aria-expanded={isFinanceSectionExpanded('salesByOrigin')}
+	                aria-controls="finance-sales-by-origin"
+	              >
+	                <span className="material-symbols-outlined" aria-hidden="true">
+	                  {isFinanceSectionExpanded('salesByOrigin') ? 'expand_less' : 'expand_more'}
+	                </span>
+	              </button>
+	            </div>
+	          </div>
+	          {isFinanceSectionExpanded('salesByOrigin') ? (
+	            <div id="finance-sales-by-origin" className="table">
+	              {(data?.salesByOrigin ?? []).map((item) => (
+	              <div key={item.origin} className="list-row finance-compact-row">
+	                <div>
+	                  <strong>{saleOriginLabels[item.origin]}</strong>
+	                  <span className="muted">{item.count} lancamento(s) • Lucro {formatCurrency(item.estimatedProfit)}</span>
+	                </div>
+	                <strong>{formatCurrency(item.net)}</strong>
+	              </div>
+	              ))}
+	            </div>
+	          ) : null}
+	        </div>
+	        <div className="panel">
+	          <div className="finance-transactions-head">
+	            <h3>Vendas por pagamento</h3>
+	            <div className="finance-section-actions">
+	              <button
+	                type="button"
+	                className="finance-section-toggle"
+	                onClick={() => toggleFinanceSection('salesByPayment')}
+	                aria-label={isFinanceSectionExpanded('salesByPayment') ? 'Recolher vendas por pagamento' : 'Expandir vendas por pagamento'}
+	                aria-expanded={isFinanceSectionExpanded('salesByPayment')}
+	                aria-controls="finance-sales-by-payment"
+	              >
+	                <span className="material-symbols-outlined" aria-hidden="true">
+	                  {isFinanceSectionExpanded('salesByPayment') ? 'expand_less' : 'expand_more'}
+	                </span>
+	              </button>
+	            </div>
+	          </div>
+	          {isFinanceSectionExpanded('salesByPayment') ? (
+	            <div id="finance-sales-by-payment" className="table">
+	              {(data?.salesByMethod ?? []).map((item) => (
+	                <div key={item.method} className="list-row finance-compact-row">
+	                  <div>
+	                    <strong>{methodLabels[item.method]}</strong>
+	                    <span className="muted">Bruto {formatCurrency(item.gross)} • Taxas {formatCurrency(item.fees)}</span>
+	                  </div>
+	                  <strong>{formatCurrency(item.net)}</strong>
+	                </div>
+	              ))}
+	            </div>
+	          ) : null}
+	        </div>
+	      </div>
+
+	      <div className="panel finance-flow-panel">
         <h3>Fluxo diario</h3>
         <div className="finance-flow-bars">
           {flowData.map((item) => {
@@ -449,6 +816,51 @@ export const FinanceDashboardPage = () => {
           ))}
         </div>
       </div>
+
+	      <div className="panel">
+	        <div className="finance-transactions-head">
+	          <div>
+	            <h3>Custo medio por origem</h3>
+	            <p className="muted">Percentual usado para estimar lucro das vendas avulsas sem produtos detalhados.</p>
+	          </div>
+	          <div className="finance-section-actions">
+	            <button type="button" className="ghost" onClick={saveOriginRules} disabled={originRulesSaving}>
+	              {originRulesSaving ? 'Salvando...' : 'Salvar custos'}
+	            </button>
+	            <button
+	              type="button"
+	              className="finance-section-toggle"
+	              onClick={() => toggleFinanceSection('originCostRules')}
+	              aria-label={isFinanceSectionExpanded('originCostRules') ? 'Recolher custo medio por origem' : 'Expandir custo medio por origem'}
+	              aria-expanded={isFinanceSectionExpanded('originCostRules')}
+	              aria-controls="finance-origin-cost-rules"
+	            >
+	              <span className="material-symbols-outlined" aria-hidden="true">
+	                {isFinanceSectionExpanded('originCostRules') ? 'expand_less' : 'expand_more'}
+	              </span>
+	            </button>
+	          </div>
+	        </div>
+	        {isFinanceSectionExpanded('originCostRules') ? (
+	          <div id="finance-origin-cost-rules" className="finance-origin-rules-grid">
+	            {saleOriginKeys.map((origin) => {
+	              const rule = originRules.find((item) => item.origin === origin);
+	              return (
+	                <label key={origin}>
+	                  {saleOriginLabels[origin]}
+	                  <input
+	                    type="number"
+	                    min={0}
+	                    max={100}
+	                    value={rule?.costPercent ?? 0}
+	                    onChange={(event) => updateOriginRule(origin, Number(event.target.value || 0))}
+	                  />
+	                </label>
+	              );
+	            })}
+	          </div>
+	        ) : null}
+	      </div>
     </div>
   );
 };
@@ -467,6 +879,7 @@ export const FinanceAccountsPage = () => {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
+    accountType: 'BANK' as AccountType,
     institution: '',
     balanceDate: todayDate,
     balanceAmount: 0,
@@ -476,21 +889,22 @@ export const FinanceAccountsPage = () => {
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
   useEffect(() => {
-    if (isCreateView) {
-      setEditingId(null);
-      setShowForm(true);
-      setForm({ name: '', institution: '', balanceDate: todayDate, balanceAmount: 0, notes: '' });
-      return;
-    }
+	    if (isCreateView) {
+	      setEditingId(null);
+	      setShowForm(true);
+	      setForm({ name: '', accountType: 'BANK', institution: '', balanceDate: todayDate, balanceAmount: 0, notes: '' });
+	      return;
+	    }
     if (editingRouteId) {
       const current = (accountsQuery.data ?? []).find((item) => item.id === editingRouteId);
       if (!current) return;
       setEditingId(current.id);
       setShowForm(true);
-      setForm({
-        name: current.name,
-        institution: current.institution ?? '',
-        balanceDate: current.balanceDate,
+	      setForm({
+	        name: current.name,
+	        accountType: current.accountType ?? 'BANK',
+	        institution: current.institution ?? '',
+	        balanceDate: current.balanceDate,
         balanceAmount: current.balanceAmount,
         notes: current.notes ?? ''
       });
@@ -500,10 +914,10 @@ export const FinanceAccountsPage = () => {
     setShowForm(false);
   }, [isCreateView, editingRouteId, accountsQuery.data]);
 
-  const resetForm = () => {
-    setEditingId(null);
-    setForm({ name: '', institution: '', balanceDate: todayDate, balanceAmount: 0, notes: '' });
-  };
+	  const resetForm = () => {
+	    setEditingId(null);
+	    setForm({ name: '', accountType: 'BANK', institution: '', balanceDate: todayDate, balanceAmount: 0, notes: '' });
+	  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -522,11 +936,22 @@ export const FinanceAccountsPage = () => {
     } finally {
       setSaving(false);
     }
-  };
+	  };
+
+	  const toggleSaleReconciled = async (sale: ManualSale) => {
+	    await apiFetch(`/finance/manual-sales/${sale.id}/reconciled`, {
+	      method: 'PUT',
+	      token: user?.token,
+	      body: JSON.stringify({ reconciled: !sale.reconciled })
+	    });
+	    invalidateQueryCache(financeManualSalesKey);
+	    invalidateQueryCache(financeDashboardKey);
+	    await salesQuery.refetch();
+	  };
 
   const filtered = (accountsQuery.data ?? []).filter((item) =>
-    `${item.name} ${item.institution ?? ''}`.toLowerCase().includes(search.toLowerCase())
-  );
+	    `${item.name} ${item.institution ?? ''} ${accountTypeLabels[item.accountType] ?? ''}`.toLowerCase().includes(search.toLowerCase())
+	  );
 
   return (
     <div className="page">
@@ -543,10 +968,10 @@ export const FinanceAccountsPage = () => {
         <div className="table">
           {filtered.map((item) => (
             <div key={item.id} className="list-row">
-              <div>
-                <strong>{item.name}</strong>
-                <span className="muted">{item.institution || '-'} • {item.balanceDate} • {formatCurrency(item.balanceAmount)}</span>
-              </div>
+	              <div>
+	                <strong>{item.name}</strong>
+	                <span className="muted">{accountTypeLabels[item.accountType]} • {item.institution || '-'} • {item.balanceDate} • {formatCurrency(item.balanceAmount)}</span>
+	              </div>
               <button
                 type="button"
                 className="icon-button"
@@ -565,10 +990,18 @@ export const FinanceAccountsPage = () => {
       <div className="panel">
         <FinanceHeader title={editingId ? 'Editar conta' : 'Nova conta'} backTo="/app/financeiro/contas" />
         <form className="form" onSubmit={submit}>
-          <div className="grid-2">
-            <label>Nome da conta<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
-            <label>Banco/Instituicao<input value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} /></label>
-          </div>
+	          <div className="grid-2">
+	            <label>Nome da conta<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
+	            <label>
+	              Tipo
+	              <SelectField
+	                value={form.accountType}
+	                onChange={(value) => setForm({ ...form, accountType: value as AccountType })}
+	                options={accountTypeKeys.map((key) => ({ value: key, label: accountTypeLabels[key] }))}
+	              />
+	            </label>
+	          </div>
+	          <label>Banco/Instituicao<input value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} /></label>
           <div className="grid-2">
             <label>Data do saldo<input type="date" value={form.balanceDate} onChange={(e) => setForm({ ...form, balanceDate: e.target.value })} required /></label>
             <label>Saldo informado<MoneyInput value={form.balanceAmount} onChange={(value) => setForm({ ...form, balanceAmount: value })} /></label>
@@ -620,14 +1053,17 @@ export const FinanceRulesPage = () => {
   return (
     <div className="page">
       <div className="panel">
-        <FinanceHeader title="Regras por metodo" backTo="/app/financeiro" />
+        <FinanceHeader title="Taxas por metodo" backTo="/app/financeiro" />
+        <p className="muted">
+          Use essas regras para transformar venda bruta em valor liquido. Exemplo: se o cartao cobra 3%, uma venda de R$ 100 entra como R$ 97 no financeiro.
+        </p>
         <div className="table">
           {(['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'] as PaymentMethod[]).map((method) => {
             const rule = rules.find((item) => item.method === method) ?? { method, mode: 'NONE' as RuleMode, value: 0 };
             return (
               <div key={method} className="table-row">
                 <label>
-                  Metodo
+                  Metodo de pagamento
                   <input value={methodLabels[method]} readOnly />
                 </label>
                 <label>
@@ -659,8 +1095,8 @@ export const FinanceRulesPage = () => {
           })}
         </div>
         <div className="actions">
-          <button type="button" onClick={saveRules} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar regras'}
+              <button type="button" onClick={saveRules} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar taxas'}
           </button>
         </div>
       </div>
@@ -678,9 +1114,10 @@ export const FinanceManualSalesPage = () => {
   const { from, to, setFrom, setTo } = useFinanceRange();
   const [filterTag, setFilterTag] = useState('');
   const [searchText, setSearchText] = useState('');
-  const salesQuery = useManualSales(user?.token, from, to, filterTag || undefined, searchText || undefined);
-  const tagsQuery = useManualSalesTags(user?.token);
-  const accountsQuery = useFinanceAccounts(user?.token);
+	  const salesQuery = useManualSales(user?.token, from, to, filterTag || undefined, searchText || undefined);
+	  const tagsQuery = useManualSalesTags(user?.token);
+	  const accountsQuery = useFinanceAccounts(user?.token);
+	  const productsQuery = useFinanceProducts(user?.token);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
@@ -688,9 +1125,11 @@ export const FinanceManualSalesPage = () => {
     accountId: '',
     occurredAt: `${todayDate}T09:00`,
     description: '',
-    tags: [] as string[],
-    lines: [{ paymentMethod: 'PIX' as PaymentMethod, amount: 0 }],
-    notes: ''
+    origin: 'balcao' as SaleOrigin,
+	    tags: [] as string[],
+	    lines: [{ paymentMethod: 'PIX' as PaymentMethod, amount: 0 }],
+	    products: [] as ManualSaleProduct[],
+	    notes: ''
   });
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
@@ -703,9 +1142,11 @@ export const FinanceManualSalesPage = () => {
         accountId: '',
         occurredAt: `${todayDate}T09:00`,
         description: '',
-        tags: [],
-        lines: [{ paymentMethod: 'PIX', amount: 0 }],
-        notes: ''
+        origin: 'balcao',
+	        tags: [],
+	        lines: [{ paymentMethod: 'PIX', amount: 0 }],
+	        products: [],
+	        notes: ''
       });
       return;
     }
@@ -714,13 +1155,17 @@ export const FinanceManualSalesPage = () => {
       if (!current) return;
       setEditingId(current.id);
       setShowForm(true);
+      const currentTags = current.tags ?? [];
+      const currentOrigin = currentTags.find(isSaleOrigin) ?? 'balcao';
       setForm({
         accountId: current.accountId ?? '',
         occurredAt: current.occurredAt.slice(0, 16),
         description: current.description,
-        tags: current.tags ?? [],
-        lines: [{ paymentMethod: current.paymentMethod, amount: current.amount }],
-        notes: current.notes ?? ''
+        origin: currentOrigin,
+	        tags: stripOriginTags(currentTags),
+	        lines: [{ paymentMethod: current.paymentMethod, amount: current.amount }],
+	        products: current.products ?? [],
+	        notes: current.notes ?? ''
       });
       return;
     }
@@ -729,6 +1174,7 @@ export const FinanceManualSalesPage = () => {
   }, [isCreateView, editingRouteId, salesQuery.data]);
 
   const tagOptions = tagsQuery.data?.tags ?? [];
+  const reusableTagOptions = tagOptions.filter((tag) => !isSaleOrigin(tag));
   const grossTotal = form.lines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
 
   const resetForm = () => {
@@ -737,9 +1183,11 @@ export const FinanceManualSalesPage = () => {
       accountId: '',
       occurredAt: `${todayDate}T09:00`,
       description: '',
-      tags: [],
-      lines: [{ paymentMethod: 'PIX', amount: 0 }],
-      notes: ''
+      origin: 'balcao',
+	      tags: [],
+	      lines: [{ paymentMethod: 'PIX', amount: 0 }],
+	      products: [],
+	      notes: ''
     });
     setShowForm(false);
   };
@@ -758,12 +1206,46 @@ export const FinanceManualSalesPage = () => {
     }));
   };
 
-  const removeLine = (index: number) => {
-    setForm((current) => {
-      if (current.lines.length === 1) return current;
-      return { ...current, lines: current.lines.filter((_, lineIndex) => lineIndex !== index) };
-    });
-  };
+	  const removeLine = (index: number) => {
+	    setForm((current) => {
+	      if (current.lines.length === 1) return current;
+	      return { ...current, lines: current.lines.filter((_, lineIndex) => lineIndex !== index) };
+	    });
+	  };
+
+	  const addSaleProduct = (productId: string) => {
+	    const product = (productsQuery.data ?? []).find((item) => item.id === productId);
+	    if (!product) return;
+	    setForm((current) => {
+	      if (current.products.some((item) => item.productId === product.id)) return current;
+	      return {
+	        ...current,
+	        products: [
+	          ...current.products,
+	          {
+	            productId: product.id,
+	            name: product.name,
+	            unitPrice: product.unitPrice || product.salePrice || 0,
+	            quantity: 1
+	          }
+	        ]
+	      };
+	    });
+	  };
+
+	  const updateSaleProduct = (index: number, patch: Partial<ManualSaleProduct>) => {
+	    setForm((current) => ({
+	      ...current,
+	      products: current.products.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
+	    }));
+	  };
+
+	  const removeSaleProduct = (index: number) => {
+	    setForm((current) => ({
+	      ...current,
+	      products: current.products.filter((_, itemIndex) => itemIndex !== index)
+	    }));
+	  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -776,11 +1258,12 @@ export const FinanceManualSalesPage = () => {
       }
       const basePayload = {
         accountId: form.accountId || undefined,
-        occurredAt: new Date(form.occurredAt).toISOString(),
-        description: form.description,
-        tags: form.tags,
-        notes: form.notes
-      };
+	        occurredAt: new Date(form.occurredAt).toISOString(),
+	        description: form.description,
+	        tags: Array.from(new Set([form.origin, ...stripOriginTags(form.tags)])),
+	        products: form.products,
+	        notes: form.notes
+	      };
       await apiFetch(editingId ? `/finance/manual-sales/${editingId}` : '/finance/manual-sales', {
         method: editingId ? 'PUT' : 'POST',
         token: user?.token,
@@ -813,7 +1296,7 @@ export const FinanceManualSalesPage = () => {
     <div className="page">
       {showForm ? (
       <div className="panel">
-        <FinanceHeader title={editingId ? 'Editar venda manual' : 'Nova venda manual'} backTo="/app/financeiro/vendas-manuais" />
+        <FinanceHeader title={editingId ? 'Editar venda avulsa' : 'Nova venda avulsa'} backTo="/app/financeiro/vendas-manuais" />
         <form className="form" onSubmit={submit}>
           <div className="grid-2">
             <label>
@@ -831,13 +1314,21 @@ export const FinanceManualSalesPage = () => {
             </label>
           </div>
           <div className="grid-3">
+            <label>
+              Origem
+              <SelectField
+                value={form.origin}
+                onChange={(value) => setForm({ ...form, origin: value as SaleOrigin })}
+                options={saleOriginKeys.map((key) => ({ value: key, label: saleOriginLabels[key] }))}
+              />
+            </label>
             <label>Descricao<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></label>
             <label>
-              Tags
-              <TagInput value={form.tags} onChange={(value) => setForm({ ...form, tags: value })} placeholder="Ex: balcao, evento, encomenda" />
+              Marcadores
+              <TagInput value={form.tags} onChange={(value) => setForm({ ...form, tags: stripOriginTags(value) })} placeholder="Ex: evento, feira, loja parceira" />
             </label>
             <div className="finance-tag-reuse">
-              {tagOptions.slice(0, 12).map((tag) => (
+              {reusableTagOptions.slice(0, 12).map((tag) => (
                 <button
                   type="button"
                   key={tag}
@@ -851,35 +1342,71 @@ export const FinanceManualSalesPage = () => {
           </div>
           <div className="finance-lines-block">
             <div className="finance-lines-head">
-              <strong>Formas de recebimento</strong>
-              {!editingId ? <button type="button" className="ghost" onClick={addLine}>Adicionar forma</button> : null}
+              <div>
+                <strong>Formas de recebimento</strong>
+                <span className="muted">Lance o total vendido por forma de pagamento.</span>
+              </div>
+              {!editingId ? <button type="button" className="finance-inline-button" onClick={addLine}>Adicionar forma</button> : null}
             </div>
             <div className="finance-lines-list">
               {form.lines.map((line, index) => (
-                <div className="finance-line-row" key={`${line.paymentMethod}-${index}`}>
+                <div className="finance-line-row finance-payment-row" key={`${line.paymentMethod}-${index}`}>
                   <SelectField
                     value={line.paymentMethod}
                     onChange={(value) => updateLine(index, { paymentMethod: value as PaymentMethod })}
                     options={(Object.keys(methodLabels) as PaymentMethod[]).map((key) => ({ value: key, label: methodLabels[key] }))}
                   />
-                  <MoneyInput value={line.amount} onChange={(value) => updateLine(index, { amount: value })} />
-                  {!editingId ? (
-                    <button type="button" className="icon-button" aria-label="Remover forma" onClick={() => removeLine(index)}>
-                      <span className="material-symbols-outlined" aria-hidden="true">delete</span>
-                    </button>
-                  ) : null}
+                  <div className="finance-payment-value-group">
+                    <MoneyInput value={line.amount} onChange={(value) => updateLine(index, { amount: value })} />
+                    {!editingId ? (
+                      <button type="button" className="icon-button" aria-label="Remover forma" onClick={() => removeLine(index)}>
+                        <span className="material-symbols-outlined" aria-hidden="true">delete</span>
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="finance-lines-total">
-              <span>Total bruto</span>
-              <strong>{formatCurrency(grossTotal)}</strong>
-            </div>
-          </div>
-          <label>Observacoes<input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+	            <div className="finance-lines-total">
+	              <span>Total bruto</span>
+	              <strong>{formatCurrency(grossTotal)}</strong>
+	            </div>
+	          </div>
+	          <div className="finance-lines-block">
+	            <div className="finance-lines-head">
+	              <strong>Produtos vendidos</strong>
+	              <span className="muted">Opcional. Use quando quiser detalhar a venda de balcao.</span>
+	            </div>
+	            <SelectField
+	              value=""
+	              onChange={addSaleProduct}
+	              options={(productsQuery.data ?? [])
+	                .filter((product) => !form.products.some((item) => item.productId === product.id))
+	                .map((product) => ({ value: product.id, label: product.name }))}
+	              placeholder="Adicionar produto"
+	            />
+	            <div className="finance-lines-list">
+	              {form.products.map((item, index) => (
+	                <div className="finance-line-row" key={item.productId}>
+	                  <span>{item.name}</span>
+	                  <input
+	                    type="number"
+	                    min={0.01}
+	                    step="0.01"
+	                    value={item.quantity}
+	                    onChange={(event) => updateSaleProduct(index, { quantity: Number(event.target.value || 0) })}
+	                  />
+	                  <button type="button" className="icon-button" aria-label="Remover produto" onClick={() => removeSaleProduct(index)}>
+	                    <span className="material-symbols-outlined" aria-hidden="true">delete</span>
+	                  </button>
+	                </div>
+	              ))}
+	            </div>
+	          </div>
+	          <label>Observacoes<input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
           <div className="actions">
             <button type="button" className="ghost" onClick={() => navigate('/app/financeiro/vendas-manuais')}>Cancelar</button>
-            <button type="submit" disabled={saving}>{saving ? 'Salvando...' : editingId ? 'Salvar venda' : 'Cadastrar venda'}</button>
+	            <button type="submit" disabled={saving}>{saving ? 'Salvando...' : editingId ? 'Salvar venda' : 'Cadastrar venda'}</button>
           </div>
         </form>
       </div>
@@ -887,12 +1414,12 @@ export const FinanceManualSalesPage = () => {
 
       {!isCreateView && !editingRouteId ? (
       <div className="panel">
-        <FinanceHeader title="Vendas manuais" backTo="/app/financeiro" />
+        <FinanceHeader title="Vendas avulsas" backTo="/app/financeiro" />
         <ListToolbar
           title=""
           searchValue={searchText}
           onSearch={setSearchText}
-          actionLabel="Nova venda manual"
+          actionLabel="Nova venda"
           onAction={() => navigate('/app/financeiro/vendas-manuais/novo')}
         />
         <div className="finance-filter-row">
@@ -909,11 +1436,14 @@ export const FinanceManualSalesPage = () => {
             <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Descricao da venda" />
           </label>
           <label className="finance-filter-field">
-            <span>Tag</span>
+	            <span>Origem ou marcador</span>
             <SelectField
               value={filterTag}
               onChange={(value) => setFilterTag(value)}
-              options={tagOptions.map((tag) => ({ value: tag, label: `#${tag}` }))}
+              options={tagOptions.map((tag) => ({
+                value: tag,
+                label: isSaleOrigin(tag) ? saleOriginLabels[tag] : `#${tag}`
+              }))}
               placeholder="Todas"
             />
           </label>
@@ -926,15 +1456,30 @@ export const FinanceManualSalesPage = () => {
                 <span className="muted">
                   {new Date(item.occurredAt).toLocaleString('pt-BR')} • {methodLabels[item.paymentMethod]} • {formatCurrency(item.netAmount)}
                 </span>
-                {item.tags?.length ? (
-                  <span className="finance-list-tags">{item.tags.map((tag) => `#${tag}`).join('  ')}</span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => navigate(`/app/financeiro/vendas-manuais/editar/${item.id}`)}
-              >
+	                {item.tags?.length ? (
+	                  <span className="finance-list-tags">
+	                    {item.tags.map((tag) => (isSaleOrigin(tag) ? saleOriginLabels[tag] : `#${tag}`)).join('  ')}
+	                  </span>
+	                ) : null}
+	                {item.products?.length ? (
+	                  <span className="finance-list-tags">
+	                    {item.products.map((product) => `${product.name} x${product.quantity}`).join('  ')}
+	                  </span>
+	                ) : null}
+	              </div>
+	              <button
+	                type="button"
+	                className="icon-button"
+	                aria-label={item.reconciled ? 'Marcar venda como nao conferida' : 'Marcar venda como conferida'}
+	                onClick={() => toggleSaleReconciled(item)}
+	              >
+	                <span className="material-symbols-outlined" aria-hidden="true">{item.reconciled ? 'check_circle' : 'radio_button_unchecked'}</span>
+	              </button>
+	              <button
+	                type="button"
+	                className="icon-button"
+	                onClick={() => navigate(`/app/financeiro/vendas-manuais/editar/${item.id}`)}
+	              >
                 <span className="material-symbols-outlined" aria-hidden="true">edit</span>
               </button>
             </div>
@@ -956,19 +1501,21 @@ export const FinanceExpensesPage = () => {
   const { from, to, setFrom, setTo } = useFinanceRange();
   const expensesQuery = useExpenses(user?.token, from, to);
   const accountsQuery = useFinanceAccounts(user?.token);
-  const [saving, setSaving] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(editingRouteId);
-  const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
-  const [form, setForm] = useState({
-    accountId: '',
-    occurredAt: `${todayDate}T09:00`,
-    description: '',
-    category: '',
-    paymentMethod: 'PIX' as PaymentMethod,
-    amount: 0,
-    notes: ''
-  });
+	  const [saving, setSaving] = useState(false);
+	  const [editingId, setEditingId] = useState<string | null>(editingRouteId);
+	  const [search, setSearch] = useState('');
+	  const [categoryFilter, setCategoryFilter] = useState('');
+	  const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
+	  const [form, setForm] = useState({
+	    accountId: '',
+	    occurredAt: `${todayDate}T09:00`,
+	    description: '',
+	    category: 'OUTROS' as ExpenseCategory,
+	    paymentMethod: 'PIX' as PaymentMethod,
+	    amount: 0,
+	    recurring: false,
+	    notes: ''
+	  });
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
@@ -977,14 +1524,15 @@ export const FinanceExpensesPage = () => {
       setEditingId(null);
       setShowForm(true);
       setForm({
-        accountId: '',
-        occurredAt: `${todayDate}T09:00`,
-        description: '',
-        category: '',
-        paymentMethod: 'PIX',
-        amount: 0,
-        notes: ''
-      });
+	        accountId: '',
+	        occurredAt: `${todayDate}T09:00`,
+	        description: '',
+	        category: 'OUTROS',
+	        paymentMethod: 'PIX',
+	        amount: 0,
+	        recurring: false,
+	        notes: ''
+	      });
       return;
     }
     if (editingRouteId) {
@@ -994,13 +1542,14 @@ export const FinanceExpensesPage = () => {
       setShowForm(true);
       setForm({
         accountId: current.accountId ?? '',
-        occurredAt: current.occurredAt.slice(0, 16),
-        description: current.description,
-        category: current.category ?? '',
-        paymentMethod: current.paymentMethod,
-        amount: current.amount,
-        notes: current.notes ?? ''
-      });
+	        occurredAt: current.occurredAt.slice(0, 16),
+	        description: current.description,
+	        category: current.category ?? 'OUTROS',
+	        paymentMethod: current.paymentMethod,
+	        amount: current.amount,
+	        recurring: current.recurring ?? false,
+	        notes: current.notes ?? ''
+	      });
       return;
     }
     setEditingId(null);
@@ -1024,7 +1573,7 @@ export const FinanceExpensesPage = () => {
       invalidateQueryCache(financeDashboardKey);
       await expensesQuery.refetch();
       setEditingId(null);
-      setForm({ accountId: '', occurredAt: `${todayDate}T09:00`, description: '', category: '', paymentMethod: 'PIX', amount: 0, notes: '' });
+	      setForm({ accountId: '', occurredAt: `${todayDate}T09:00`, description: '', category: 'OUTROS', paymentMethod: 'PIX', amount: 0, recurring: false, notes: '' });
       setShowForm(false);
       navigate('/app/financeiro/despesas');
     } finally {
@@ -1032,9 +1581,22 @@ export const FinanceExpensesPage = () => {
     }
   };
 
-  const filtered = (expensesQuery.data ?? []).filter((item) =>
-    `${item.description} ${item.category ?? ''}`.toLowerCase().includes(search.toLowerCase())
-  );
+		  const filtered = (expensesQuery.data ?? []).filter((item) => {
+		    const matchesSearch = `${item.description} ${expenseCategoryLabels[item.category] ?? ''}`.toLowerCase().includes(search.toLowerCase());
+		    const matchesCategory = !categoryFilter || item.category === categoryFilter;
+		    return matchesSearch && matchesCategory;
+		  });
+
+	  const toggleExpenseReconciled = async (expense: Expense) => {
+	    await apiFetch(`/finance/expenses/${expense.id}/reconciled`, {
+	      method: 'PUT',
+	      token: user?.token,
+	      body: JSON.stringify({ reconciled: !expense.reconciled })
+	    });
+	    invalidateQueryCache(financeExpensesKey);
+	    invalidateQueryCache(financeDashboardKey);
+	    await expensesQuery.refetch();
+	  };
 
   return (
     <div className="page">
@@ -1059,9 +1621,24 @@ export const FinanceExpensesPage = () => {
           </div>
           <div className="grid-3">
             <label>Descricao<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></label>
-            <label>Categoria<input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></label>
-            <label>Valor<MoneyInput value={form.amount} onChange={(value) => setForm({ ...form, amount: value })} /></label>
-          </div>
+	            <label>
+	              Categoria
+	              <SelectField
+	                value={form.category}
+	                onChange={(value) => setForm({ ...form, category: value as ExpenseCategory })}
+	                options={expenseCategoryKeys.map((key) => ({ value: key, label: expenseCategoryLabels[key] }))}
+	              />
+	            </label>
+	            <label>Valor<MoneyInput value={form.amount} onChange={(value) => setForm({ ...form, amount: value })} /></label>
+	          </div>
+	          <label className="checkbox-row">
+	            <input
+	              type="checkbox"
+	              checked={form.recurring}
+	              onChange={(event) => setForm({ ...form, recurring: event.target.checked })}
+	            />
+	            Despesa recorrente do mes
+	          </label>
           <label>
             Metodo
             <SelectField
@@ -1094,25 +1671,43 @@ export const FinanceExpensesPage = () => {
             <span>De</span>
             <input type="date" className="finance-date-input" value={from} onChange={(e) => setFrom(e.target.value)} />
           </label>
-          <label className="finance-filter-field">
-            <span>Ate</span>
-            <input type="date" className="finance-date-input" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
-        </div>
+	          <label className="finance-filter-field">
+	            <span>Ate</span>
+	            <input type="date" className="finance-date-input" value={to} onChange={(e) => setTo(e.target.value)} />
+	          </label>
+	          <label className="finance-filter-field">
+	            <span>Categoria</span>
+	            <SelectField
+	              value={categoryFilter}
+	              onChange={setCategoryFilter}
+	              options={expenseCategoryKeys.map((key) => ({ value: key, label: expenseCategoryLabels[key] }))}
+	              placeholder="Todas"
+	            />
+	          </label>
+	        </div>
         <div className="table">
           {filtered.map((item) => (
             <div key={item.id} className="list-row">
               <div>
                 <strong>{item.description}</strong>
-                <span className="muted">
-                  {new Date(item.occurredAt).toLocaleString('pt-BR')} • {methodLabels[item.paymentMethod]} • {formatCurrency(item.netAmount)}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => navigate(`/app/financeiro/despesas/editar/${item.id}`)}
-              >
+	                <span className="muted">
+	                  {new Date(item.occurredAt).toLocaleString('pt-BR')} • {expenseCategoryLabels[item.category]} • {methodLabels[item.paymentMethod]} • {formatCurrency(item.netAmount)}
+	                </span>
+	                {item.recurring ? <span className="finance-list-tags">Recorrente</span> : null}
+	              </div>
+	              <button
+	                type="button"
+	                className="icon-button"
+	                aria-label={item.reconciled ? 'Marcar despesa como nao conferida' : 'Marcar despesa como conferida'}
+	                onClick={() => toggleExpenseReconciled(item)}
+	              >
+	                <span className="material-symbols-outlined" aria-hidden="true">{item.reconciled ? 'check_circle' : 'radio_button_unchecked'}</span>
+	              </button>
+	              <button
+	                type="button"
+	                className="icon-button"
+	                onClick={() => navigate(`/app/financeiro/despesas/editar/${item.id}`)}
+	              >
                 <span className="material-symbols-outlined" aria-hidden="true">edit</span>
               </button>
             </div>

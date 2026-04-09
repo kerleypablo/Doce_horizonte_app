@@ -273,7 +273,7 @@ export const ProductsPage = () => {
 
     const payload = {
       name: form.name,
-      recipeId: form.extraRecipes[0]?.recipeId,
+      recipeId: undefined,
       prepTimeMinutes: Number(form.prepTimeMinutes),
       notes: form.notes,
       unitsCount: Number(form.unitsCount),
@@ -601,21 +601,55 @@ export const ProductsPage = () => {
         return sum + (total / sub.yield) * item.quantity;
       }, 0);
 
+      visited.delete(recipe.id);
       return ingredientsCost + subCost;
+    };
+
+    const calcRecipePortionCost = (recipe: RecipeItem, quantity: number) => {
+      if (recipe.yield <= 0) return 0;
+      return (calcRecipeCost(recipe) / recipe.yield) * quantity;
+    };
+
+    const calcProductDirectCost = (product: ProductItem, visited = new Set<string>()): number => {
+      if (visited.has(product.id)) return 0;
+      visited.add(product.id);
+
+      const recipesCost = product.extraRecipes.reduce((sum, item) => {
+        const recipe = recipesMap.get(item.recipeId);
+        return recipe ? sum + calcRecipePortionCost(recipe, item.quantity) : sum;
+      }, 0);
+
+      const productsCost = product.extraProducts.reduce((sum, item) => {
+        const child = productsMap.get(item.productId);
+        if (!child) return sum;
+        const direct = calcProductDirectCost(child, visited);
+        const fallback = child.unitPrice > 0 ? child.unitPrice : child.salePrice;
+        return sum + (direct > 0 ? direct : fallback) * item.quantity;
+      }, 0);
+
+      const packagingCost = product.packagingInputs.reduce((sum, item) => {
+        const input = inputsMap.get(item.inputId);
+        if (!input) return sum;
+        const unitCost = input.packagePrice / input.packageSize;
+        const normalized = normalizeQuantity(item.quantity, item.unit, input.unit);
+        return sum + unitCost * normalized;
+      }, 0);
+
+      visited.delete(product.id);
+      return recipesCost + productsCost + packagingCost;
     };
 
     const extraRecipesCost = form.extraRecipes.reduce((sum, item) => {
       const recipe = recipesMap.get(item.recipeId);
-      if (!recipe || recipe.yield <= 0) return sum;
-      const total = calcRecipeCost(recipe);
-      return sum + (total / recipe.yield) * item.quantity;
+      return recipe ? sum + calcRecipePortionCost(recipe, item.quantity) : sum;
     }, 0);
 
     const extraProductsCost = form.extraProducts.reduce((sum, item) => {
       const product = productsMap.get(item.productId);
       if (!product) return sum;
-      const unit = product.unitPrice > 0 ? product.unitPrice : product.salePrice;
-      return sum + unit * item.quantity;
+      const direct = calcProductDirectCost(product);
+      const fallback = product.unitPrice > 0 ? product.unitPrice : product.salePrice;
+      return sum + (direct > 0 ? direct : fallback) * item.quantity;
     }, 0);
 
     const packagingCost = form.packagingInputs.reduce((sum, item) => {
@@ -640,10 +674,10 @@ export const ProductsPage = () => {
     const channel = settings?.salesChannels.find((c) => c.id === form.channelId);
     const variablePercentBase = (settings?.taxesPercent ?? 0) + (channel?.feePercent ?? 0) + (channel?.paymentFeePercent ?? 0);
     const feeFixed = channel?.feeFixed ?? 0;
-    const denominator = Math.max(1 - variablePercentBase / 100, 0.001);
     const baseCost = totalCost + feeFixed;
-    const markupMultiplier = 1 + (form.targetProfitPercent + form.extraPercent) / 100;
-    const totalPrice = (baseCost * markupMultiplier) / denominator;
+    const desiredMarginPercent = form.targetProfitPercent + form.extraPercent;
+    const denominator = Math.max(1 - (variablePercentBase + desiredMarginPercent) / 100, 0.001);
+    const totalPrice = baseCost / denominator;
     const unitPrice = totalPrice / (form.unitsCount || 1);
 
     return {
@@ -670,10 +704,8 @@ export const ProductsPage = () => {
     const totalPrice = value * (form.unitsCount || 1);
     if (totalPrice <= 0) return;
 
-    const denominator = Math.max(1 - costSummary.variablePercentBase / 100, 0.001);
-    const recoveredBase = totalPrice * denominator;
-    const markupPercent = (recoveredBase / Math.max(costSummary.baseCost, 0.0001) - 1) * 100;
-    const profitPercent = markupPercent - form.extraPercent;
+    const grossMarginPercent = (1 - costSummary.baseCost / totalPrice) * 100;
+    const profitPercent = grossMarginPercent - costSummary.variablePercentBase - form.extraPercent;
     setForm({ ...form, targetProfitPercent: Number(Math.max(profitPercent, 0).toFixed(2)) });
   };
 

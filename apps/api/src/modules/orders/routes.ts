@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
+import { calcProductPreview } from '../pricing/product-calc.js';
 
 const orderProductSchema = z.object({
   productId: z.string().min(1),
@@ -92,6 +93,110 @@ const parseSeqFromNumber = (value?: string | null) => {
 
 export const orderRoutes = async (app: FastifyInstance) => {
   const pedidosGuard = { preHandler: [app.authenticate, app.requireModule('pedidos')] };
+
+  const mapInput = (row: any) => ({
+    id: row.id,
+    companyId: row.company_id,
+    name: row.name,
+    brand: row.brand ?? undefined,
+    category: row.category,
+    unit: row.unit,
+    packageSize: Number(row.package_size),
+    packagePrice: Number(row.package_price),
+    tags: row.tags ?? [],
+    notes: row.notes ?? undefined
+  });
+
+  const mapRecipe = (row: any) => ({
+    id: row.id,
+    companyId: row.company_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    prepTimeMinutes: Number(row.prep_time_minutes ?? 0),
+    yield: Number(row.yield),
+    yieldUnit: row.yield_unit,
+    ingredients: row.ingredients ?? [],
+    subRecipes: row.sub_recipes ?? [],
+    tags: row.tags ?? [],
+    notes: row.notes ?? undefined
+  });
+
+  const mapProduct = (row: any) => ({
+    id: row.id,
+    companyId: row.company_id,
+    name: row.name,
+    recipeId: row.recipe_id ?? undefined,
+    prepTimeMinutes: Number(row.prep_time_minutes ?? 0),
+    notes: row.notes ?? undefined,
+    unitsCount: Number(row.units_count ?? 1),
+    targetProfitPercent: Number(row.target_profit_percent ?? 0),
+    extraPercent: Number(row.extra_percent ?? 0),
+    unitPrice: Number(row.unit_price ?? 0),
+    salePrice: Number(row.sale_price ?? 0),
+    channelId: row.channel_id ?? undefined,
+    extraRecipes: row.extra_recipes ?? [],
+    extraProducts: row.extra_products ?? [],
+    packagingInputs: row.packaging_inputs ?? []
+  });
+
+  const enrichProductsWithCostSnapshot = async (companyId: string, productsPayload: z.infer<typeof orderProductSchema>[]) => {
+    if (!productsPayload.length) return productsPayload;
+    const [{ data: companySettings }, { data: channels }, { data: inputs }, { data: recipes }, { data: products }] = await Promise.all([
+      supabaseAdmin.from('company_settings').select('*').eq('company_id', companyId).single(),
+      supabaseAdmin.from('sales_channels').select('*').eq('company_id', companyId),
+      supabaseAdmin.from('inputs').select('*').eq('company_id', companyId),
+      supabaseAdmin.from('recipes').select('*').eq('company_id', companyId),
+      supabaseAdmin.from('products').select('*').eq('company_id', companyId)
+    ]);
+
+    if (!companySettings) return productsPayload;
+
+    const mappedInputs = (inputs ?? []).map(mapInput);
+    const mappedRecipes = (recipes ?? []).map(mapRecipe);
+    const mappedProducts = (products ?? []).map(mapProduct);
+    const productsById = new Map((products ?? []).map((item) => [item.id, item]));
+
+    return productsPayload.map((item) => {
+      const productRow = productsById.get(item.productId);
+      if (!productRow) return item;
+      const product = mapProduct(productRow);
+      const channel = (channels ?? []).find((c) => c.id === product.channelId) ?? (channels ?? [])[0];
+      const preview = calcProductPreview({
+        unitsCount: product.unitsCount,
+        prepTimeMinutes: product.prepTimeMinutes,
+        targetProfitPercent: product.targetProfitPercent,
+        extraPercent: product.extraPercent,
+        extraRecipes: product.extraRecipes,
+        extraProducts: product.extraProducts,
+        packagingInputs: product.packagingInputs,
+        settings: {
+          overheadMethod: companySettings.overhead_method,
+          overheadPercent: companySettings.overhead_percent,
+          overheadPerUnit: companySettings.overhead_per_unit,
+          laborCostPerHour: companySettings.labor_cost_per_hour,
+          fixedCostPerHour: companySettings.fixed_cost_per_hour,
+          taxesPercent: companySettings.taxes_percent,
+          defaultProfitPercent: companySettings.default_profit_percent,
+          salesChannels: []
+        },
+        inputs: mappedInputs,
+        recipes: mappedRecipes,
+        products: mappedProducts,
+        feePercent: channel?.fee_percent ?? 0,
+        paymentFeePercent: channel?.payment_fee_percent ?? 0,
+        feeFixed: channel?.fee_fixed ?? 0
+      });
+      const estimatedUnitCost = preview.unitCost;
+      const estimatedTotalCost = estimatedUnitCost * item.quantity;
+      const estimatedProfitValue = (item.unitPrice * item.quantity) - estimatedTotalCost;
+      return {
+        ...item,
+        estimatedUnitCost,
+        estimatedTotalCost,
+        estimatedProfitValue
+      };
+    });
+  };
 
   const listQuerySchema = z.object({
     view: z.enum(['full', 'list']).optional()
@@ -260,8 +365,9 @@ export const orderRoutes = async (app: FastifyInstance) => {
       const customerSnapshot = data.customerSnapshot
         ? { ...data.customerSnapshot, deliveryAddress: data.deliveryAddress ?? undefined }
         : (data.deliveryAddress ? { deliveryAddress: data.deliveryAddress } : null);
-      const { data: created, error } = await supabaseAdmin
-        .from('orders')
+	      const enrichedProducts = await enrichProductsWithCostSnapshot(auth.companyId, data.products);
+	      const { data: created, error } = await supabaseAdmin
+	        .from('orders')
         .insert({
           company_id: auth.companyId,
           number,
@@ -272,7 +378,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
           delivery_type: data.deliveryType,
           delivery_date: data.deliveryDate ?? null,
           status: data.status,
-          products: data.products,
+	          products: enrichedProducts,
           additions: data.additions,
           discount_mode: data.discountMode,
           discount_value: data.discountValue,
@@ -301,9 +407,10 @@ export const orderRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
     const data = orderSchema.parse(request.body);
-    const customerSnapshot = data.customerSnapshot
-      ? { ...data.customerSnapshot, deliveryAddress: data.deliveryAddress ?? undefined }
-      : (data.deliveryAddress ? { deliveryAddress: data.deliveryAddress } : null);
+	    const customerSnapshot = data.customerSnapshot
+	      ? { ...data.customerSnapshot, deliveryAddress: data.deliveryAddress ?? undefined }
+	      : (data.deliveryAddress ? { deliveryAddress: data.deliveryAddress } : null);
+	    const enrichedProducts = await enrichProductsWithCostSnapshot(auth.companyId, data.products);
 
     const { data: updated, error } = await supabaseAdmin
       .from('orders')
@@ -315,7 +422,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
         delivery_type: data.deliveryType,
         delivery_date: data.deliveryDate ?? null,
         status: data.status,
-        products: data.products,
+	        products: enrichedProducts,
         additions: data.additions,
         discount_mode: data.discountMode,
         discount_value: data.discountValue,
