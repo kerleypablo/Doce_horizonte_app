@@ -423,7 +423,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
         .eq('company_id', auth.companyId),
       supabaseAdmin
         .from('financial_daily_closings')
-        .select('closing_date, checked_balance')
+        .select('account_id, closing_date, checked_balance')
         .eq('company_id', auth.companyId)
         .gte('closing_date', range.from)
         .lte('closing_date', range.to)
@@ -447,9 +447,14 @@ export const financeRoutes = async (app: FastifyInstance) => {
     ]);
 
     const historyMap = new Map<string, number>();
+    const closingKeys = new Set(
+      (closings ?? []).map((item) => `${String(item.account_id ?? '')}:${String(item.closing_date ?? '')}`)
+    );
+
     for (const account of accounts ?? []) {
       const balanceDate = String(account.balance_date ?? '');
       if (!balanceDate || balanceDate < range.from || balanceDate > range.to) continue;
+      if (closingKeys.has(`${String(account.id)}:${balanceDate}`)) continue;
       historyMap.set(balanceDate, (historyMap.get(balanceDate) ?? 0) + Number(account.balance_amount ?? 0));
     }
     for (const closing of closings ?? []) {
