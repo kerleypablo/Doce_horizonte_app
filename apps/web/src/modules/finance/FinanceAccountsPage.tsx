@@ -354,17 +354,6 @@ export const FinanceAccountsPage = () => {
                   </div>
                 </div>
               </article>
-
-              <article className="finance-dashboard-side-card">
-                <div className="finance-dashboard-list-head">
-                  <h4>Como funciona</h4>
-                </div>
-                <div className="finance-dashboard-notes">
-                  <p>O grafico mostra o saldo conferido salvo por dia. Quando nao houver fechamento, a tela usa apenas a base atual das contas.</p>
-                  <p>Use ajuste de entrada ou saida quando esquecer um lancamento e quiser alinhar o saldo real da conta.</p>
-                  <p>Esses ajustes entram no financeiro como movimentacao real e passam a aparecer em dashboard, vendas ou despesas.</p>
-                </div>
-              </article>
             </div>
           </div>
 
@@ -439,7 +428,7 @@ export const FinanceAccountsPage = () => {
             />
             <div className="table">
               {filtered.map((item) => (
-                <div key={item.id} className="list-row">
+                <div key={item.id} className="list-row finance-account-row">
                   <div>
                     <strong>{item.name}</strong>
                     <span className="muted">{accountTypeLabels[item.accountType]} • {item.institution || '-'} • {item.balanceDate} • {formatCurrency(item.balanceAmount)}</span>
@@ -473,31 +462,31 @@ export const FinanceAccountsPage = () => {
                 </div>
               ))}
             </div>
+          </div>
 
-            <div className="finance-dashboard-side-card finance-accounts-adjustment-history">
-              <div className="finance-dashboard-list-head">
-                <h4>Ajustes recentes</h4>
-              </div>
-              <div className="finance-dashboard-list">
-                {(accountsSummaryQuery.data?.adjustments ?? []).slice(0, 6).map((item) => (
-                  <div key={item.id} className="finance-dashboard-list-row">
-                    <div>
-                      <strong>{item.description}</strong>
-                      <span>{new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : 'Saida'}</span>
-                    </div>
-                    <strong>{formatCurrency(item.amount)}</strong>
+          <div className="panel finance-dashboard-panel finance-accounts-adjustment-panel">
+            <div className="finance-dashboard-list-head">
+              <h4>Ajustes recentes</h4>
+            </div>
+            <div className="finance-dashboard-list">
+              {(accountsSummaryQuery.data?.adjustments ?? []).slice(0, 6).map((item) => (
+                <div key={item.id} className="finance-dashboard-list-row">
+                  <div>
+                    <strong>{item.description}</strong>
+                    <span>{new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : 'Saida'}</span>
                   </div>
-                ))}
-                {(accountsSummaryQuery.data?.adjustments ?? []).length === 0 ? (
-                  <div className="finance-dashboard-list-row">
-                    <div>
-                      <strong>Sem ajustes no periodo</strong>
-                      <span>Os ajustes lancados aqui entram no relatorio e ajudam a alinhar o caixa.</span>
-                    </div>
-                    <strong>-</strong>
+                  <strong>{formatCurrency(item.amount)}</strong>
+                </div>
+              ))}
+              {(accountsSummaryQuery.data?.adjustments ?? []).length === 0 ? (
+                <div className="finance-dashboard-list-row">
+                  <div>
+                    <strong>Sem ajustes no periodo</strong>
+                    <span>-</span>
                   </div>
-                ) : null}
-              </div>
+                  <strong>-</strong>
+                </div>
+              ) : null}
             </div>
           </div>
         </>

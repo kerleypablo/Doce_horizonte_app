@@ -4002,12 +4002,15 @@ button:disabled {
   border: none;
   background: transparent;
   color: var(--muted);
-  padding: 11px 16px;
+  min-height: 44px;
+  min-width: max-content;
+  padding: 11px 18px;
   border-radius: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: 0.2s ease;
   text-align: center;
+  white-space: nowrap;
 }
 
 .finance-dashboard-tabs button.active {
@@ -4244,6 +4247,15 @@ button.finance-dashboard-action-link {
   gap: 10px;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.finance-account-row {
+  border-left: 4px solid color-mix(in srgb, var(--accent-strong) 72%, white);
+  border-radius: 18px;
+}
+
+.finance-accounts-adjustment-panel {
+  margin-top: 18px;
 }
 
 .finance-dashboard-side-card.accent {
