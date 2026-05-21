@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
@@ -34,6 +34,7 @@ export const FinanceExpensesPage = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
+  const initializedRouteRef = useRef<string | null>(null);
   const [form, setForm] = useState({
     accountId: '',
     occurredAt: `${todayDate}T09:00`,
@@ -48,7 +49,11 @@ export const FinanceExpensesPage = () => {
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
   useEffect(() => {
+    const routeKey = isCreateView ? 'create' : editingRouteId ? `edit:${editingRouteId}` : 'list';
+    if (initializedRouteRef.current === routeKey) return;
+
     if (isCreateView) {
+      initializedRouteRef.current = routeKey;
       setEditingId(null);
       setShowForm(true);
       setForm({
@@ -66,6 +71,7 @@ export const FinanceExpensesPage = () => {
     if (editingRouteId) {
       const current = (expensesQuery.data ?? []).find((item) => item.id === editingRouteId);
       if (!current) return;
+      initializedRouteRef.current = routeKey;
       setEditingId(current.id);
       setShowForm(true);
       setForm({
@@ -80,6 +86,7 @@ export const FinanceExpensesPage = () => {
       });
       return;
     }
+    initializedRouteRef.current = routeKey;
     setEditingId(null);
     setShowForm(false);
   }, [isCreateView, editingRouteId, expensesQuery.data]);

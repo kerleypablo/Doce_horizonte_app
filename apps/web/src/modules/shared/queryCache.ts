@@ -147,11 +147,15 @@ export const useCachedQuery = <T,>(
     const onFocus = () => {
       run(false).catch(() => undefined);
     };
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      run(false).catch(() => undefined);
+    };
     window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [enabled, refetchOnWindowFocus, run]);
 
