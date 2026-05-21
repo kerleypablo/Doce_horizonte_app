@@ -374,7 +374,7 @@ export const FinanceAccountsPage = () => {
             </div>
             <div className="finance-dashboard-list">
               {(accountsSummaryQuery.data?.adjustments ?? []).slice(0, 6).map((item) => (
-                <div key={item.id} className="finance-dashboard-list-row">
+                <div key={item.id} className="finance-dashboard-list-row finance-accounts-adjustment-row">
                   <div>
                     <strong>{item.description}</strong>
                     <span>{accountNameMap.get(item.accountId) ?? 'Conta'} • {new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : 'Saida'}</span>

@@ -4264,6 +4264,16 @@ button.finance-dashboard-action-link {
   gap: 8px;
   flex-wrap: nowrap;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.finance-accounts-adjustment-row {
+  align-items: center;
+}
+
+.finance-accounts-adjustment-row > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .finance-adjustment-mode-row {
@@ -4422,5 +4432,13 @@ button.finance-dashboard-action-link {
 
   .finance-dashboard-action-row {
     justify-content: flex-start;
+  }
+
+  .finance-accounts-adjustment-row {
+    align-items: center;
+  }
+
+  .finance-accounts-adjustment-row > div:first-child {
+    min-width: 0;
   }
 }
