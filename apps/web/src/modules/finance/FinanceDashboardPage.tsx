@@ -12,17 +12,28 @@ import {
   saleOriginLabels
 } from './constants.ts';
 import {
+  useExpenses,
   useFinanceDashboard,
-  useFinanceRange
+  useFinanceRange,
+  useManualSales
 } from './hooks.ts';
 import { formatCurrency, monthStart, todayDate } from './utils.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
+type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'setup';
+type RangePreset = 'today' | 'week' | 'month' | 'custom';
 
 const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
   { id: 'overview', label: 'Visao geral' },
   { id: 'cashflow', label: 'Fluxo' },
   { id: 'sources', label: 'Origens' }
+];
+
+const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'sales', label: 'Vendas' },
+  { id: 'expenses', label: 'Despesas' },
+  { id: 'setup', label: 'Cadastro' }
 ];
 
 const getThemeTokens = () => {
@@ -50,14 +61,174 @@ const getThemeTokens = () => {
   };
 };
 
+const buildColumnChart = ({
+  categories,
+  values,
+  theme,
+  name = 'Liquido'
+}: {
+  categories: string[];
+  values: number[];
+  theme: ReturnType<typeof getThemeTokens>;
+  name?: string;
+}): Highcharts.Options => ({
+  chart: {
+    type: 'column',
+    backgroundColor: 'transparent',
+    spacing: [8, 8, 0, 8],
+    height: 250
+  },
+  title: { text: undefined },
+  credits: { enabled: false },
+  legend: { enabled: false },
+  xAxis: {
+    categories,
+    lineColor: theme.border,
+    labels: { style: { color: theme.muted, fontSize: '11px' } }
+  },
+  yAxis: {
+    title: { text: undefined },
+    gridLineColor: theme.border,
+    labels: {
+      style: { color: theme.muted, fontSize: '11px' },
+      formatter() {
+        return formatCurrency(Number(this.value));
+      }
+    }
+  },
+  tooltip: {
+    backgroundColor: theme.bg,
+    borderColor: theme.border,
+    style: { color: theme.text },
+    pointFormatter() {
+      return `<span>${this.category}: <b>${formatCurrency(Number(this.y ?? 0))}</b></span>`;
+    }
+  },
+  plotOptions: {
+    column: {
+      borderRadius: 10,
+      borderWidth: 0,
+      pointPadding: 0.12,
+      groupPadding: 0.14
+    }
+  },
+  series: [
+    {
+      type: 'column',
+      name,
+      colorByPoint: true,
+      colors: [
+        theme.accentStrong,
+        theme.accent,
+        `${theme.accentStrong}CC`,
+        `${theme.accent}B3`,
+        `${theme.accentStrong}99`
+      ],
+      data: values
+    }
+  ]
+});
+
+const buildBarChart = ({
+  categories,
+  firstSeries,
+  secondSeries,
+  theme,
+  firstName,
+  secondName
+}: {
+  categories: string[];
+  firstSeries: number[];
+  secondSeries?: number[];
+  theme: ReturnType<typeof getThemeTokens>;
+  firstName: string;
+  secondName?: string;
+}): Highcharts.Options => ({
+  chart: {
+    type: 'bar',
+    backgroundColor: 'transparent',
+    spacing: [8, 8, 0, 8],
+    height: 260
+  },
+  title: { text: undefined },
+  credits: { enabled: false },
+  legend: { enabled: Boolean(secondSeries) },
+  xAxis: {
+    categories,
+    lineColor: theme.border,
+    labels: { style: { color: theme.muted, fontSize: '11px' } }
+  },
+  yAxis: {
+    title: { text: undefined },
+    gridLineColor: theme.border,
+    labels: {
+      style: { color: theme.muted, fontSize: '11px' },
+      formatter() {
+        return formatCurrency(Number(this.value));
+      }
+    }
+  },
+  tooltip: {
+    shared: true,
+    backgroundColor: theme.bg,
+    borderColor: theme.border,
+    style: { color: theme.text }
+  },
+  plotOptions: {
+    bar: {
+      borderRadius: 10,
+      borderWidth: 0,
+      pointPadding: 0.14,
+      groupPadding: 0.16
+    }
+  },
+  series: [
+    {
+      type: 'bar',
+      name: firstName,
+      color: theme.accentStrong,
+      data: firstSeries
+    },
+    ...(secondSeries
+      ? [
+          {
+            type: 'bar' as const,
+            name: secondName ?? 'Serie 2',
+            color: theme.accent,
+            data: secondSeries
+          }
+        ]
+      : [])
+  ]
+});
+
+const renderListRows = (
+  items: Array<{ title: string; subtitle: string; value: string }>
+) => (
+  <div className="finance-dashboard-list">
+    {items.map((item) => (
+      <div key={`${item.title}-${item.subtitle}`} className="finance-dashboard-list-row">
+        <div>
+          <strong>{item.title}</strong>
+          <span>{item.subtitle}</span>
+        </div>
+        <strong>{item.value}</strong>
+      </div>
+    ))}
+  </div>
+);
+
 export const FinanceDashboardPage = () => {
   const { user } = useAuth();
   const { from, to, setFrom, setTo } = useFinanceRange();
   const fromPickerRef = useRef<HTMLInputElement | null>(null);
   const toPickerRef = useRef<HTMLInputElement | null>(null);
-  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+  const [activeDashboardTab, setActiveDashboardTab] = useState<DashboardTab>('overview');
+  const [activeHomeTab, setActiveHomeTab] = useState<FinanceHomeTab>('dashboard');
 
   const dashboardQuery = useFinanceDashboard(user?.token, from, to);
+  const salesQuery = useManualSales(user?.token, from, to);
+  const expensesQuery = useExpenses(user?.token, from, to);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
@@ -100,12 +271,17 @@ export const FinanceDashboardPage = () => {
     setTo(todayDate);
   };
 
+  const activeRangePreset: RangePreset = useMemo(() => {
+    if (from === todayDate && to === todayDate) return 'today';
+    if (from === monthStart && to === todayDate) return 'month';
+    const start = new Date();
+    start.setDate(start.getDate() - 6);
+    const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    if (from === startDate && to === todayDate) return 'week';
+    return 'custom';
+  }, [from, to]);
+
   const headlineCards = [
-    {
-      label: 'Saldo projetado',
-      value: formatCurrency(data?.totals.projectedBalance ?? 0),
-      note: 'Caixa atual + entradas - despesas'
-    },
     {
       label: 'Resultado de caixa',
       value: formatCurrency(data?.totals.netResult ?? 0),
@@ -135,8 +311,8 @@ export const FinanceDashboardPage = () => {
       chart: {
         type: 'areaspline',
         backgroundColor: 'transparent',
-        spacing: [12, 8, 8, 8],
-        height: 300
+        spacing: [4, 8, 0, 8],
+        height: 290
       },
       title: { text: undefined },
       credits: { enabled: false },
@@ -191,154 +367,416 @@ export const FinanceDashboardPage = () => {
     };
   }, [data?.chart, theme.accent, theme.accentStrong, theme.bg, theme.border, theme.muted, theme.text]);
 
-  const methodChartOptions = useMemo<Highcharts.Options>(() => {
-    return {
-      chart: {
-        type: 'column',
-        backgroundColor: 'transparent',
-        spacing: [12, 8, 8, 8],
-        height: 280
-      },
-      title: { text: undefined },
-      credits: { enabled: false },
-      legend: { enabled: false },
-      xAxis: {
+  const methodChartOptions = useMemo(
+    () =>
+      buildColumnChart({
         categories: (data?.salesByMethod ?? []).map((item) => methodLabels[item.method]),
-        lineColor: theme.border,
-        labels: { style: { color: theme.muted, fontSize: '11px' } }
-      },
-      yAxis: {
-        title: { text: undefined },
-        gridLineColor: theme.border,
-        labels: {
-          style: { color: theme.muted, fontSize: '11px' },
-          formatter() {
-            return formatCurrency(Number(this.value));
-          }
-        }
-      },
-      tooltip: {
-        backgroundColor: theme.bg,
-        borderColor: theme.border,
-        style: { color: theme.text },
-        pointFormatter() {
-          return `<span>${this.category}: <b>${formatCurrency(Number(this.y ?? 0))}</b></span>`;
-        }
-      },
-      plotOptions: {
-        column: {
-          borderRadius: 10,
-          borderWidth: 0,
-          pointPadding: 0.12,
-          groupPadding: 0.14
-        }
-      },
-      series: [
-        {
-          type: 'column',
-          name: 'Liquido',
-          colorByPoint: true,
-          colors: [
-            theme.accentStrong,
-            theme.accent,
-            `${theme.accentStrong}CC`,
-            `${theme.accent}B3`
-          ],
-          data: (data?.salesByMethod ?? []).map((item) => item.net)
-        }
-      ]
-    };
-  }, [data?.salesByMethod, theme.accent, theme.accentStrong, theme.bg, theme.border, theme.muted, theme.text]);
+        values: (data?.salesByMethod ?? []).map((item) => item.net),
+        theme
+      }),
+    [data?.salesByMethod, theme]
+  );
 
-  const originChartOptions = useMemo<Highcharts.Options>(() => {
-    return {
-      chart: {
-        type: 'bar',
-        backgroundColor: 'transparent',
-        spacing: [12, 8, 8, 8],
-        height: 280
-      },
-      title: { text: undefined },
-      credits: { enabled: false },
-      legend: { enabled: false },
-      xAxis: {
+  const originChartOptions = useMemo(
+    () =>
+      buildBarChart({
         categories: (data?.salesByOrigin ?? []).map((item) => saleOriginLabels[item.origin]),
-        lineColor: theme.border,
-        labels: { style: { color: theme.muted, fontSize: '11px' } }
-      },
-      yAxis: {
-        title: { text: undefined },
-        gridLineColor: theme.border,
-        labels: {
-          style: { color: theme.muted, fontSize: '11px' },
-          formatter() {
-            return formatCurrency(Number(this.value));
-          }
-        }
-      },
-      tooltip: {
-        backgroundColor: theme.bg,
-        borderColor: theme.border,
-        style: { color: theme.text },
-        shared: true
-      },
-      plotOptions: {
-        bar: {
-          borderRadius: 10,
-          borderWidth: 0,
-          pointPadding: 0.14,
-          groupPadding: 0.16
-        }
-      },
-      series: [
-        {
-          type: 'bar',
-          name: 'Liquido',
-          color: theme.accentStrong,
-          data: (data?.salesByOrigin ?? []).map((item) => item.net)
-        },
-        {
-          type: 'bar',
-          name: 'Lucro estimado',
-          color: theme.accent,
-          data: (data?.salesByOrigin ?? []).map((item) => item.estimatedProfit)
-        }
-      ]
-    };
-  }, [data?.salesByOrigin, theme.accent, theme.accentStrong, theme.bg, theme.border, theme.muted, theme.text]);
+        firstSeries: (data?.salesByOrigin ?? []).map((item) => item.net),
+        secondSeries: (data?.salesByOrigin ?? []).map((item) => item.estimatedProfit),
+        theme,
+        firstName: 'Liquido',
+        secondName: 'Lucro estimado'
+      }),
+    [data?.salesByOrigin, theme]
+  );
 
-  const accountHighlights = (data?.accountsByType ?? [])
-    .filter((item) => item.balanceAmount > 0)
-    .sort((a, b) => b.balanceAmount - a.balanceAmount)
-    .slice(0, 4);
+  const expenseChartOptions = useMemo(
+    () =>
+      buildColumnChart({
+        categories: (data?.expensesByCategory ?? []).map((item) => expenseCategoryLabels[item.category]),
+        values: (data?.expensesByCategory ?? []).map((item) => item.amount),
+        theme,
+        name: 'Despesas'
+      }),
+    [data?.expensesByCategory, theme]
+  );
 
-  const expenseHighlights = (data?.expensesByCategory ?? [])
-    .filter((item) => item.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 4);
+  const accountsChartOptions = useMemo(
+    () =>
+      buildColumnChart({
+        categories: (data?.accountsByType ?? []).map((item) => accountTypeLabels[item.accountType]),
+        values: (data?.accountsByType ?? []).map((item) => item.balanceAmount),
+        theme,
+        name: 'Saldo'
+      }),
+    [data?.accountsByType, theme]
+  );
 
   const topOrigin = [...(data?.salesByOrigin ?? [])]
     .sort((a, b) => b.net - a.net)
     .find((item) => item.net > 0);
 
+  const salesHighlights = [...(salesQuery.data ?? [])]
+    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+    .slice(0, 4)
+    .map((item) => ({
+      title: item.description,
+      subtitle: `${new Date(item.occurredAt).toLocaleDateString('pt-BR')} • ${methodLabels[item.paymentMethod]}`,
+      value: formatCurrency(item.netAmount)
+    }));
+
+  const expenseHighlights = [...(expensesQuery.data ?? [])]
+    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+    .slice(0, 4)
+    .map((item) => ({
+      title: item.description,
+      subtitle: `${expenseCategoryLabels[item.category]} • ${methodLabels[item.paymentMethod]}`,
+      value: formatCurrency(item.netAmount)
+    }));
+
+  const accountHighlights = [...(data?.accountsByType ?? [])]
+    .sort((a, b) => b.balanceAmount - a.balanceAmount)
+    .slice(0, 4)
+    .map((item) => ({
+      title: accountTypeLabels[item.accountType],
+      subtitle: `${item.count} conta(s)`,
+      value: formatCurrency(item.balanceAmount)
+    }));
+
+  const dashboardSummaryContent = (
+    <>
+      <div className="finance-dashboard-content-grid">
+        <div className="finance-dashboard-main">
+          <article className="finance-dashboard-panel finance-dashboard-chart-panel">
+            <div className="finance-dashboard-tabs finance-dashboard-tabs-inner">
+              {dashboardTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={activeDashboardTab === tab.id ? 'active' : ''}
+                  onClick={() => setActiveDashboardTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeDashboardTab === 'overview' ? <HighchartsReact highcharts={Highcharts} options={flowChartOptions} /> : null}
+            {activeDashboardTab === 'cashflow' ? <HighchartsReact highcharts={Highcharts} options={flowChartOptions} /> : null}
+            {activeDashboardTab === 'sources' ? <HighchartsReact highcharts={Highcharts} options={originChartOptions} /> : null}
+          </article>
+
+          <div className="finance-dashboard-duo-grid">
+            <article className="finance-dashboard-panel">
+              <div className="finance-dashboard-panel-head compact">
+                <div>
+                  <span className="finance-dashboard-section-label">Formas de pagamento</span>
+                  <h3>Liquido por metodo</h3>
+                </div>
+              </div>
+              <HighchartsReact highcharts={Highcharts} options={methodChartOptions} />
+            </article>
+
+            <article className="finance-dashboard-panel">
+              <div className="finance-dashboard-panel-head compact">
+                <div>
+                  <span className="finance-dashboard-section-label">Leitura rapida</span>
+                  <h3>Resumo executivo</h3>
+                </div>
+              </div>
+              <div className="finance-dashboard-kpi-stack">
+                <div className="finance-dashboard-inline-metric">
+                  <span>Pedidos do app</span>
+                  <strong>{formatCurrency(data?.totals.ordersTotal ?? 0)}</strong>
+                </div>
+                <div className="finance-dashboard-inline-metric">
+                  <span>Vendas avulsas</span>
+                  <strong>{formatCurrency(data?.totals.manualSalesNet ?? 0)}</strong>
+                </div>
+                <div className="finance-dashboard-inline-metric">
+                  <span>Despesas</span>
+                  <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
+                </div>
+                <div className="finance-dashboard-inline-metric">
+                  <span>Taxas estimadas</span>
+                  <strong>{formatCurrency(data?.totals.manualSalesFees ?? 0)}</strong>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <aside className="finance-dashboard-side">
+          <article className="finance-dashboard-side-card accent">
+            <span className="finance-dashboard-section-label">Melhor canal</span>
+            <strong>{topOrigin ? saleOriginLabels[topOrigin.origin] : 'Sem dados'}</strong>
+            <small>
+              {topOrigin
+                ? `${formatCurrency(topOrigin.net)} liquidos no periodo`
+                : 'Ainda nao ha vendas suficientes no periodo selecionado'}
+            </small>
+          </article>
+
+          <article className="finance-dashboard-side-card">
+            <div className="finance-dashboard-list-head">
+              <h4>Saldos por tipo</h4>
+              <Link to="/app/financeiro/contas">Contas</Link>
+            </div>
+            {renderListRows(accountHighlights)}
+          </article>
+
+          <article className="finance-dashboard-side-card">
+            <div className="finance-dashboard-list-head">
+              <h4>Despesas dominantes</h4>
+              <Link to="/app/financeiro/despesas">Despesas</Link>
+            </div>
+            {renderListRows(
+              [...(data?.expensesByCategory ?? [])]
+                .sort((a, b) => b.amount - a.amount)
+                .slice(0, 4)
+                .map((item) => ({
+                  title: expenseCategoryLabels[item.category],
+                  subtitle: `${item.count} lancamento(s)`,
+                  value: formatCurrency(item.amount)
+                }))
+            )}
+          </article>
+        </aside>
+      </div>
+    </>
+  );
+
+  const salesContent = (
+    <div className="finance-dashboard-content-grid">
+      <div className="finance-dashboard-main">
+        <div className="finance-dashboard-headline-grid finance-dashboard-headline-grid-compact">
+          <article className="finance-dashboard-stat-card">
+            <span>Vendas avulsas liquidas</span>
+            <strong>{formatCurrency(data?.totals.manualSalesNet ?? 0)}</strong>
+            <small>{(salesQuery.data ?? []).length} lancamento(s) no periodo</small>
+          </article>
+          <article className="finance-dashboard-stat-card">
+            <span>Taxas estimadas</span>
+            <strong>{formatCurrency(data?.totals.manualSalesFees ?? 0)}</strong>
+            <small>Descontos por forma de pagamento</small>
+          </article>
+          <article className="finance-dashboard-stat-card">
+            <span>Lucro estimado</span>
+            <strong>{formatCurrency(data?.totals.manualSalesEstimatedProfit ?? 0)}</strong>
+            <small>Usando custo medio por origem</small>
+          </article>
+        </div>
+
+        <article className="finance-dashboard-panel">
+          <div className="finance-dashboard-panel-head compact">
+            <div>
+              <span className="finance-dashboard-section-label">Performance</span>
+              <h3>Origem e retorno das vendas</h3>
+            </div>
+            <div className="finance-dashboard-action-row">
+              <Link to="/app/financeiro/vendas-manuais" className="finance-dashboard-action-link">Ver vendas</Link>
+              <Link to="/app/financeiro/vendas-manuais/novo" className="finance-dashboard-action-link primary">Nova venda</Link>
+            </div>
+          </div>
+          <HighchartsReact highcharts={Highcharts} options={originChartOptions} />
+        </article>
+      </div>
+
+      <aside className="finance-dashboard-side">
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>Ultimas vendas</h4>
+          </div>
+          {renderListRows(salesHighlights)}
+        </article>
+
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>Liquido por metodo</h4>
+          </div>
+          <HighchartsReact highcharts={Highcharts} options={methodChartOptions} />
+        </article>
+      </aside>
+    </div>
+  );
+
+  const expensesContent = (
+    <div className="finance-dashboard-content-grid">
+      <div className="finance-dashboard-main">
+        <div className="finance-dashboard-headline-grid finance-dashboard-headline-grid-compact">
+          <article className="finance-dashboard-stat-card">
+            <span>Despesas liquidas</span>
+            <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
+            <small>{(expensesQuery.data ?? []).length} lancamento(s) no periodo</small>
+          </article>
+          <article className="finance-dashboard-stat-card">
+            <span>Recorrentes</span>
+            <strong>{formatCurrency(data?.totals.recurringExpensesNet ?? 0)}</strong>
+            <small>Compromissos recorrentes do mes</small>
+          </article>
+          <article className="finance-dashboard-stat-card">
+            <span>Maior categoria</span>
+            <strong>
+              {data?.expensesByCategory?.length
+                ? expenseCategoryLabels[[...(data.expensesByCategory ?? [])].sort((a, b) => b.amount - a.amount)[0]?.category]
+                : '-'}
+            </strong>
+            <small>Categoria que mais pressiona o caixa</small>
+          </article>
+        </div>
+
+        <article className="finance-dashboard-panel">
+          <div className="finance-dashboard-panel-head compact">
+            <div>
+              <span className="finance-dashboard-section-label">Saidas</span>
+              <h3>Despesas por categoria</h3>
+            </div>
+            <div className="finance-dashboard-action-row">
+              <Link to="/app/financeiro/despesas" className="finance-dashboard-action-link">Ver despesas</Link>
+              <Link to="/app/financeiro/despesas/novo" className="finance-dashboard-action-link primary">Nova despesa</Link>
+            </div>
+          </div>
+          <HighchartsReact highcharts={Highcharts} options={expenseChartOptions} />
+        </article>
+      </div>
+
+      <aside className="finance-dashboard-side">
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>Ultimas despesas</h4>
+          </div>
+          {renderListRows(expenseHighlights)}
+        </article>
+
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>Pontos de atencao</h4>
+          </div>
+          <div className="finance-dashboard-kpi-stack">
+            <div className="finance-dashboard-inline-metric">
+              <span>Saldo base</span>
+              <strong>{formatCurrency(data?.totals.accountsBalance ?? 0)}</strong>
+            </div>
+            <div className="finance-dashboard-inline-metric">
+              <span>Resultado de caixa</span>
+              <strong>{formatCurrency(data?.totals.netResult ?? 0)}</strong>
+            </div>
+            <div className="finance-dashboard-inline-metric">
+              <span>Diferenca conferida</span>
+              <strong>
+                {data?.totals.balanceDifference == null ? '-' : formatCurrency(data.totals.balanceDifference)}
+              </strong>
+            </div>
+          </div>
+        </article>
+      </aside>
+    </div>
+  );
+
+  const setupContent = (
+    <div className="finance-dashboard-content-grid">
+      <div className="finance-dashboard-main">
+        <div className="finance-dashboard-headline-grid finance-dashboard-headline-grid-compact">
+          <article className="finance-dashboard-stat-card">
+            <span>Saldo base em contas</span>
+            <strong>{formatCurrency(data?.totals.accountsBalance ?? 0)}</strong>
+            <small>Base inicial do caixa projetado</small>
+          </article>
+          <article className="finance-dashboard-stat-card">
+            <span>Tipos de conta ativos</span>
+            <strong>{(data?.accountsByType ?? []).filter((item) => item.count > 0).length}</strong>
+            <small>Banco, caixa, recebiveis e outros</small>
+          </article>
+          <article className="finance-dashboard-stat-card">
+            <span>Estrutura do financeiro</span>
+            <strong>Contas + regras</strong>
+            <small>Cadastros que sustentam os calculos</small>
+          </article>
+        </div>
+
+        <article className="finance-dashboard-panel">
+          <div className="finance-dashboard-panel-head compact">
+            <div>
+              <span className="finance-dashboard-section-label">Cadastros base</span>
+              <h3>Saldos por tipo de conta</h3>
+            </div>
+            <div className="finance-dashboard-action-row">
+              <Link to="/app/financeiro/contas" className="finance-dashboard-action-link">Contas</Link>
+              <Link to="/app/financeiro/regras" className="finance-dashboard-action-link primary">Taxas e regras</Link>
+            </div>
+          </div>
+          <HighchartsReact highcharts={Highcharts} options={accountsChartOptions} />
+        </article>
+      </div>
+
+      <aside className="finance-dashboard-side">
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>Contas organizadas</h4>
+          </div>
+          {renderListRows(accountHighlights)}
+        </article>
+
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>O que entra em cadastro</h4>
+          </div>
+          <div className="finance-dashboard-kpi-stack">
+            <div className="finance-dashboard-inline-metric">
+              <span>Contas bancarias e caixa</span>
+              <strong>Contas</strong>
+            </div>
+            <div className="finance-dashboard-inline-metric">
+              <span>Taxas por metodo</span>
+              <strong>Regras</strong>
+            </div>
+            <div className="finance-dashboard-inline-metric">
+              <span>Base para saldo projetado</span>
+              <strong>Saldo inicial</strong>
+            </div>
+          </div>
+        </article>
+      </aside>
+    </div>
+  );
+
+  const contentByHomeTab: Record<FinanceHomeTab, React.ReactNode> = {
+    dashboard: dashboardSummaryContent,
+    sales: salesContent,
+    expenses: expensesContent,
+    setup: setupContent
+  };
+
   return (
     <div className="page finance-page finance-dashboard-v2">
       <section className="finance-dashboard-shell">
+        <div className="finance-dashboard-tabs finance-dashboard-tabs-primary">
+          {financeHomeTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={activeHomeTab === tab.id ? 'active' : ''}
+              onClick={() => setActiveHomeTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <div className="finance-dashboard-hero">
-          <div className="finance-dashboard-greeting">
-            <span className="finance-dashboard-eyebrow">Financeiro</span>
-            <h2>Painel estrategico do caixa</h2>
-            <p>
-              A home agora fica focada em leitura: entradas, saidas, tendencia e origem do resultado
-              sem misturar cadastro ou manutencao operacional.
-            </p>
+          <div className="finance-dashboard-balance-card">
+            <span className="finance-dashboard-section-label">Saldo projetado</span>
+            <strong>{formatCurrency(data?.totals.projectedBalance ?? 0)}</strong>
+            <small>
+              {formatRangeDate(from)} ate {formatRangeDate(to)}
+            </small>
           </div>
 
           <div className="finance-dashboard-period">
             <div className="finance-dashboard-pill-row">
-              <button type="button" className="ghost" onClick={setTodayRange}>Hoje</button>
-              <button type="button" className="ghost" onClick={setLast7DaysRange}>7 dias</button>
-              <button type="button" className="finance-pill-active" onClick={setMonthRange}>Mes</button>
+              <button type="button" className={activeRangePreset === 'today' ? 'active' : 'ghost'} onClick={setTodayRange}>Hoje</button>
+              <button type="button" className={activeRangePreset === 'week' ? 'active' : 'ghost'} onClick={setLast7DaysRange}>7 dias</button>
+              <button type="button" className={activeRangePreset === 'month' ? 'active' : 'ghost'} onClick={setMonthRange}>Mes</button>
             </div>
 
             <div className="finance-dashboard-date-card">
@@ -358,19 +796,6 @@ export const FinanceDashboardPage = () => {
           </div>
         </div>
 
-        <div className="finance-dashboard-tabs">
-          {dashboardTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={activeTab === tab.id ? 'active' : ''}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
         <div className="finance-dashboard-headline-grid">
           {headlineCards.map((card) => (
             <article key={card.label} className="finance-dashboard-stat-card">
@@ -381,149 +806,7 @@ export const FinanceDashboardPage = () => {
           ))}
         </div>
 
-        <div className="finance-dashboard-content-grid">
-          <div className="finance-dashboard-main">
-            <article className="finance-dashboard-panel finance-dashboard-chart-panel">
-              <div className="finance-dashboard-panel-head">
-                <div>
-                  <span className="finance-dashboard-section-label">
-                    {activeTab === 'overview' ? 'Movimento consolidado' : activeTab === 'cashflow' ? 'Fluxo diario' : 'Canais e formas'}
-                  </span>
-                  <h3>
-                    {activeTab === 'overview' && 'Entradas e saidas no periodo'}
-                    {activeTab === 'cashflow' && 'Ritmo do caixa ao longo dos dias'}
-                    {activeTab === 'sources' && 'Onde o caixa esta performando melhor'}
-                  </h3>
-                </div>
-                <span className="finance-dashboard-panel-value">
-                  {formatCurrency(data?.totals.totalEntries ?? 0)}
-                </span>
-              </div>
-
-              {activeTab === 'overview' ? (
-                <HighchartsReact highcharts={Highcharts} options={flowChartOptions} />
-              ) : null}
-              {activeTab === 'cashflow' ? (
-                <HighchartsReact highcharts={Highcharts} options={flowChartOptions} />
-              ) : null}
-              {activeTab === 'sources' ? (
-                <HighchartsReact highcharts={Highcharts} options={originChartOptions} />
-              ) : null}
-            </article>
-
-            <div className="finance-dashboard-duo-grid">
-              <article className="finance-dashboard-panel">
-                <div className="finance-dashboard-panel-head compact">
-                  <div>
-                    <span className="finance-dashboard-section-label">Formas de pagamento</span>
-                    <h3>Liquido por metodo</h3>
-                  </div>
-                </div>
-                <HighchartsReact highcharts={Highcharts} options={methodChartOptions} />
-              </article>
-
-              <article className="finance-dashboard-panel">
-                <div className="finance-dashboard-panel-head compact">
-                  <div>
-                    <span className="finance-dashboard-section-label">Leitura rapida</span>
-                    <h3>Resumo executivo</h3>
-                  </div>
-                </div>
-
-                <div className="finance-dashboard-kpi-stack">
-                  <div className="finance-dashboard-inline-metric">
-                    <span>Pedidos do app</span>
-                    <strong>{formatCurrency(data?.totals.ordersTotal ?? 0)}</strong>
-                  </div>
-                  <div className="finance-dashboard-inline-metric">
-                    <span>Vendas avulsas</span>
-                    <strong>{formatCurrency(data?.totals.manualSalesNet ?? 0)}</strong>
-                  </div>
-                  <div className="finance-dashboard-inline-metric">
-                    <span>Despesas</span>
-                    <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
-                  </div>
-                  <div className="finance-dashboard-inline-metric">
-                    <span>Taxas estimadas</span>
-                    <strong>{formatCurrency(data?.totals.manualSalesFees ?? 0)}</strong>
-                  </div>
-                </div>
-              </article>
-            </div>
-          </div>
-
-          <aside className="finance-dashboard-side">
-            <article className="finance-dashboard-side-card accent">
-              <span className="finance-dashboard-section-label">Melhor canal</span>
-              <strong>{topOrigin ? saleOriginLabels[topOrigin.origin] : 'Sem dados'}</strong>
-              <small>
-                {topOrigin
-                  ? `${formatCurrency(topOrigin.net)} liquidos no periodo`
-                  : 'Ainda nao ha vendas suficientes no periodo selecionado'}
-              </small>
-            </article>
-
-            <article className="finance-dashboard-side-card">
-              <div className="finance-dashboard-list-head">
-                <h4>Saldos por tipo</h4>
-                <Link to="/app/financeiro/contas">Contas</Link>
-              </div>
-              <div className="finance-dashboard-list">
-                {accountHighlights.map((item) => (
-                  <div key={item.accountType} className="finance-dashboard-list-row">
-                    <div>
-                      <strong>{accountTypeLabels[item.accountType]}</strong>
-                      <span>{item.count} conta(s)</span>
-                    </div>
-                    <strong>{formatCurrency(item.balanceAmount)}</strong>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="finance-dashboard-side-card">
-              <div className="finance-dashboard-list-head">
-                <h4>Despesas dominantes</h4>
-                <Link to="/app/financeiro/despesas">Despesas</Link>
-              </div>
-              <div className="finance-dashboard-list">
-                {expenseHighlights.map((item) => (
-                  <div key={item.category} className="finance-dashboard-list-row">
-                    <div>
-                      <strong>{expenseCategoryLabels[item.category]}</strong>
-                      <span>{item.count} lancamento(s)</span>
-                    </div>
-                    <strong>{formatCurrency(item.amount)}</strong>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="finance-dashboard-side-card">
-              <div className="finance-dashboard-list-head">
-                <h4>Indicadores tecnicos</h4>
-              </div>
-              <div className="finance-dashboard-kpi-stack">
-                <div className="finance-dashboard-inline-metric">
-                  <span>Saldo base</span>
-                  <strong>{formatCurrency(data?.totals.accountsBalance ?? 0)}</strong>
-                </div>
-                <div className="finance-dashboard-inline-metric">
-                  <span>Despesas recorrentes</span>
-                  <strong>{formatCurrency(data?.totals.recurringExpensesNet ?? 0)}</strong>
-                </div>
-                <div className="finance-dashboard-inline-metric">
-                  <span>Custo vendas avulsas</span>
-                  <strong>{formatCurrency(data?.totals.manualSalesEstimatedCost ?? 0)}</strong>
-                </div>
-                <div className="finance-dashboard-inline-metric">
-                  <span>Custo pedidos</span>
-                  <strong>{formatCurrency(data?.totals.ordersEstimatedCost ?? 0)}</strong>
-                </div>
-              </div>
-            </article>
-          </aside>
-        </div>
+        {contentByHomeTab[activeHomeTab]}
       </section>
     </div>
   );
