@@ -4300,6 +4300,9 @@ button.finance-dashboard-action-link {
 }
 
 .finance-dashboard-side-card.accent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   background:
     linear-gradient(140deg, color-mix(in srgb, var(--accent-strong) 88%, white) 0%, color-mix(in srgb, var(--accent) 72%, white) 100%);
   color: white;
@@ -4312,10 +4315,19 @@ button.finance-dashboard-action-link {
 }
 
 .finance-dashboard-side-card.accent strong {
+  display: block;
   font-family: 'Space Grotesk', sans-serif;
   font-size: 28px;
   line-height: 1.04;
   margin: 6px 0;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.finance-dashboard-side-card.accent small {
+  display: block;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .finance-dashboard-list-head {

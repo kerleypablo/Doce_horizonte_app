@@ -23,7 +23,7 @@ import {
   useFinanceRange,
   useManualSales
 } from './hooks.ts';
-import { formatCurrency, monthStart, todayDate } from './utils.ts';
+import { formatCompactCurrency, formatCurrency, monthStart, todayDate } from './utils.ts';
 import type { OriginCostRule, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
@@ -101,17 +101,17 @@ const buildColumnChart = ({
     labels: {
       style: { color: theme.muted, fontSize: '11px' },
       formatter() {
-        return formatCurrency(Number(this.value));
+        return formatCompactCurrency(Number(this.value));
       }
     }
   },
   tooltip: {
     backgroundColor: theme.bg,
     borderColor: theme.border,
-    style: { color: theme.text },
-    pointFormatter() {
-      return `<span>${this.category}: <b>${formatCurrency(Number(this.y ?? 0))}</b></span>`;
-    }
+      style: { color: theme.text },
+      pointFormatter() {
+      return `<span>${this.category}: <b>${formatCompactCurrency(Number(this.y ?? 0))}</b></span>`;
+      }
   },
   plotOptions: {
     column: {
@@ -173,7 +173,7 @@ const buildBarChart = ({
     labels: {
       style: { color: theme.muted, fontSize: '11px' },
       formatter() {
-        return formatCurrency(Number(this.value));
+        return formatCompactCurrency(Number(this.value));
       }
     }
   },
@@ -377,7 +377,7 @@ export const FinanceDashboardPage = () => {
         labels: {
           style: { color: theme.muted, fontSize: '11px' },
           formatter() {
-            return formatCurrency(Number(this.value));
+            return formatCompactCurrency(Number(this.value));
           }
         }
       },
@@ -386,7 +386,9 @@ export const FinanceDashboardPage = () => {
         backgroundColor: theme.bg,
         borderColor: theme.border,
         style: { color: theme.text },
-        valuePrefix: 'R$ '
+        pointFormatter() {
+          return `<span style="color:${this.color}">\u25cf</span> ${this.series.name}: <b>${formatCompactCurrency(Number(this.y ?? 0))}</b><br/>`;
+        }
       },
       plotOptions: {
         series: {
