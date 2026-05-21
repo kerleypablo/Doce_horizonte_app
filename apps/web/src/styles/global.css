@@ -4262,6 +4262,31 @@ button.finance-dashboard-action-link {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.finance-adjustment-mode-row {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.finance-adjustment-mode-row button {
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-alt) 72%, white);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.finance-adjustment-mode-row button.active {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: white;
 }
 
 .finance-dashboard-side-card.accent {

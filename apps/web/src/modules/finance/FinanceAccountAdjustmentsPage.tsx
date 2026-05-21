@@ -17,11 +17,12 @@ import {
   saleOriginKeys,
   saleOriginLabels
 } from './constants.ts';
-import { useFinanceAccounts } from './hooks.ts';
+import { useFinanceAccounts, useFinanceAccountsSummary } from './hooks.ts';
 import { todayDate } from './utils.ts';
 import type { ExpenseCategory, PaymentMethod, SaleOrigin } from './types.ts';
 
 type AdjustmentKind = 'ENTRY' | 'EXIT';
+type AdjustmentMode = 'amount' | 'difference';
 
 const paymentMethodOptions: PaymentMethod[] = ['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'];
 
@@ -31,18 +32,21 @@ export const FinanceAccountAdjustmentsPage = () => {
   const params = useParams<{ kind?: AdjustmentKind; adjustmentId?: string }>();
   const [searchParams] = useSearchParams();
   const accountsQuery = useFinanceAccounts(user?.token);
+  const accountsSummaryQuery = useFinanceAccountsSummary(user?.token, todayDate, todayDate);
   const editingKind = params.kind ?? null;
   const editingId = params.adjustmentId ?? null;
   const isEditing = Boolean(editingKind && editingId);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
+    mode: 'amount' as AdjustmentMode,
     kind: 'EXIT' as AdjustmentKind,
     accountId: searchParams.get('accountId') ?? '',
     origin: 'outros' as SaleOrigin,
     occurredAt: `${todayDate}T12:00`,
     paymentMethod: 'PIX' as PaymentMethod,
     amount: 0,
+    targetBalance: 0,
     description: 'Ajuste de saldo',
     category: 'OUTROS' as ExpenseCategory,
     notes: ''
@@ -59,12 +63,14 @@ export const FinanceAccountAdjustmentsPage = () => {
     )
       .then((response) => {
         setForm({
+          mode: 'amount',
           kind: response.kind,
           accountId: response.item.accountId,
           origin: response.item.origin ?? 'outros',
           occurredAt: String(response.item.occurredAt).slice(0, 16),
           paymentMethod: response.item.paymentMethod,
           amount: response.item.amount,
+          targetBalance: 0,
           description: response.item.description,
           category: response.item.category ?? 'OUTROS',
           notes: response.item.notes ?? ''
@@ -85,11 +91,27 @@ export const FinanceAccountAdjustmentsPage = () => {
     [accountsQuery.data]
   );
 
+  const currentBalanceMap = useMemo(
+    () => new Map((accountsSummaryQuery.data?.accounts ?? []).map((item) => [item.accountId, item.currentBalance])),
+    [accountsSummaryQuery.data?.accounts]
+  );
+
+  const selectedCurrentBalance = currentBalanceMap.get(form.accountId) ?? 0;
+  const computedAmount = form.mode === 'difference' ? Math.abs(form.targetBalance - selectedCurrentBalance) : form.amount;
+  const computedKind = form.mode === 'difference'
+    ? form.targetBalance >= selectedCurrentBalance ? 'ENTRY' : 'EXIT'
+    : form.kind;
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.accountId) return;
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        kind: computedKind,
+        amount: computedAmount
+      };
       await apiFetch(
         isEditing
           ? `/finance/account-adjustments/${editingKind}/${editingId}`
@@ -97,7 +119,7 @@ export const FinanceAccountAdjustmentsPage = () => {
         {
           method: isEditing ? 'PUT' : 'POST',
           token: user?.token,
-          body: JSON.stringify(form)
+          body: JSON.stringify(payload)
         }
       );
       invalidateQueryCache(financeAccountsSummaryKey);
@@ -125,20 +147,55 @@ export const FinanceAccountAdjustmentsPage = () => {
               />
             </label>
             <label>
-              Tipo de ajuste
-              <SelectField
-                value={form.kind}
-                onChange={(value) => setForm((current) => ({ ...current, kind: value as AdjustmentKind }))}
-                options={[
-                  { value: 'EXIT', label: 'Saida' },
-                  { value: 'ENTRY', label: 'Entrada' }
-                ]}
-              />
+              Modo de lancamento
+              <div className="finance-adjustment-mode-row">
+                <button type="button" className={form.mode === 'amount' ? 'active' : ''} onClick={() => setForm((current) => ({ ...current, mode: 'amount' }))}>
+                  Por valor
+                </button>
+                <button type="button" className={form.mode === 'difference' ? 'active' : ''} onClick={() => setForm((current) => ({ ...current, mode: 'difference' }))}>
+                  Por diferenca
+                </button>
+              </div>
             </label>
           </div>
+          {form.mode === 'amount' ? (
+            <div className="grid-2">
+              <label>
+                Tipo de ajuste
+                <SelectField
+                  value={form.kind}
+                  onChange={(value) => setForm((current) => ({ ...current, kind: value as AdjustmentKind }))}
+                  options={[
+                    { value: 'EXIT', label: 'Saida' },
+                    { value: 'ENTRY', label: 'Entrada' }
+                  ]}
+                />
+              </label>
+              <label>
+                Valor
+                <MoneyInput value={form.amount} onChange={(value) => setForm((current) => ({ ...current, amount: value }))} />
+              </label>
+            </div>
+          ) : (
+            <div className="grid-2">
+              <label>
+                Saldo atual da conta
+                <MoneyInput value={selectedCurrentBalance} onChange={() => undefined} />
+              </label>
+              <label>
+                Saldo real no banco
+                <MoneyInput value={form.targetBalance} onChange={(value) => setForm((current) => ({ ...current, targetBalance: value }))} />
+              </label>
+            </div>
+          )}
           <div className="grid-2">
             <label>Data e hora<input type="datetime-local" value={form.occurredAt} onChange={(event) => setForm((current) => ({ ...current, occurredAt: event.target.value }))} required /></label>
-            <label>Valor<MoneyInput value={form.amount} onChange={(value) => setForm((current) => ({ ...current, amount: value }))} /></label>
+            {form.mode === 'difference' ? (
+              <label>
+                Ajuste calculado
+                <MoneyInput value={computedAmount} onChange={() => undefined} />
+              </label>
+            ) : <div />}
           </div>
           <div className="grid-2">
             <label>
@@ -149,7 +206,7 @@ export const FinanceAccountAdjustmentsPage = () => {
                 options={paymentMethodOptions.map((method) => ({ value: method, label: methodLabels[method] }))}
               />
             </label>
-            {form.kind === 'ENTRY' ? (
+            {(form.mode === 'difference' ? computedKind : form.kind) === 'ENTRY' ? (
               <label>
                 Tipo da entrada
                 <SelectField
@@ -159,7 +216,7 @@ export const FinanceAccountAdjustmentsPage = () => {
                 />
               </label>
             ) : null}
-            {form.kind === 'EXIT' ? (
+            {(form.mode === 'difference' ? computedKind : form.kind) === 'EXIT' ? (
               <label>
                 Categoria
                 <SelectField
@@ -172,9 +229,15 @@ export const FinanceAccountAdjustmentsPage = () => {
           </div>
           <label>Descricao<input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} required /></label>
           <label>Observacoes<input value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label>
+          {form.mode === 'difference' ? (
+            <div className="finance-dashboard-inline-metric">
+              <span>Tipo calculado</span>
+              <strong>{computedKind === 'ENTRY' ? 'Entrada' : 'Saida'}</strong>
+            </div>
+          ) : null}
           <div className="actions">
             <button type="button" className="ghost" onClick={() => navigate('/app/financeiro/contas')}>Cancelar</button>
-            <button type="submit" disabled={saving || loading || !form.accountId || form.amount <= 0}>
+            <button type="submit" disabled={saving || loading || !form.accountId || computedAmount <= 0}>
               {saving ? 'Salvando...' : isEditing ? 'Salvar ajuste' : 'Cadastrar ajuste'}
             </button>
           </div>

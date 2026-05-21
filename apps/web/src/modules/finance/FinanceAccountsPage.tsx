@@ -208,6 +208,7 @@ export const FinanceAccountsPage = () => {
 
   const theme = getThemeTokens();
   const currentBalanceMap = new Map((accountsSummaryQuery.data?.accounts ?? []).map((item) => [item.accountId, item.currentBalance]));
+  const accountNameMap = new Map((accountsQuery.data ?? []).map((item) => [item.id, item.name]));
 
   const historyChartOptions = useMemo<Highcharts.Options>(() => ({
     chart: {
@@ -376,7 +377,7 @@ export const FinanceAccountsPage = () => {
                 <div key={item.id} className="finance-dashboard-list-row">
                   <div>
                     <strong>{item.description}</strong>
-                    <span>{new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : 'Saida'}</span>
+                    <span>{accountNameMap.get(item.accountId) ?? 'Conta'} • {new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : 'Saida'}</span>
                   </div>
                   <div className="finance-accounts-adjustment-actions">
                     <strong>{formatCurrency(item.amount)}</strong>
