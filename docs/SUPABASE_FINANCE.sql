@@ -35,7 +35,6 @@ create table if not exists financial_manual_sales (
   amount numeric not null check (amount > 0),
   products jsonb not null default '[]',
   tags text[] not null default '{}',
-  reconciled boolean not null default false,
   notes text,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
@@ -50,7 +49,6 @@ create table if not exists financial_expenses (
   category text,
   payment_method text not null check (payment_method in ('PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER')),
   amount numeric not null check (amount > 0),
-  reconciled boolean not null default false,
   recurring boolean not null default false,
   notes text,
   created_at timestamp with time zone not null default now(),
@@ -69,6 +67,19 @@ create table if not exists financial_daily_closings (
   unique (company_id, account_id, closing_date)
 );
 
+create table if not exists financial_reconciliation_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id) on delete cascade,
+  account_id uuid not null references financial_accounts(id) on delete cascade,
+  adjustment_date date not null,
+  previous_balance numeric not null default 0,
+  checked_balance numeric not null default 0,
+  delta_amount numeric not null default 0,
+  notes text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
 create table if not exists financial_origin_cost_rules (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id) on delete cascade,
@@ -83,10 +94,10 @@ alter table financial_accounts add column if not exists account_type text not nu
 alter table financial_daily_closings add column if not exists account_id uuid references financial_accounts(id) on delete cascade;
 alter table financial_manual_sales add column if not exists tags text[] not null default '{}';
 alter table financial_manual_sales add column if not exists products jsonb not null default '[]';
-alter table financial_manual_sales add column if not exists reconciled boolean not null default false;
-alter table financial_expenses add column if not exists reconciled boolean not null default false;
 alter table financial_expenses add column if not exists recurring boolean not null default false;
 alter table financial_expenses alter column category set default 'OUTROS';
+alter table financial_manual_sales drop column if exists reconciled;
+alter table financial_expenses drop column if exists reconciled;
 update financial_expenses set category = 'OUTROS' where category is null or category = '';
 
 create index if not exists financial_accounts_company_idx on financial_accounts(company_id);
@@ -98,6 +109,7 @@ create index if not exists financial_expenses_company_category_idx on financial_
 create index if not exists financial_daily_closings_company_date_idx on financial_daily_closings(company_id, closing_date);
 create index if not exists financial_daily_closings_company_account_date_idx on financial_daily_closings(company_id, account_id, closing_date);
 create index if not exists financial_origin_cost_rules_company_idx on financial_origin_cost_rules(company_id);
+create index if not exists financial_reconciliation_adjustments_company_account_date_idx on financial_reconciliation_adjustments(company_id, account_id, adjustment_date);
 
 insert into financial_method_rules (company_id, method, mode, value)
 select c.id, m.method, 'NONE', 0

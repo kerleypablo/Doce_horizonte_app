@@ -49,6 +49,12 @@ const dailyClosingSchema = z.object({
   notes: z.string().optional()
 });
 
+const reconciliationAdjustmentSchema = z.object({
+  date: z.string().min(1),
+  checkedBalance: z.number(),
+  notes: z.string().optional()
+});
+
 const methodRuleSchema = z.object({
   method: paymentMethodSchema,
   mode: ruleModeSchema,
@@ -297,6 +303,18 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	    updatedAt: row.updated_at
 	  }) : null;
 
+  const mapReconciliationAdjustment = (row: any) => row ? ({
+    id: row.id,
+    accountId: row.account_id,
+    date: row.adjustment_date,
+    previousBalance: Number(row.previous_balance ?? 0),
+    checkedBalance: Number(row.checked_balance ?? 0),
+    deltaAmount: Number(row.delta_amount ?? 0),
+    notes: row.notes ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }) : null;
+
 	  const getRules = async (companyId: string): Promise<MethodRule[]> => {
     const { data, error } = await supabaseAdmin
       .from('financial_method_rules')
@@ -412,6 +430,85 @@ export const financeRoutes = async (app: FastifyInstance) => {
       .single();
     if (error) return reply.status(400).send({ message: 'Erro ao atualizar conta', detail: error.message });
     return reply.send(mapAccount(data));
+  });
+
+  app.post('/finance/accounts/:id/reconciliation-adjustments', financeGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const params = request.params as { id: string };
+    const body = reconciliationAdjustmentSchema.parse(request.body);
+
+    const { data: account, error: accountError } = await supabaseAdmin
+      .from('financial_accounts')
+      .select('*')
+      .eq('id', params.id)
+      .eq('company_id', auth.companyId)
+      .single();
+
+    if (accountError || !account) {
+      return reply.status(404).send({ message: 'Conta nao encontrada', detail: accountError?.message });
+    }
+
+    const previousBalance = Number(account.balance_amount ?? 0);
+    const checkedBalance = Number(body.checkedBalance ?? 0);
+    const deltaAmount = checkedBalance - previousBalance;
+    const nowIso = new Date().toISOString();
+
+    const { data: closingData, error: closingError } = await supabaseAdmin
+      .from('financial_daily_closings')
+      .upsert({
+        company_id: auth.companyId,
+        account_id: params.id,
+        closing_date: body.date,
+        checked_balance: checkedBalance,
+        notes: body.notes ?? null,
+        updated_at: nowIso
+      }, { onConflict: 'company_id,account_id,closing_date' })
+      .select('*')
+      .single();
+
+    if (closingError) {
+      return reply.status(400).send({ message: 'Erro ao salvar fechamento antes da conciliacao', detail: closingError.message });
+    }
+
+    const { data: updatedAccount, error: updateError } = await supabaseAdmin
+      .from('financial_accounts')
+      .update({
+        balance_date: body.date,
+        balance_amount: checkedBalance,
+        updated_at: nowIso
+      })
+      .eq('id', params.id)
+      .eq('company_id', auth.companyId)
+      .select('*')
+      .single();
+
+    if (updateError) {
+      return reply.status(400).send({ message: 'Erro ao atualizar saldo base da conta', detail: updateError.message });
+    }
+
+    const { data: adjustmentData, error: adjustmentError } = await supabaseAdmin
+      .from('financial_reconciliation_adjustments')
+      .insert({
+        company_id: auth.companyId,
+        account_id: params.id,
+        adjustment_date: body.date,
+        previous_balance: previousBalance,
+        checked_balance: checkedBalance,
+        delta_amount: deltaAmount,
+        notes: body.notes ?? null
+      })
+      .select('*')
+      .single();
+
+    if (adjustmentError) {
+      return reply.status(400).send({ message: 'Erro ao registrar ajuste de conciliacao', detail: adjustmentError.message });
+    }
+
+    return reply.send({
+      account: mapAccount(updatedAccount),
+      closing: mapClosing(closingData),
+      adjustment: mapReconciliationAdjustment(adjustmentData)
+    });
   });
 
 	  app.delete('/finance/accounts/:id', financeGuard, async (request, reply) => {
