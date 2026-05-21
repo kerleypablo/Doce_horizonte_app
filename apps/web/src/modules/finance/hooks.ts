@@ -3,6 +3,7 @@ import { apiFetch } from '../shared/api.ts';
 import { useCachedQuery } from '../shared/queryCache.ts';
 import {
   financeAccountsKey,
+  financeAccountsSummaryKey,
   financeDashboardKey,
   financeExpensesKey,
   financeManualSalesKey,
@@ -14,6 +15,7 @@ import type {
   DashboardData,
   Expense,
   FinanceAccount,
+  FinanceAccountsSummary,
   FinanceProduct,
   ManualSale,
   MethodRule,
@@ -38,6 +40,13 @@ export const useFinanceAccounts = (token?: string) =>
     financeAccountsKey,
     () => apiFetch<FinanceAccount[]>('/finance/accounts', { token }),
     { enabled: Boolean(token), staleTime: 45_000 }
+  );
+
+export const useFinanceAccountsSummary = (token?: string, from?: string, to?: string) =>
+  useCachedQuery(
+    `${financeAccountsSummaryKey}:${from ?? ''}:${to ?? ''}`,
+    () => apiFetch<FinanceAccountsSummary>(`/finance/accounts/summary?from=${from}&to=${to}`, { token }),
+    { enabled: Boolean(token && from && to), staleTime: 30_000 }
   );
 
 export const useFinanceRules = (token?: string) =>

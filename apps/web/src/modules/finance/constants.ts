@@ -8,6 +8,7 @@ import type {
 
 export const financeDashboardKey = 'finance-dashboard';
 export const financeAccountsKey = 'finance-accounts';
+export const financeAccountsSummaryKey = 'finance-accounts-summary';
 export const financeRulesKey = 'finance-rules';
 export const financeOriginCostRulesKey = 'finance-origin-cost-rules';
 export const financeManualSalesKey = 'finance-manual-sales';

@@ -23,6 +23,29 @@ export type FinanceAccount = {
   notes?: string;
 };
 
+export type FinanceAccountDailyBalance = {
+  date: string;
+  totalBalance: number;
+};
+
+export type FinanceAccountAdjustment = {
+  id: string;
+  accountId: string;
+  kind: 'ENTRY' | 'EXIT';
+  occurredAt: string;
+  description: string;
+  paymentMethod: PaymentMethod;
+  amount: number;
+  category?: ExpenseCategory;
+  notes?: string;
+};
+
+export type FinanceAccountsSummary = {
+  range: { from: string; to: string };
+  history: FinanceAccountDailyBalance[];
+  adjustments: FinanceAccountAdjustment[];
+};
+
 export type MethodRule = {
   method: PaymentMethod;
   mode: RuleMode;

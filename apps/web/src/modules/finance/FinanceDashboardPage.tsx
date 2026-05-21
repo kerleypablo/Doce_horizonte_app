@@ -5,12 +5,9 @@ import HighchartsReact from 'highcharts-react-official';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
-import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
-import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { invalidateQueryCache } from '../shared/queryCache.ts';
 import { FinanceAccessBlocked } from './FinanceShared.tsx';
 import {
-  financeAccountsKey,
   financeDashboardKey,
   financeOriginCostRulesKey,
   accountTypeLabels,
@@ -26,7 +23,7 @@ import {
   useManualSales
 } from './hooks.ts';
 import { formatCurrency, monthStart, todayDate } from './utils.ts';
-import type { AccountClosing, OriginCostRule, SaleOrigin } from './types.ts';
+import type { OriginCostRule, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
 type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'setup' | 'costs';
@@ -242,10 +239,6 @@ export const FinanceDashboardPage = () => {
   const expensesQuery = useExpenses(user?.token, from, to);
   const [originRules, setOriginRules] = useState<OriginCostRule[]>([]);
   const [originRulesSaving, setOriginRulesSaving] = useState(false);
-  const [accountClosingForms, setAccountClosingForms] = useState<Record<string, { checkedBalance: number; notes: string }>>({});
-  const [closingSavingByAccount, setClosingSavingByAccount] = useState<Record<string, boolean>>({});
-  const [reconcilingAccount, setReconcilingAccount] = useState<AccountClosing | null>(null);
-  const [reconciliationSaving, setReconciliationSaving] = useState(false);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
@@ -257,21 +250,6 @@ export const FinanceDashboardPage = () => {
       setOriginRules(originCostRulesQuery.data.rules);
     }
   }, [originCostRulesQuery.data]);
-
-  useEffect(() => {
-    if (!dashboardQuery.data?.accountClosings) return;
-    setAccountClosingForms((current) => {
-      const next = { ...current };
-      for (const item of dashboardQuery.data.accountClosings) {
-        if (next[item.accountId]) continue;
-        next[item.accountId] = {
-          checkedBalance: item.checkedBalance ?? item.projectedBalance,
-          notes: item.notes ?? ''
-        };
-      }
-      return next;
-    });
-  }, [dashboardQuery.data]);
 
   const openPicker = (ref: React.RefObject<HTMLInputElement>) => {
     const input = ref.current;
@@ -347,85 +325,26 @@ export const FinanceDashboardPage = () => {
     }
   };
 
-  const updateAccountClosingForm = (accountId: string, patch: Partial<{ checkedBalance: number; notes: string }>) => {
-    setAccountClosingForms((current) => ({
-      ...current,
-      [accountId]: {
-        checkedBalance: current[accountId]?.checkedBalance ?? 0,
-        notes: current[accountId]?.notes ?? '',
-        ...patch
-      }
-    }));
-  };
-
-  const saveDailyClosing = async (accountClosing: AccountClosing) => {
-    setClosingSavingByAccount((current) => ({ ...current, [accountClosing.accountId]: true }));
-    const form = accountClosingForms[accountClosing.accountId] ?? {
-      checkedBalance: accountClosing.checkedBalance ?? accountClosing.projectedBalance,
-      notes: accountClosing.notes ?? ''
-    };
-    try {
-      await apiFetch('/finance/daily-closing', {
-        method: 'PUT',
-        token: user?.token,
-        body: JSON.stringify({
-          accountId: accountClosing.accountId,
-          date: to,
-          checkedBalance: form.checkedBalance,
-          notes: form.notes
-        })
-      });
-      invalidateQueryCache(financeDashboardKey);
-      await dashboardQuery.refetch();
-    } finally {
-      setClosingSavingByAccount((current) => ({ ...current, [accountClosing.accountId]: false }));
-    }
-  };
-
-  const applyReconciliationAdjustment = async () => {
-    if (!reconcilingAccount || reconciliationSaving) return;
-    const form = accountClosingForms[reconcilingAccount.accountId] ?? {
-      checkedBalance: reconcilingAccount.checkedBalance ?? reconcilingAccount.projectedBalance,
-      notes: reconcilingAccount.notes ?? ''
-    };
-    setReconciliationSaving(true);
-    try {
-      await apiFetch(`/finance/accounts/${reconcilingAccount.accountId}/reconciliation-adjustments`, {
-        method: 'POST',
-        token: user?.token,
-        body: JSON.stringify({
-          date: to,
-          checkedBalance: form.checkedBalance,
-          notes: form.notes
-        })
-      });
-      invalidateQueryCache(financeAccountsKey);
-      invalidateQueryCache(financeDashboardKey);
-      await dashboardQuery.refetch();
-      setReconcilingAccount(null);
-    } finally {
-      setReconciliationSaving(false);
-    }
-  };
-
   const headlineCards = [
     {
-      label: 'Resultado de caixa',
+      label: 'Entradas no periodo',
+      value: formatCurrency(data?.totals.totalEntries ?? 0),
+      note: 'Pedidos do app + vendas avulsas'
+    },
+    {
+      label: 'Saidas no periodo',
+      value: formatCurrency(data?.totals.expensesNet ?? 0),
+      note: 'Despesas liquidas registradas'
+    },
+    {
+      label: 'Resultado do periodo',
       value: formatCurrency(data?.totals.netResult ?? 0),
-      note: 'Entradas liquidas do periodo'
+      note: 'Entradas menos saidas'
     },
     {
-      label: 'Lucro estimado',
-      value: formatCurrency(data?.totals.estimatedNetProfit ?? 0),
-      note: 'Pedidos + vendas avulsas - custos - despesas'
-    },
-    {
-      label: 'Diferenca conferida',
-      value:
-        data?.totals.balanceDifference === null || data?.totals.balanceDifference === undefined
-          ? '-'
-          : formatCurrency(data.totals.balanceDifference),
-      note: 'Comparacao com fechamento real'
+      label: 'Pedidos do app',
+      value: formatCurrency(data?.totals.ordersTotal ?? 0),
+      note: `${data?.totals.ordersCount ?? 0} pedido(s) no periodo`
     }
   ];
 
@@ -636,23 +555,32 @@ export const FinanceDashboardPage = () => {
         </div>
 
         <aside className="finance-dashboard-side">
-          <article className="finance-dashboard-side-card accent">
-            <span className="finance-dashboard-section-label">Melhor canal</span>
-            <strong>{topOrigin ? saleOriginLabels[topOrigin.origin] : 'Sem dados'}</strong>
+        <article className="finance-dashboard-side-card accent">
+          <span className="finance-dashboard-section-label">Melhor canal</span>
+          <strong>{topOrigin ? saleOriginLabels[topOrigin.origin] : 'Sem dados'}</strong>
             <small>
               {topOrigin
                 ? `${formatCurrency(topOrigin.net)} liquidos no periodo`
                 : 'Ainda nao ha vendas suficientes no periodo selecionado'}
             </small>
-          </article>
+        </article>
 
-          <article className="finance-dashboard-side-card">
-            <div className="finance-dashboard-list-head">
-              <h4>Saldos por tipo</h4>
-              <Link to="/app/financeiro/contas">Contas</Link>
-            </div>
-            {renderListRows(accountHighlights)}
-          </article>
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>Entradas por origem</h4>
+            <Link to="/app/financeiro/vendas-manuais">Vendas</Link>
+          </div>
+          {renderListRows(
+            [...(data?.salesByOrigin ?? [])]
+              .sort((a, b) => b.net - a.net)
+              .slice(0, 4)
+              .map((item) => ({
+                title: saleOriginLabels[item.origin],
+                subtitle: `${item.count} venda(s)`,
+                value: formatCurrency(item.net)
+              }))
+          )}
+        </article>
 
           <article className="finance-dashboard-side-card">
             <div className="finance-dashboard-list-head">
@@ -784,81 +712,14 @@ export const FinanceDashboardPage = () => {
         <article className="finance-dashboard-panel">
           <div className="finance-dashboard-panel-head compact">
             <div>
-              <span className="finance-dashboard-section-label">Fechamento diario</span>
-              <h3>Conferencia por conta</h3>
+              <span className="finance-dashboard-section-label">Operacao das contas</span>
+              <h3>Onde controlar saldo e ajustes</h3>
             </div>
           </div>
-          <div className="finance-dashboard-account-closing-list">
-            {(data?.accountClosings ?? []).map((item) => {
-              const form = accountClosingForms[item.accountId] ?? {
-                checkedBalance: item.checkedBalance ?? item.projectedBalance,
-                notes: item.notes ?? ''
-              };
-              const saving = closingSavingByAccount[item.accountId] ?? false;
-              return (
-                <div key={item.accountId} className="finance-dashboard-account-closing-card">
-                  <div className="finance-dashboard-account-closing-head">
-                    <div>
-                      <strong>{item.accountName}</strong>
-                      <span>{accountTypeLabels[item.accountType]}</span>
-                    </div>
-                    <div className="finance-dashboard-account-closing-metrics">
-                    <div>
-                      <small>Saldo base</small>
-                      <strong>{formatCurrency(item.baseBalance)}</strong>
-                    </div>
-                    <div>
-                      <small>Data base</small>
-                      <strong>{item.balanceDate ? formatRangeDate(item.balanceDate) : '-'}</strong>
-                    </div>
-                    <div>
-                      <small>Projetado</small>
-                      <strong>{formatCurrency(item.projectedBalance)}</strong>
-                    </div>
-                    <div>
-                        <small>Diferenca</small>
-                        <strong>{item.difference == null ? '-' : formatCurrency(item.difference)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="finance-dashboard-form-grid">
-                    <label>
-                      Saldo conferido
-                      <MoneyInput
-                        value={form.checkedBalance}
-                        onChange={(value) => updateAccountClosingForm(item.accountId, { checkedBalance: value })}
-                      />
-                    </label>
-                    <label>
-                      Observacoes
-                      <input
-                        value={form.notes}
-                        onChange={(event) => updateAccountClosingForm(item.accountId, { notes: event.target.value })}
-                        placeholder="Ex: extrato conferido"
-                      />
-                    </label>
-                  </div>
-                  <div className="finance-dashboard-action-row finance-dashboard-action-row-left">
-                    <button
-                      type="button"
-                      className="finance-dashboard-action-link primary"
-                      onClick={() => saveDailyClosing(item)}
-                      disabled={saving}
-                    >
-                      {saving ? 'Salvando...' : 'Salvar fechamento'}
-                    </button>
-                    <button
-                      type="button"
-                      className="finance-dashboard-action-link"
-                      onClick={() => setReconcilingAccount(item)}
-                      disabled={saving}
-                    >
-                      Aplicar conciliacao
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="finance-dashboard-notes">
+            <p>O dashboard principal nao usa mais saldo bancario como destaque. Aqui ficam apenas os atalhos para a base do financeiro.</p>
+            <p>Use a tela de contas para acompanhar saldo conferido por dia, editar a base de cada conta e lancar ajustes de entrada ou saida.</p>
+            <p>Os ajustes lancados em contas entram como movimentacao real e aparecem nas telas de vendas ou despesas, alem do resultado do dashboard.</p>
           </div>
         </article>
       </div>
@@ -885,12 +746,12 @@ export const FinanceDashboardPage = () => {
               <strong>Regras</strong>
             </div>
             <div className="finance-dashboard-inline-metric">
-              <span>Conferencia por conta</span>
-              <strong>Fechamento</strong>
+              <span>Historico de saldo por dia</span>
+              <strong>Contas</strong>
             </div>
             <div className="finance-dashboard-inline-metric">
-              <span>Corrigir a base pelo saldo real</span>
-              <strong>Conciliacao</strong>
+              <span>Ajustes de entrada e saida</span>
+              <strong>Movimentacao</strong>
             </div>
           </div>
         </article>
@@ -1010,8 +871,8 @@ export const FinanceDashboardPage = () => {
         <div className={`finance-dashboard-hero ${activeHomeTab !== 'dashboard' ? 'finance-dashboard-hero-compact' : ''}`}>
           {activeHomeTab === 'dashboard' ? (
             <div className="finance-dashboard-balance-card">
-              <span className="finance-dashboard-section-label">Saldo projetado</span>
-              <strong>{formatCurrency(data?.totals.projectedBalance ?? 0)}</strong>
+              <span className="finance-dashboard-section-label">Entradas no periodo</span>
+              <strong>{formatCurrency(data?.totals.totalEntries ?? 0)}</strong>
               <small>
                 {formatRangeDate(from)} ate {formatRangeDate(to)}
               </small>
@@ -1056,22 +917,6 @@ export const FinanceDashboardPage = () => {
 
         {contentByHomeTab[activeHomeTab]}
       </section>
-
-      <ConfirmDialog
-        open={Boolean(reconcilingAccount)}
-        title="Aplicar ajuste de conciliacao"
-        message={
-          reconcilingAccount
-            ? `Isso vai atualizar o saldo base de "${reconcilingAccount.accountName}" para o saldo conferido do periodo e usar esse valor como nova base para os proximos calculos. Deseja continuar?`
-            : ''
-        }
-        confirmLabel={reconciliationSaving ? 'Aplicando...' : 'Aplicar ajuste'}
-        onConfirm={applyReconciliationAdjustment}
-        onCancel={() => {
-          if (reconciliationSaving) return;
-          setReconcilingAccount(null);
-        }}
-      />
     </div>
   );
 };

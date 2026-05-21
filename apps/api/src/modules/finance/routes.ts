@@ -55,6 +55,16 @@ const reconciliationAdjustmentSchema = z.object({
   notes: z.string().optional()
 });
 
+const accountAdjustmentSchema = z.object({
+  kind: z.enum(['ENTRY', 'EXIT']),
+  occurredAt: z.string().min(1),
+  paymentMethod: paymentMethodSchema,
+  amount: z.number().positive(),
+  description: z.string().min(2).optional(),
+  category: expenseCategorySchema.optional(),
+  notes: z.string().optional()
+});
+
 const methodRuleSchema = z.object({
   method: paymentMethodSchema,
   mode: ruleModeSchema,
@@ -315,6 +325,19 @@ export const financeRoutes = async (app: FastifyInstance) => {
     updatedAt: row.updated_at
   }) : null;
 
+  const mapAccountAdjustment = (row: any, kind: 'ENTRY' | 'EXIT') => ({
+    id: row.id,
+    accountId: row.account_id ?? undefined,
+    kind,
+    occurredAt: row.occurred_at,
+    description: row.description,
+    paymentMethod: row.payment_method as z.infer<typeof paymentMethodSchema>,
+    amount: Number(row.amount ?? 0),
+    category: kind === 'EXIT' ? row.category ?? 'OUTROS' : undefined,
+    notes: row.notes ?? '',
+    createdAt: row.created_at
+  });
+
 	  const getRules = async (companyId: string): Promise<MethodRule[]> => {
     const { data, error } = await supabaseAdmin
       .from('financial_method_rules')
@@ -388,6 +411,62 @@ export const financeRoutes = async (app: FastifyInstance) => {
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data ?? []).map(mapAccount);
+  });
+
+  app.get('/finance/accounts/summary', financeGuard, async (request) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const range = parseDateRange(request.query);
+    const [{ data: accounts }, { data: closings }, { data: adjustmentSales }, { data: adjustmentExpenses }] = await Promise.all([
+      supabaseAdmin
+        .from('financial_accounts')
+        .select('id, balance_date, balance_amount')
+        .eq('company_id', auth.companyId),
+      supabaseAdmin
+        .from('financial_daily_closings')
+        .select('closing_date, checked_balance')
+        .eq('company_id', auth.companyId)
+        .gte('closing_date', range.from)
+        .lte('closing_date', range.to)
+        .order('closing_date', { ascending: true }),
+      supabaseAdmin
+        .from('financial_manual_sales')
+        .select('*')
+        .eq('company_id', auth.companyId)
+        .contains('tags', ['ajuste'])
+        .gte('occurred_at', range.fromIso)
+        .lte('occurred_at', range.toIso)
+        .order('occurred_at', { ascending: false }),
+      supabaseAdmin
+        .from('financial_expenses')
+        .select('*')
+        .eq('company_id', auth.companyId)
+        .ilike('description', 'Ajuste de saldo%')
+        .gte('occurred_at', range.fromIso)
+        .lte('occurred_at', range.toIso)
+        .order('occurred_at', { ascending: false })
+    ]);
+
+    const historyMap = new Map<string, number>();
+    for (const account of accounts ?? []) {
+      const balanceDate = String(account.balance_date ?? '');
+      if (!balanceDate || balanceDate < range.from || balanceDate > range.to) continue;
+      historyMap.set(balanceDate, (historyMap.get(balanceDate) ?? 0) + Number(account.balance_amount ?? 0));
+    }
+    for (const closing of closings ?? []) {
+      const closingDate = String(closing.closing_date ?? '');
+      historyMap.set(closingDate, (historyMap.get(closingDate) ?? 0) + Number(closing.checked_balance ?? 0));
+    }
+
+    return {
+      range: { from: range.from, to: range.to },
+      history: Array.from(historyMap.entries())
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([date, totalBalance]) => ({ date, totalBalance })),
+      adjustments: [
+        ...((adjustmentSales ?? []).map((row) => mapAccountAdjustment(row, 'ENTRY'))),
+        ...((adjustmentExpenses ?? []).map((row) => mapAccountAdjustment(row, 'EXIT')))
+      ].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
+    };
   });
 
   app.post('/finance/accounts', financeGuard, async (request, reply) => {
@@ -509,6 +588,52 @@ export const financeRoutes = async (app: FastifyInstance) => {
       closing: mapClosing(closingData),
       adjustment: mapReconciliationAdjustment(adjustmentData)
     });
+  });
+
+  app.post('/finance/accounts/:id/adjustments', financeGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const params = request.params as { id: string };
+    const body = accountAdjustmentSchema.parse(request.body);
+    const baseDescription = body.description?.trim() || 'Ajuste de saldo';
+
+    if (body.kind === 'ENTRY') {
+      const { data, error } = await supabaseAdmin
+        .from('financial_manual_sales')
+        .insert({
+          company_id: auth.companyId,
+          account_id: params.id,
+          occurred_at: body.occurredAt,
+          description: baseDescription,
+          payment_method: body.paymentMethod,
+          amount: body.amount,
+          products: [],
+          tags: normalizeTags(['ajuste']),
+          notes: body.notes ?? null
+        })
+        .select('*')
+        .single();
+      if (error) return reply.status(400).send({ message: 'Erro ao lancar ajuste de entrada', detail: error.message });
+      return reply.status(201).send({ kind: 'ENTRY', item: mapAccountAdjustment(data, 'ENTRY') });
+    }
+
+    const expenseDescription = baseDescription.startsWith('Ajuste de saldo') ? baseDescription : `Ajuste de saldo - ${baseDescription}`;
+    const { data, error } = await supabaseAdmin
+      .from('financial_expenses')
+      .insert({
+        company_id: auth.companyId,
+        account_id: params.id,
+        occurred_at: body.occurredAt,
+        description: expenseDescription,
+        category: body.category ?? 'OUTROS',
+        payment_method: body.paymentMethod,
+        amount: body.amount,
+        recurring: false,
+        notes: body.notes ?? null
+      })
+      .select('*')
+      .single();
+    if (error) return reply.status(400).send({ message: 'Erro ao lancar ajuste de saida', detail: error.message });
+    return reply.status(201).send({ kind: 'EXIT', item: mapAccountAdjustment(data, 'EXIT') });
   });
 
 	  app.delete('/finance/accounts/:id', financeGuard, async (request, reply) => {
