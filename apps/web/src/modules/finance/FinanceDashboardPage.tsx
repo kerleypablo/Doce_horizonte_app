@@ -13,6 +13,7 @@ import {
   accountTypeLabels,
   expenseCategoryLabels,
   methodLabels,
+  modeLabels,
   saleOriginLabels
 } from './constants.ts';
 import {
@@ -26,7 +27,7 @@ import { formatCurrency, monthStart, todayDate } from './utils.ts';
 import type { OriginCostRule, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
-type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'setup' | 'costs';
+type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'accounts' | 'costs' | 'rates';
 type RangePreset = 'today' | 'week' | 'month' | 'custom';
 
 const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
@@ -39,8 +40,9 @@ const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'sales', label: 'Vendas' },
   { id: 'expenses', label: 'Despesas' },
-  { id: 'setup', label: 'Cadastro' },
-  { id: 'costs', label: 'Custos' }
+  { id: 'accounts', label: 'Contas' },
+  { id: 'costs', label: 'Custos' },
+  { id: 'rates', label: 'Taxas' }
 ];
 
 const getThemeTokens = () => {
@@ -692,18 +694,18 @@ export const FinanceDashboardPage = () => {
     </div>
   );
 
-  const setupContent = (
+  const accountsContent = (
     <div className="finance-dashboard-content-grid">
       <div className="finance-dashboard-main">
         <article className="finance-dashboard-panel">
           <div className="finance-dashboard-panel-head compact">
             <div>
-              <span className="finance-dashboard-section-label">Cadastros base</span>
+              <span className="finance-dashboard-section-label">Contas</span>
               <h3>Saldos por tipo de conta</h3>
             </div>
             <div className="finance-dashboard-action-row">
               <Link to="/app/financeiro/contas" className="finance-dashboard-action-link">Contas</Link>
-              <Link to="/app/financeiro/regras" className="finance-dashboard-action-link primary">Taxas e regras</Link>
+              <Link to="/app/financeiro/contas/novo" className="finance-dashboard-action-link primary">Nova conta</Link>
             </div>
           </div>
           <HighchartsReact highcharts={Highcharts} options={accountsChartOptions} />
@@ -712,15 +714,14 @@ export const FinanceDashboardPage = () => {
         <article className="finance-dashboard-panel">
           <div className="finance-dashboard-panel-head compact">
             <div>
-              <span className="finance-dashboard-section-label">Operacao das contas</span>
-              <h3>Onde controlar saldo e ajustes</h3>
+              <span className="finance-dashboard-section-label">Operacao</span>
+              <h3>Cadastrar e ajustar contas</h3>
+            </div>
+            <div className="finance-dashboard-action-row">
+              <Link to="/app/financeiro/contas" className="finance-dashboard-action-link">Ver contas</Link>
             </div>
           </div>
-          <div className="finance-dashboard-notes">
-            <p>O dashboard principal nao usa mais saldo bancario como destaque. Aqui ficam apenas os atalhos para a base do financeiro.</p>
-            <p>Use a tela de contas para acompanhar saldo conferido por dia, editar a base de cada conta e lancar ajustes de entrada ou saida.</p>
-            <p>Os ajustes lancados em contas entram como movimentacao real e aparecem nas telas de vendas ou despesas, alem do resultado do dashboard.</p>
-          </div>
+          {renderListRows(accountHighlights)}
         </article>
       </div>
 
@@ -731,29 +732,50 @@ export const FinanceDashboardPage = () => {
           </div>
           {renderListRows(accountHighlights)}
         </article>
+      </aside>
+    </div>
+  );
 
+  const ratesContent = (
+    <div className="finance-dashboard-content-grid">
+      <div className="finance-dashboard-main">
+        <article className="finance-dashboard-panel">
+          <div className="finance-dashboard-panel-head compact">
+            <div>
+              <span className="finance-dashboard-section-label">Taxas e regras</span>
+              <h3>Ajuste por metodo de pagamento</h3>
+            </div>
+            <div className="finance-dashboard-action-row">
+              <Link to="/app/financeiro/regras" className="finance-dashboard-action-link primary">Abrir tela de regras</Link>
+            </div>
+          </div>
+          <div className="finance-dashboard-cost-grid">
+            {(['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'] as const).map((method) => {
+              const rule = data?.methodRules?.find((item) => item.method === method);
+              return (
+                <label key={method}>
+                  <span>{methodLabels[method as keyof typeof methodLabels]}</span>
+                  <input value={rule ? `${modeLabels[rule.mode]} • ${rule.value ? formatCurrency(rule.value) : '0,00'}` : 'Sem regra'} readOnly />
+                </label>
+              );
+            })}
+          </div>
+        </article>
+      </div>
+
+      <aside className="finance-dashboard-side">
         <article className="finance-dashboard-side-card">
           <div className="finance-dashboard-list-head">
-            <h4>O que entra em cadastro</h4>
+            <h4>Metodos configurados</h4>
           </div>
-          <div className="finance-dashboard-kpi-stack">
-            <div className="finance-dashboard-inline-metric">
-              <span>Contas bancarias e caixa</span>
-              <strong>Contas</strong>
-            </div>
-            <div className="finance-dashboard-inline-metric">
-              <span>Taxas por metodo</span>
-              <strong>Regras</strong>
-            </div>
-            <div className="finance-dashboard-inline-metric">
-              <span>Historico de saldo por dia</span>
-              <strong>Contas</strong>
-            </div>
-            <div className="finance-dashboard-inline-metric">
-              <span>Ajustes de entrada e saida</span>
-              <strong>Movimentacao</strong>
-            </div>
-          </div>
+          {renderListRows(
+            (data?.methodRules ?? [])
+              .map((item) => ({
+                title: methodLabels[item.method],
+                subtitle: modeLabels[item.mode],
+                value: item.value ? formatCurrency(item.value) : 'Sem ajuste'
+              }))
+          )}
         </article>
       </aside>
     </div>
@@ -812,33 +834,15 @@ export const FinanceDashboardPage = () => {
       <aside className="finance-dashboard-side">
         <article className="finance-dashboard-side-card">
           <div className="finance-dashboard-list-head">
-            <h4>O que essa aba faz</h4>
+            <h4>Custos configurados</h4>
           </div>
-          <div className="finance-dashboard-kpi-stack">
-            <div className="finance-dashboard-inline-metric">
-              <span>Balcao / rua / iFood etc.</span>
-              <strong>Canal</strong>
-            </div>
-            <div className="finance-dashboard-inline-metric">
-              <span>Percentual medio de custo</span>
-              <strong>Regra</strong>
-            </div>
-            <div className="finance-dashboard-inline-metric">
-              <span>Impacta lucro estimado</span>
-              <strong>Dashboard</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Como usar</h4>
-          </div>
-          <div className="finance-dashboard-notes">
-            <p>Se vendas de iFood costumam ter custo maior, aumente esse percentual.</p>
-            <p>Se balcao tem margem melhor, reduza o custo medio dessa origem.</p>
-            <p>Isso nao muda caixa nem despesa real. Muda apenas o lucro estimado exibido.</p>
-          </div>
+          {renderListRows(
+            originRules.map((item) => ({
+              title: saleOriginLabels[item.origin],
+              subtitle: 'Percentual medio',
+              value: `${item.costPercent}%`
+            }))
+          )}
         </article>
       </aside>
     </div>
@@ -848,8 +852,9 @@ export const FinanceDashboardPage = () => {
     dashboard: dashboardSummaryContent,
     sales: salesContent,
     expenses: expensesContent,
-    setup: setupContent,
-    costs: costsContent
+    accounts: accountsContent,
+    costs: costsContent,
+    rates: ratesContent
   };
 
   return (
