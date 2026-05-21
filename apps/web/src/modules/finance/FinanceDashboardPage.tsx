@@ -1,11 +1,16 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
+import { apiFetch } from '../shared/api.ts';
+import { MoneyInput } from '../shared/MoneyInput.tsx';
+import { invalidateQueryCache } from '../shared/queryCache.ts';
 import { FinanceAccessBlocked } from './FinanceShared.tsx';
 import {
+  financeDashboardKey,
+  financeOriginCostRulesKey,
   accountTypeLabels,
   expenseCategoryLabels,
   methodLabels,
@@ -14,13 +19,15 @@ import {
 import {
   useExpenses,
   useFinanceDashboard,
+  useFinanceOriginCostRules,
   useFinanceRange,
   useManualSales
 } from './hooks.ts';
 import { formatCurrency, monthStart, todayDate } from './utils.ts';
+import type { OriginCostRule, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
-type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'setup';
+type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'setup' | 'costs';
 type RangePreset = 'today' | 'week' | 'month' | 'custom';
 
 const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
@@ -33,7 +40,8 @@ const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'sales', label: 'Vendas' },
   { id: 'expenses', label: 'Despesas' },
-  { id: 'setup', label: 'Cadastro' }
+  { id: 'setup', label: 'Cadastro' },
+  { id: 'costs', label: 'Custos' }
 ];
 
 const getThemeTokens = () => {
@@ -227,13 +235,31 @@ export const FinanceDashboardPage = () => {
   const [activeHomeTab, setActiveHomeTab] = useState<FinanceHomeTab>('dashboard');
 
   const dashboardQuery = useFinanceDashboard(user?.token, from, to);
+  const originCostRulesQuery = useFinanceOriginCostRules(user?.token);
   const salesQuery = useManualSales(user?.token, from, to);
   const expensesQuery = useExpenses(user?.token, from, to);
+  const [originRules, setOriginRules] = useState<OriginCostRule[]>([]);
+  const [originRulesSaving, setOriginRulesSaving] = useState(false);
+  const [closingAmount, setClosingAmount] = useState(0);
+  const [closingNotes, setClosingNotes] = useState('');
+  const [closingSaving, setClosingSaving] = useState(false);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
   const data = dashboardQuery.data;
   const theme = getThemeTokens();
+
+  useEffect(() => {
+    if (originCostRulesQuery.data?.rules) {
+      setOriginRules(originCostRulesQuery.data.rules);
+    }
+  }, [originCostRulesQuery.data]);
+
+  useEffect(() => {
+    if (!dashboardQuery.data) return;
+    setClosingAmount(dashboardQuery.data.dailyClosing?.checkedBalance ?? dashboardQuery.data.totals.projectedBalance ?? 0);
+    setClosingNotes(dashboardQuery.data.dailyClosing?.notes ?? '');
+  }, [dashboardQuery.data]);
 
   const openPicker = (ref: React.RefObject<HTMLInputElement>) => {
     const input = ref.current;
@@ -280,6 +306,53 @@ export const FinanceDashboardPage = () => {
     if (from === startDate && to === todayDate) return 'week';
     return 'custom';
   }, [from, to]);
+
+  const updateOriginRule = (origin: SaleOrigin, costPercent: number) => {
+    setOriginRules((current) => {
+      const map = new Map(current.map((item) => [item.origin, item.costPercent]));
+      map.set(origin, costPercent);
+      return Array.from(map.entries()).map(([itemOrigin, itemPercent]) => ({
+        origin: itemOrigin as SaleOrigin,
+        costPercent: itemPercent
+      }));
+    });
+  };
+
+  const saveOriginRules = async () => {
+    setOriginRulesSaving(true);
+    try {
+      await apiFetch('/finance/origin-cost-rules', {
+        method: 'PUT',
+        token: user?.token,
+        body: JSON.stringify({ rules: originRules })
+      });
+      invalidateQueryCache(financeOriginCostRulesKey);
+      invalidateQueryCache(financeDashboardKey);
+      await originCostRulesQuery.refetch();
+      await dashboardQuery.refetch();
+    } finally {
+      setOriginRulesSaving(false);
+    }
+  };
+
+  const saveDailyClosing = async () => {
+    setClosingSaving(true);
+    try {
+      await apiFetch('/finance/daily-closing', {
+        method: 'PUT',
+        token: user?.token,
+        body: JSON.stringify({
+          date: to,
+          checkedBalance: closingAmount,
+          notes: closingNotes
+        })
+      });
+      invalidateQueryCache(financeDashboardKey);
+      await dashboardQuery.refetch();
+    } finally {
+      setClosingSaving(false);
+    }
+  };
 
   const headlineCards = [
     {
@@ -649,6 +722,30 @@ export const FinanceDashboardPage = () => {
           </div>
           <HighchartsReact highcharts={Highcharts} options={accountsChartOptions} />
         </article>
+
+        <article className="finance-dashboard-panel">
+          <div className="finance-dashboard-panel-head compact">
+            <div>
+              <span className="finance-dashboard-section-label">Fechamento diario</span>
+              <h3>Saldo real conferido no fim do dia</h3>
+            </div>
+          </div>
+          <div className="finance-dashboard-form-grid">
+            <label>
+              Saldo conferido
+              <MoneyInput value={closingAmount} onChange={setClosingAmount} />
+            </label>
+            <label>
+              Observacoes
+              <input value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} placeholder="Ex: caixa fechado as 18h" />
+            </label>
+          </div>
+          <div className="finance-dashboard-action-row finance-dashboard-action-row-left">
+            <button type="button" className="finance-dashboard-action-link primary" onClick={saveDailyClosing} disabled={closingSaving}>
+              {closingSaving ? 'Salvando...' : 'Salvar fechamento'}
+            </button>
+          </div>
+        </article>
       </div>
 
       <aside className="finance-dashboard-side">
@@ -682,11 +779,97 @@ export const FinanceDashboardPage = () => {
     </div>
   );
 
+  const costsContent = (
+    <div className="finance-dashboard-content-grid">
+      <div className="finance-dashboard-main">
+        <article className="finance-dashboard-panel">
+          <div className="finance-dashboard-panel-head compact">
+            <div>
+              <span className="finance-dashboard-section-label">Custos por origem</span>
+              <h3>Percentual medio usado no lucro estimado</h3>
+            </div>
+            <div className="finance-dashboard-action-row">
+              <button type="button" className="finance-dashboard-action-link primary" onClick={saveOriginRules} disabled={originRulesSaving}>
+                {originRulesSaving ? 'Salvando...' : 'Salvar custos'}
+              </button>
+            </div>
+          </div>
+          <HighchartsReact
+            highcharts={Highcharts}
+            options={buildColumnChart({
+              categories: originRules.map((item) => saleOriginLabels[item.origin]),
+              values: originRules.map((item) => item.costPercent),
+              theme,
+              name: 'Custo %'
+            })}
+          />
+        </article>
+
+        <article className="finance-dashboard-panel">
+          <div className="finance-dashboard-panel-head compact">
+            <div>
+              <span className="finance-dashboard-section-label">Edicao</span>
+              <h3>Ajuste por canal de venda</h3>
+            </div>
+          </div>
+          <div className="finance-dashboard-cost-grid">
+            {originRules.map((rule) => (
+              <label key={rule.origin}>
+                <span>{saleOriginLabels[rule.origin]}</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rule.costPercent}
+                  onChange={(event) => updateOriginRule(rule.origin, Number(event.target.value || 0))}
+                />
+              </label>
+            ))}
+          </div>
+        </article>
+      </div>
+
+      <aside className="finance-dashboard-side">
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>O que essa aba faz</h4>
+          </div>
+          <div className="finance-dashboard-kpi-stack">
+            <div className="finance-dashboard-inline-metric">
+              <span>Balcao / rua / iFood etc.</span>
+              <strong>Canal</strong>
+            </div>
+            <div className="finance-dashboard-inline-metric">
+              <span>Percentual medio de custo</span>
+              <strong>Regra</strong>
+            </div>
+            <div className="finance-dashboard-inline-metric">
+              <span>Impacta lucro estimado</span>
+              <strong>Dashboard</strong>
+            </div>
+          </div>
+        </article>
+
+        <article className="finance-dashboard-side-card">
+          <div className="finance-dashboard-list-head">
+            <h4>Como usar</h4>
+          </div>
+          <div className="finance-dashboard-notes">
+            <p>Se vendas de iFood costumam ter custo maior, aumente esse percentual.</p>
+            <p>Se balcao tem margem melhor, reduza o custo medio dessa origem.</p>
+            <p>Isso nao muda caixa nem despesa real. Muda apenas o lucro estimado exibido.</p>
+          </div>
+        </article>
+      </aside>
+    </div>
+  );
+
   const contentByHomeTab: Record<FinanceHomeTab, React.ReactNode> = {
     dashboard: dashboardSummaryContent,
     sales: salesContent,
     expenses: expensesContent,
-    setup: setupContent
+    setup: setupContent,
+    costs: costsContent
   };
 
   return (

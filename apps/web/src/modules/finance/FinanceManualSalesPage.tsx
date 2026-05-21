@@ -3,6 +3,7 @@ import type React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
+import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
@@ -41,6 +42,7 @@ export const FinanceManualSalesPage = () => {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
+  const [deletingSale, setDeletingSale] = useState<{ id: string; description: string } | null>(null);
   const [form, setForm] = useState(createEmptyManualSaleForm);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
@@ -151,6 +153,20 @@ export const FinanceManualSalesPage = () => {
     invalidateQueryCache(financeManualSalesKey);
     invalidateQueryCache(financeDashboardKey);
     await salesQuery.refetch();
+  };
+
+  const confirmDeleteSale = async () => {
+    if (!deletingSale) return;
+    await apiFetch(`/finance/manual-sales/${deletingSale.id}`, {
+      method: 'DELETE',
+      token: user?.token
+    });
+    invalidateQueryCache(financeManualSalesKey);
+    invalidateQueryCache(`${financeManualSalesKey}:tags`);
+    invalidateQueryCache(financeDashboardKey);
+    await salesQuery.refetch();
+    await tagsQuery.refetch();
+    setDeletingSale(null);
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -382,11 +398,28 @@ export const FinanceManualSalesPage = () => {
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">edit</span>
                 </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Excluir venda"
+                  onClick={() => setDeletingSale({ id: item.id, description: item.description })}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">delete</span>
+                </button>
               </div>
             ))}
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(deletingSale)}
+        title="Excluir venda"
+        message={deletingSale ? `Deseja excluir a venda "${deletingSale.description}"?` : ''}
+        confirmLabel="Excluir"
+        onConfirm={confirmDeleteSale}
+        onCancel={() => setDeletingSale(null)}
+      />
     </div>
   );
 };

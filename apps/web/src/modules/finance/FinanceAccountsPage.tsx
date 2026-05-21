@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
+import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { invalidateQueryCache } from '../shared/queryCache.ts';
 import { FinanceAccessBlocked, FinanceHeader } from './FinanceShared.tsx';
-import { accountTypeKeys, accountTypeLabels, financeAccountsKey } from './constants.ts';
+import { accountTypeKeys, accountTypeLabels, financeAccountsKey, financeDashboardKey } from './constants.ts';
 import { useFinanceAccounts } from './hooks.ts';
 import { formatCurrency, todayDate } from './utils.ts';
 import type { AccountType } from './types.ts';
@@ -24,6 +25,7 @@ export const FinanceAccountsPage = () => {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
   const [saving, setSaving] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState<{ id: string; name: string } | null>(null);
   const initializedRouteRef = useRef<string | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -92,6 +94,18 @@ export const FinanceAccountsPage = () => {
     }
   };
 
+  const confirmDeleteAccount = async () => {
+    if (!deletingAccount) return;
+    await apiFetch(`/finance/accounts/${deletingAccount.id}`, {
+      method: 'DELETE',
+      token: user?.token
+    });
+    invalidateQueryCache(financeAccountsKey);
+    invalidateQueryCache(financeDashboardKey);
+    await accountsQuery.refetch();
+    setDeletingAccount(null);
+  };
+
   const filtered = (accountsQuery.data ?? []).filter((item) =>
     `${item.name} ${item.institution ?? ''} ${accountTypeLabels[item.accountType] ?? ''}`.toLowerCase().includes(search.toLowerCase())
   );
@@ -122,6 +136,14 @@ export const FinanceAccountsPage = () => {
                   onClick={() => navigate(`/app/financeiro/contas/editar/${item.id}`)}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Excluir"
+                  onClick={() => setDeletingAccount({ id: item.id, name: item.name })}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                 </button>
               </div>
             ))}
@@ -157,6 +179,15 @@ export const FinanceAccountsPage = () => {
           </form>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(deletingAccount)}
+        title="Excluir conta"
+        message={deletingAccount ? `Deseja excluir a conta "${deletingAccount.name}"?` : ''}
+        confirmLabel="Excluir"
+        onConfirm={confirmDeleteAccount}
+        onCancel={() => setDeletingAccount(null)}
+      />
     </div>
   );
 };
