@@ -38,17 +38,15 @@ const accountSchema = z.object({
 });
 
 const closingQuerySchema = z.object({
-  date: z.string().min(1)
+  date: z.string().min(1),
+  accountId: z.string().uuid().optional()
 });
 
 const dailyClosingSchema = z.object({
+  accountId: z.string().uuid(),
   date: z.string().min(1),
   checkedBalance: z.number(),
   notes: z.string().optional()
-});
-
-const reconciledSchema = z.object({
-  reconciled: z.boolean()
 });
 
 const methodRuleSchema = z.object({
@@ -253,7 +251,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     createdAt: row.created_at
   });
 
-  const mapSale = (row: any, rulesMap: Map<string, MethodRule>) => {
+	  const mapSale = (row: any, rulesMap: Map<string, MethodRule>) => {
     const amount = Number(row.amount ?? 0);
     const rule = rulesMap.get(String(row.payment_method));
     return {
@@ -263,13 +261,12 @@ export const financeRoutes = async (app: FastifyInstance) => {
       description: row.description,
       paymentMethod: row.payment_method as z.infer<typeof paymentMethodSchema>,
 	      amount,
-	      netAmount: calcLiquidByRule(amount, rule),
-	      tags: Array.isArray(row.tags) ? row.tags : [],
-	      products: Array.isArray(row.products) ? row.products : [],
-	      reconciled: row.reconciled ?? false,
-	      notes: row.notes ?? '',
-	      createdAt: row.created_at
-	    };
+      netAmount: calcLiquidByRule(amount, rule),
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      products: Array.isArray(row.products) ? row.products : [],
+      notes: row.notes ?? '',
+      createdAt: row.created_at
+    };
   };
 
   const mapExpense = (row: any, rulesMap: Map<string, MethodRule>) => {
@@ -283,16 +280,16 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	      category: row.category ?? 'OUTROS',
 	      paymentMethod: row.payment_method as z.infer<typeof paymentMethodSchema>,
 	      amount,
-	      netAmount: calcLiquidByRule(amount, rule),
-	      reconciled: row.reconciled ?? false,
-	      recurring: row.recurring ?? false,
-	      notes: row.notes ?? '',
-	      createdAt: row.created_at
-	    };
+      netAmount: calcLiquidByRule(amount, rule),
+      recurring: row.recurring ?? false,
+      notes: row.notes ?? '',
+      createdAt: row.created_at
+    };
 	  };
 
 	  const mapClosing = (row: any) => row ? ({
 	    id: row.id,
+	    accountId: row.account_id,
 	    date: row.closing_date,
 	    checkedBalance: Number(row.checked_balance ?? 0),
 	    notes: row.notes ?? '',
@@ -432,14 +429,19 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	  app.get('/finance/daily-closing', financeGuard, async (request) => {
 	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 	    const query = closingQuerySchema.parse(request.query ?? {});
-	    const { data, error } = await supabaseAdmin
-	      .from('financial_daily_closings')
-	      .select('*')
-	      .eq('company_id', auth.companyId)
-	      .eq('closing_date', query.date)
-	      .maybeSingle();
-	    if (error) throw error;
-	    return mapClosing(data);
+      let closingQuery = supabaseAdmin
+        .from('financial_daily_closings')
+        .select('*')
+        .eq('company_id', auth.companyId)
+        .eq('closing_date', query.date);
+      if (query.accountId) {
+        const { data, error } = await closingQuery.eq('account_id', query.accountId).maybeSingle();
+        if (error) throw error;
+        return mapClosing(data);
+      }
+      const { data, error } = await closingQuery.order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(mapClosing);
 	  });
 
 	  app.put('/finance/daily-closing', financeGuard, async (request, reply) => {
@@ -449,11 +451,12 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	      .from('financial_daily_closings')
 	      .upsert({
 	        company_id: auth.companyId,
+	        account_id: body.accountId,
 	        closing_date: body.date,
 	        checked_balance: body.checkedBalance,
 	        notes: body.notes ?? null,
 	        updated_at: new Date().toISOString()
-	      }, { onConflict: 'company_id,closing_date' })
+	      }, { onConflict: 'company_id,account_id,closing_date' })
 	      .select('*')
 	      .single();
 	    if (error) return reply.status(400).send({ message: 'Erro ao salvar fechamento', detail: error.message });
@@ -621,23 +624,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	    return reply.status(204).send();
 	  });
 
-	  app.put('/finance/manual-sales/:id/reconciled', financeGuard, async (request, reply) => {
-	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-	    const params = request.params as { id: string };
-	    const body = reconciledSchema.parse(request.body);
-	    const { data, error } = await supabaseAdmin
-	      .from('financial_manual_sales')
-	      .update({ reconciled: body.reconciled, updated_at: new Date().toISOString() })
-	      .eq('id', params.id)
-	      .eq('company_id', auth.companyId)
-	      .select('*')
-	      .single();
-	    if (error) return reply.status(400).send({ message: 'Erro ao conferir venda', detail: error.message });
-	    const rules = await getRules(auth.companyId);
-	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
-	    return reply.send(mapSale(data, rulesMap));
-	  });
-
   app.get('/finance/expenses', financeGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 	    const range = parseDateRange(request.query);
@@ -716,23 +702,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	    return reply.status(204).send();
 	  });
 
-	  app.put('/finance/expenses/:id/reconciled', financeGuard, async (request, reply) => {
-	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-	    const params = request.params as { id: string };
-	    const body = reconciledSchema.parse(request.body);
-	    const { data, error } = await supabaseAdmin
-	      .from('financial_expenses')
-	      .update({ reconciled: body.reconciled, updated_at: new Date().toISOString() })
-	      .eq('id', params.id)
-	      .eq('company_id', auth.companyId)
-	      .select('*')
-	      .single();
-	    if (error) return reply.status(400).send({ message: 'Erro ao conferir despesa', detail: error.message });
-	    const rules = await getRules(auth.companyId);
-	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
-	    return reply.send(mapExpense(data, rulesMap));
-	  });
-
 	  app.get('/finance/dashboard', financeGuard, async (request) => {
 	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 	    const range = parseDateRange(request.query);
@@ -741,10 +710,10 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
 	    const originCostMap = new Map(originCostRules.map((item) => [item.origin, item.costPercent]));
 
-		    const [{ data: accounts }, { data: sales }, { data: expenses }, { data: orders }, { data: closing }] = await Promise.all([
+		    const [{ data: accounts }, { data: sales }, { data: expenses }, { data: orders }, { data: closings }] = await Promise.all([
 	      supabaseAdmin
 	        .from('financial_accounts')
-	        .select('id, name, account_type, balance_amount')
+	        .select('id, name, account_type, balance_amount, balance_date')
 	        .eq('company_id', auth.companyId),
       supabaseAdmin
         .from('financial_manual_sales')
@@ -771,7 +740,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	        .select('*')
 	        .eq('company_id', auth.companyId)
 	        .eq('closing_date', range.to)
-	        .maybeSingle()
 	    ]);
 
 	    const accountsBalance = (accounts ?? []).reduce((sum, item) => sum + Number(item.balance_amount ?? 0), 0);
@@ -867,9 +835,46 @@ export const financeRoutes = async (app: FastifyInstance) => {
 		    const projectedBalance = accountsBalance + totalEntries - expensesNet;
 		    const estimatedGrossProfit = ordersEstimatedProfit + manualSalesEstimatedProfit;
 		    const estimatedNetProfit = estimatedGrossProfit - expensesNet;
-	    const dailyClosing = mapClosing(closing);
-	    const checkedBalance = dailyClosing?.checkedBalance;
-	    const balanceDifference = typeof checkedBalance === 'number' ? checkedBalance - projectedBalance : null;
+      const accountClosingMap = new Map(
+        (closings ?? []).map((row) => [String(row.account_id), row])
+      );
+      const accountClosings = (accounts ?? []).map((account) => {
+        const accountId = String(account.id);
+        const accountSalesNet = (sales ?? []).reduce((sum, row) => {
+          if (String(row.account_id ?? '') !== accountId) return sum;
+          const amount = Number(row.amount ?? 0);
+          const rule = rulesMap.get(toMethodKey(row.payment_method));
+          return sum + calcLiquidByRule(amount, rule);
+        }, 0);
+        const accountExpensesNet = (expenses ?? []).reduce((sum, row) => {
+          if (String(row.account_id ?? '') !== accountId) return sum;
+          const amount = Number(row.amount ?? 0);
+          const rule = rulesMap.get(toMethodKey(row.payment_method));
+          return sum + calcLiquidByRule(amount, rule);
+        }, 0);
+        const projectedAccountBalance = Number(account.balance_amount ?? 0) + accountSalesNet - accountExpensesNet;
+        const closingRow = accountClosingMap.get(accountId);
+        const accountCheckedBalance = closingRow ? Number(closingRow.checked_balance ?? 0) : null;
+        return {
+          id: closingRow?.id ?? null,
+          accountId,
+          accountName: account.name,
+          accountType: account.account_type ?? 'BANK',
+          balanceDate: account.balance_date ?? null,
+          baseBalance: Number(account.balance_amount ?? 0),
+          projectedBalance: projectedAccountBalance,
+          checkedBalance: accountCheckedBalance,
+          difference: typeof accountCheckedBalance === 'number' ? accountCheckedBalance - projectedAccountBalance : null,
+          notes: closingRow?.notes ?? ''
+        };
+      });
+      const hasAnyClosing = accountClosings.some((item) => item.checkedBalance !== null);
+      const checkedBalance = hasAnyClosing
+        ? accountClosings.reduce((sum, item) => sum + (item.checkedBalance ?? 0), 0)
+        : undefined;
+      const balanceDifference = hasAnyClosing
+        ? checkedBalance! - accountClosings.reduce((sum, item) => sum + item.projectedBalance, 0)
+        : null;
 
     const byDay = new Map(
       eachDate(range.from, range.to).map((date) => [
@@ -936,7 +941,8 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	      expensesByCategory: Array.from(expensesByCategory.values()),
 	      methodRules: rules,
 	      originCostRules,
-	      dailyClosing,
+	      dailyClosing: null,
+	      accountClosings,
 	      accountsByType: Array.from(accountsByType.values()),
 	      accounts: (accounts ?? []).map((item) => ({
 	        id: item.id,

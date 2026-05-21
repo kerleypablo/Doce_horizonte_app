@@ -24,7 +24,7 @@ import {
   useManualSalesTags
 } from './hooks.ts';
 import { createEmptyManualSaleForm, createManualSaleLine, formatCurrency, isSaleOrigin, stripOriginTags } from './utils.ts';
-import type { ManualSale, ManualSaleProduct, PaymentMethod, SaleOrigin } from './types.ts';
+import type { ManualSaleProduct, PaymentMethod, SaleOrigin } from './types.ts';
 
 export const FinanceManualSalesPage = () => {
   const { user } = useAuth();
@@ -142,17 +142,6 @@ export const FinanceManualSalesPage = () => {
       ...current,
       products: current.products.filter((_, itemIndex) => itemIndex !== index)
     }));
-  };
-
-  const toggleSaleReconciled = async (sale: ManualSale) => {
-    await apiFetch(`/finance/manual-sales/${sale.id}/reconciled`, {
-      method: 'PUT',
-      token: user?.token,
-      body: JSON.stringify({ reconciled: !sale.reconciled })
-    });
-    invalidateQueryCache(financeManualSalesKey);
-    invalidateQueryCache(financeDashboardKey);
-    await salesQuery.refetch();
   };
 
   const confirmDeleteSale = async () => {
@@ -383,14 +372,6 @@ export const FinanceManualSalesPage = () => {
                     </span>
                   ) : null}
                 </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={item.reconciled ? 'Marcar venda como nao conferida' : 'Marcar venda como conferida'}
-                  onClick={() => toggleSaleReconciled(item)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">{item.reconciled ? 'check_circle' : 'radio_button_unchecked'}</span>
-                </button>
                 <button
                   type="button"
                   className="icon-button"

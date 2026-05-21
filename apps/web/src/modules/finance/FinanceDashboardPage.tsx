@@ -24,7 +24,7 @@ import {
   useManualSales
 } from './hooks.ts';
 import { formatCurrency, monthStart, todayDate } from './utils.ts';
-import type { OriginCostRule, SaleOrigin } from './types.ts';
+import type { AccountClosing, OriginCostRule, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
 type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'setup' | 'costs';
@@ -240,9 +240,8 @@ export const FinanceDashboardPage = () => {
   const expensesQuery = useExpenses(user?.token, from, to);
   const [originRules, setOriginRules] = useState<OriginCostRule[]>([]);
   const [originRulesSaving, setOriginRulesSaving] = useState(false);
-  const [closingAmount, setClosingAmount] = useState(0);
-  const [closingNotes, setClosingNotes] = useState('');
-  const [closingSaving, setClosingSaving] = useState(false);
+  const [accountClosingForms, setAccountClosingForms] = useState<Record<string, { checkedBalance: number; notes: string }>>({});
+  const [closingSavingByAccount, setClosingSavingByAccount] = useState<Record<string, boolean>>({});
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
@@ -256,9 +255,18 @@ export const FinanceDashboardPage = () => {
   }, [originCostRulesQuery.data]);
 
   useEffect(() => {
-    if (!dashboardQuery.data) return;
-    setClosingAmount(dashboardQuery.data.dailyClosing?.checkedBalance ?? dashboardQuery.data.totals.projectedBalance ?? 0);
-    setClosingNotes(dashboardQuery.data.dailyClosing?.notes ?? '');
+    if (!dashboardQuery.data?.accountClosings) return;
+    setAccountClosingForms((current) => {
+      const next = { ...current };
+      for (const item of dashboardQuery.data.accountClosings) {
+        if (next[item.accountId]) continue;
+        next[item.accountId] = {
+          checkedBalance: item.checkedBalance ?? item.projectedBalance,
+          notes: item.notes ?? ''
+        };
+      }
+      return next;
+    });
   }, [dashboardQuery.data]);
 
   const openPicker = (ref: React.RefObject<HTMLInputElement>) => {
@@ -335,22 +343,38 @@ export const FinanceDashboardPage = () => {
     }
   };
 
-  const saveDailyClosing = async () => {
-    setClosingSaving(true);
+  const updateAccountClosingForm = (accountId: string, patch: Partial<{ checkedBalance: number; notes: string }>) => {
+    setAccountClosingForms((current) => ({
+      ...current,
+      [accountId]: {
+        checkedBalance: current[accountId]?.checkedBalance ?? 0,
+        notes: current[accountId]?.notes ?? '',
+        ...patch
+      }
+    }));
+  };
+
+  const saveDailyClosing = async (accountClosing: AccountClosing) => {
+    setClosingSavingByAccount((current) => ({ ...current, [accountClosing.accountId]: true }));
+    const form = accountClosingForms[accountClosing.accountId] ?? {
+      checkedBalance: accountClosing.checkedBalance ?? accountClosing.projectedBalance,
+      notes: accountClosing.notes ?? ''
+    };
     try {
       await apiFetch('/finance/daily-closing', {
         method: 'PUT',
         token: user?.token,
         body: JSON.stringify({
+          accountId: accountClosing.accountId,
           date: to,
-          checkedBalance: closingAmount,
-          notes: closingNotes
+          checkedBalance: form.checkedBalance,
+          notes: form.notes
         })
       });
       invalidateQueryCache(financeDashboardKey);
       await dashboardQuery.refetch();
     } finally {
-      setClosingSaving(false);
+      setClosingSavingByAccount((current) => ({ ...current, [accountClosing.accountId]: false }));
     }
   };
 
@@ -727,23 +751,68 @@ export const FinanceDashboardPage = () => {
           <div className="finance-dashboard-panel-head compact">
             <div>
               <span className="finance-dashboard-section-label">Fechamento diario</span>
-              <h3>Saldo real conferido no fim do dia</h3>
+              <h3>Conferencia por conta</h3>
             </div>
           </div>
-          <div className="finance-dashboard-form-grid">
-            <label>
-              Saldo conferido
-              <MoneyInput value={closingAmount} onChange={setClosingAmount} />
-            </label>
-            <label>
-              Observacoes
-              <input value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} placeholder="Ex: caixa fechado as 18h" />
-            </label>
-          </div>
-          <div className="finance-dashboard-action-row finance-dashboard-action-row-left">
-            <button type="button" className="finance-dashboard-action-link primary" onClick={saveDailyClosing} disabled={closingSaving}>
-              {closingSaving ? 'Salvando...' : 'Salvar fechamento'}
-            </button>
+          <div className="finance-dashboard-account-closing-list">
+            {(data?.accountClosings ?? []).map((item) => {
+              const form = accountClosingForms[item.accountId] ?? {
+                checkedBalance: item.checkedBalance ?? item.projectedBalance,
+                notes: item.notes ?? ''
+              };
+              const saving = closingSavingByAccount[item.accountId] ?? false;
+              return (
+                <div key={item.accountId} className="finance-dashboard-account-closing-card">
+                  <div className="finance-dashboard-account-closing-head">
+                    <div>
+                      <strong>{item.accountName}</strong>
+                      <span>{accountTypeLabels[item.accountType]}</span>
+                    </div>
+                    <div className="finance-dashboard-account-closing-metrics">
+                      <div>
+                        <small>Saldo base</small>
+                        <strong>{formatCurrency(item.baseBalance)}</strong>
+                      </div>
+                      <div>
+                        <small>Projetado</small>
+                        <strong>{formatCurrency(item.projectedBalance)}</strong>
+                      </div>
+                      <div>
+                        <small>Diferenca</small>
+                        <strong>{item.difference == null ? '-' : formatCurrency(item.difference)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="finance-dashboard-form-grid">
+                    <label>
+                      Saldo conferido
+                      <MoneyInput
+                        value={form.checkedBalance}
+                        onChange={(value) => updateAccountClosingForm(item.accountId, { checkedBalance: value })}
+                      />
+                    </label>
+                    <label>
+                      Observacoes
+                      <input
+                        value={form.notes}
+                        onChange={(event) => updateAccountClosingForm(item.accountId, { notes: event.target.value })}
+                        placeholder="Ex: extrato conferido"
+                      />
+                    </label>
+                  </div>
+                  <div className="finance-dashboard-action-row finance-dashboard-action-row-left">
+                    <button
+                      type="button"
+                      className="finance-dashboard-action-link primary"
+                      onClick={() => saveDailyClosing(item)}
+                      disabled={saving}
+                    >
+                      {saving ? 'Salvando...' : 'Salvar fechamento'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </article>
       </div>
@@ -771,7 +840,7 @@ export const FinanceDashboardPage = () => {
             </div>
             <div className="finance-dashboard-inline-metric">
               <span>Base para saldo projetado</span>
-              <strong>Saldo inicial</strong>
+              <strong>Saldo base</strong>
             </div>
           </div>
         </article>

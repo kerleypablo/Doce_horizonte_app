@@ -64,7 +64,6 @@ export type ManualSale = {
   netAmount: number;
   tags: string[];
   products: ManualSaleProduct[];
-  reconciled: boolean;
   notes?: string;
 };
 
@@ -77,15 +76,28 @@ export type Expense = {
   paymentMethod: PaymentMethod;
   amount: number;
   netAmount: number;
-  reconciled: boolean;
   recurring: boolean;
   notes?: string;
 };
 
 export type DailyClosing = {
   id: string;
+  accountId: string;
   date: string;
   checkedBalance: number;
+  notes?: string;
+};
+
+export type AccountClosing = {
+  id: string | null;
+  accountId: string;
+  accountName: string;
+  accountType: AccountType;
+  balanceDate?: string | null;
+  baseBalance: number;
+  projectedBalance: number;
+  checkedBalance: number | null;
+  difference: number | null;
   notes?: string;
 };
 
@@ -119,6 +131,7 @@ export type DashboardData = {
   expensesByCategory: Array<{ category: ExpenseCategory; amount: number; count: number }>;
   originCostRules: OriginCostRule[];
   dailyClosing: DailyClosing | null;
+  accountClosings: AccountClosing[];
   accountsByType: Array<{ accountType: AccountType; balanceAmount: number; count: number }>;
   accounts: Array<{ id: string; name: string; accountType: AccountType; balanceAmount: number }>;
 };

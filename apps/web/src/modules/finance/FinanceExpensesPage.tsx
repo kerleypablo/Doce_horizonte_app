@@ -18,7 +18,7 @@ import {
 } from './constants.ts';
 import { useExpenses, useFinanceAccounts, useFinanceRange } from './hooks.ts';
 import { formatCurrency, todayDate } from './utils.ts';
-import type { Expense, ExpenseCategory, PaymentMethod } from './types.ts';
+import type { ExpenseCategory, PaymentMethod } from './types.ts';
 
 export const FinanceExpensesPage = () => {
   const { user } = useAuth();
@@ -123,17 +123,6 @@ export const FinanceExpensesPage = () => {
     const matchesCategory = !categoryFilter || item.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
-
-  const toggleExpenseReconciled = async (expense: Expense) => {
-    await apiFetch(`/finance/expenses/${expense.id}/reconciled`, {
-      method: 'PUT',
-      token: user?.token,
-      body: JSON.stringify({ reconciled: !expense.reconciled })
-    });
-    invalidateQueryCache(financeExpensesKey);
-    invalidateQueryCache(financeDashboardKey);
-    await expensesQuery.refetch();
-  };
 
   const confirmDeleteExpense = async () => {
     if (!deletingExpense) return;
@@ -248,14 +237,6 @@ export const FinanceExpensesPage = () => {
                     </span>
                     {item.recurring ? <span className="finance-list-tags">Recorrente</span> : null}
                   </div>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={item.reconciled ? 'Marcar despesa como nao conferida' : 'Marcar despesa como conferida'}
-                    onClick={() => toggleExpenseReconciled(item)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">{item.reconciled ? 'check_circle' : 'radio_button_unchecked'}</span>
-                  </button>
                   <button
                     type="button"
                     className="icon-button"

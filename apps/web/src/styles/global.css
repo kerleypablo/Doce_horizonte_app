@@ -3996,6 +3996,9 @@ button:disabled {
 }
 
 .finance-dashboard-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -4004,6 +4007,7 @@ button:disabled {
   font-weight: 700;
   cursor: pointer;
   transition: 0.2s ease;
+  text-align: center;
 }
 
 .finance-dashboard-tabs button.active {
@@ -4184,6 +4188,50 @@ button.finance-dashboard-action-link {
   gap: 6px;
 }
 
+.finance-dashboard-account-closing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.finance-dashboard-account-closing-card {
+  padding: 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-alt) 72%, white);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, white);
+}
+
+.finance-dashboard-account-closing-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.finance-dashboard-account-closing-head > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.finance-dashboard-account-closing-head span,
+.finance-dashboard-account-closing-metrics small {
+  color: var(--muted);
+}
+
+.finance-dashboard-account-closing-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(100px, 1fr));
+  gap: 10px;
+}
+
+.finance-dashboard-account-closing-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .finance-dashboard-cost-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4292,6 +4340,12 @@ button.finance-dashboard-action-link {
   .finance-dashboard-form-grid,
   .finance-dashboard-cost-grid {
     grid-template-columns: 1fr;
+  }
+
+  .finance-dashboard-account-closing-head,
+  .finance-dashboard-account-closing-metrics {
+    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 }
 

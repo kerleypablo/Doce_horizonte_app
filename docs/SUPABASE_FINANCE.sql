@@ -60,12 +60,13 @@ create table if not exists financial_expenses (
 create table if not exists financial_daily_closings (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references companies(id) on delete cascade,
+  account_id uuid not null references financial_accounts(id) on delete cascade,
   closing_date date not null,
   checked_balance numeric not null default 0,
   notes text,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  unique (company_id, closing_date)
+  unique (company_id, account_id, closing_date)
 );
 
 create table if not exists financial_origin_cost_rules (
@@ -79,6 +80,7 @@ create table if not exists financial_origin_cost_rules (
 );
 
 alter table financial_accounts add column if not exists account_type text not null default 'BANK';
+alter table financial_daily_closings add column if not exists account_id uuid references financial_accounts(id) on delete cascade;
 alter table financial_manual_sales add column if not exists tags text[] not null default '{}';
 alter table financial_manual_sales add column if not exists products jsonb not null default '[]';
 alter table financial_manual_sales add column if not exists reconciled boolean not null default false;
@@ -94,6 +96,7 @@ create index if not exists financial_manual_sales_tags_gin_idx on financial_manu
 create index if not exists financial_expenses_company_date_idx on financial_expenses(company_id, occurred_at);
 create index if not exists financial_expenses_company_category_idx on financial_expenses(company_id, category);
 create index if not exists financial_daily_closings_company_date_idx on financial_daily_closings(company_id, closing_date);
+create index if not exists financial_daily_closings_company_account_date_idx on financial_daily_closings(company_id, account_id, closing_date);
 create index if not exists financial_origin_cost_rules_company_idx on financial_origin_cost_rules(company_id);
 
 insert into financial_method_rules (company_id, method, mode, value)
