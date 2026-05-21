@@ -549,24 +549,6 @@ export const FinanceDashboardPage = () => {
   const salesContent = (
     <div className="finance-dashboard-content-grid">
       <div className="finance-dashboard-main">
-        <div className="finance-dashboard-headline-grid finance-dashboard-headline-grid-compact">
-          <article className="finance-dashboard-stat-card">
-            <span>Vendas avulsas liquidas</span>
-            <strong>{formatCurrency(data?.totals.manualSalesNet ?? 0)}</strong>
-            <small>{(salesQuery.data ?? []).length} lancamento(s) no periodo</small>
-          </article>
-          <article className="finance-dashboard-stat-card">
-            <span>Taxas estimadas</span>
-            <strong>{formatCurrency(data?.totals.manualSalesFees ?? 0)}</strong>
-            <small>Descontos por forma de pagamento</small>
-          </article>
-          <article className="finance-dashboard-stat-card">
-            <span>Lucro estimado</span>
-            <strong>{formatCurrency(data?.totals.manualSalesEstimatedProfit ?? 0)}</strong>
-            <small>Usando custo medio por origem</small>
-          </article>
-        </div>
-
         <article className="finance-dashboard-panel">
           <div className="finance-dashboard-panel-head compact">
             <div>
@@ -603,28 +585,6 @@ export const FinanceDashboardPage = () => {
   const expensesContent = (
     <div className="finance-dashboard-content-grid">
       <div className="finance-dashboard-main">
-        <div className="finance-dashboard-headline-grid finance-dashboard-headline-grid-compact">
-          <article className="finance-dashboard-stat-card">
-            <span>Despesas liquidas</span>
-            <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
-            <small>{(expensesQuery.data ?? []).length} lancamento(s) no periodo</small>
-          </article>
-          <article className="finance-dashboard-stat-card">
-            <span>Recorrentes</span>
-            <strong>{formatCurrency(data?.totals.recurringExpensesNet ?? 0)}</strong>
-            <small>Compromissos recorrentes do mes</small>
-          </article>
-          <article className="finance-dashboard-stat-card">
-            <span>Maior categoria</span>
-            <strong>
-              {data?.expensesByCategory?.length
-                ? expenseCategoryLabels[[...(data.expensesByCategory ?? [])].sort((a, b) => b.amount - a.amount)[0]?.category]
-                : '-'}
-            </strong>
-            <small>Categoria que mais pressiona o caixa</small>
-          </article>
-        </div>
-
         <article className="finance-dashboard-panel">
           <div className="finance-dashboard-panel-head compact">
             <div>
@@ -676,24 +636,6 @@ export const FinanceDashboardPage = () => {
   const setupContent = (
     <div className="finance-dashboard-content-grid">
       <div className="finance-dashboard-main">
-        <div className="finance-dashboard-headline-grid finance-dashboard-headline-grid-compact">
-          <article className="finance-dashboard-stat-card">
-            <span>Saldo base em contas</span>
-            <strong>{formatCurrency(data?.totals.accountsBalance ?? 0)}</strong>
-            <small>Base inicial do caixa projetado</small>
-          </article>
-          <article className="finance-dashboard-stat-card">
-            <span>Tipos de conta ativos</span>
-            <strong>{(data?.accountsByType ?? []).filter((item) => item.count > 0).length}</strong>
-            <small>Banco, caixa, recebiveis e outros</small>
-          </article>
-          <article className="finance-dashboard-stat-card">
-            <span>Estrutura do financeiro</span>
-            <strong>Contas + regras</strong>
-            <small>Cadastros que sustentam os calculos</small>
-          </article>
-        </div>
-
         <article className="finance-dashboard-panel">
           <div className="finance-dashboard-panel-head compact">
             <div>
@@ -763,14 +705,16 @@ export const FinanceDashboardPage = () => {
           ))}
         </div>
 
-        <div className="finance-dashboard-hero">
-          <div className="finance-dashboard-balance-card">
-            <span className="finance-dashboard-section-label">Saldo projetado</span>
-            <strong>{formatCurrency(data?.totals.projectedBalance ?? 0)}</strong>
-            <small>
-              {formatRangeDate(from)} ate {formatRangeDate(to)}
-            </small>
-          </div>
+        <div className={`finance-dashboard-hero ${activeHomeTab !== 'dashboard' ? 'finance-dashboard-hero-compact' : ''}`}>
+          {activeHomeTab === 'dashboard' ? (
+            <div className="finance-dashboard-balance-card">
+              <span className="finance-dashboard-section-label">Saldo projetado</span>
+              <strong>{formatCurrency(data?.totals.projectedBalance ?? 0)}</strong>
+              <small>
+                {formatRangeDate(from)} ate {formatRangeDate(to)}
+              </small>
+            </div>
+          ) : <div />}
 
           <div className="finance-dashboard-period">
             <div className="finance-dashboard-pill-row">
@@ -796,15 +740,17 @@ export const FinanceDashboardPage = () => {
           </div>
         </div>
 
-        <div className="finance-dashboard-headline-grid">
-          {headlineCards.map((card) => (
-            <article key={card.label} className="finance-dashboard-stat-card">
-              <span>{card.label}</span>
-              <strong>{card.value}</strong>
-              <small>{card.note}</small>
-            </article>
-          ))}
-        </div>
+        {activeHomeTab === 'dashboard' ? (
+          <div className="finance-dashboard-headline-grid">
+            {headlineCards.map((card) => (
+              <article key={card.label} className="finance-dashboard-stat-card">
+                <span>{card.label}</span>
+                <strong>{card.value}</strong>
+                <small>{card.note}</small>
+              </article>
+            ))}
+          </div>
+        ) : null}
 
         {contentByHomeTab[activeHomeTab]}
       </section>
