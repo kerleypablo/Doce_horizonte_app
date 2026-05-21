@@ -14,18 +14,15 @@ import { FinanceAccessBlocked, FinanceHeader } from './FinanceShared.tsx';
 import {
   accountTypeKeys,
   accountTypeLabels,
-  expenseCategoryKeys,
-  expenseCategoryLabels,
   financeAccountsKey,
   financeAccountsSummaryKey,
   financeDashboardKey,
   financeExpensesKey,
-  financeManualSalesKey,
-  methodLabels
+  financeManualSalesKey
 } from './constants.ts';
 import { useFinanceAccounts, useFinanceAccountsSummary, useFinanceRange } from './hooks.ts';
 import { formatCurrency, monthStart, todayDate } from './utils.ts';
-import type { AccountType, ExpenseCategory, FinanceAccount, PaymentMethod } from './types.ts';
+import type { AccountType, FinanceAccount } from './types.ts';
 
 const getThemeTokens = () => {
   if (typeof window === 'undefined') {
@@ -50,10 +47,6 @@ const getThemeTokens = () => {
   };
 };
 
-type AdjustmentKind = 'ENTRY' | 'EXIT';
-
-const paymentMethodOptions: PaymentMethod[] = ['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'];
-
 export const FinanceAccountsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -69,8 +62,7 @@ export const FinanceAccountsPage = () => {
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
   const [saving, setSaving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState<{ id: string; name: string } | null>(null);
-  const [adjustingAccount, setAdjustingAccount] = useState<FinanceAccount | null>(null);
-  const [adjustmentSaving, setAdjustmentSaving] = useState(false);
+  const [deletingAdjustment, setDeletingAdjustment] = useState<{ id: string; kind: 'ENTRY' | 'EXIT'; description: string } | null>(null);
   const initializedRouteRef = useRef<string | null>(null);
   const fromPickerRef = useRef<HTMLInputElement | null>(null);
   const toPickerRef = useRef<HTMLInputElement | null>(null);
@@ -80,15 +72,6 @@ export const FinanceAccountsPage = () => {
     institution: '',
     balanceDate: todayDate,
     balanceAmount: 0,
-    notes: ''
-  });
-  const [adjustmentForm, setAdjustmentForm] = useState({
-    kind: 'EXIT' as AdjustmentKind,
-    occurredAt: `${todayDate}T12:00`,
-    paymentMethod: 'PIX' as PaymentMethod,
-    amount: 0,
-    description: 'Ajuste de saldo',
-    category: 'OUTROS' as ExpenseCategory,
     notes: ''
   });
 
@@ -131,18 +114,6 @@ export const FinanceAccountsPage = () => {
     setForm({ name: '', accountType: 'BANK', institution: '', balanceDate: todayDate, balanceAmount: 0, notes: '' });
   };
 
-  const resetAdjustmentForm = (account?: FinanceAccount | null) => {
-    setAdjustmentForm({
-      kind: 'EXIT',
-      occurredAt: `${todayDate}T12:00`,
-      paymentMethod: 'PIX',
-      amount: 0,
-      description: account ? `Ajuste de saldo - ${account.name}` : 'Ajuste de saldo',
-      category: 'OUTROS',
-      notes: ''
-    });
-  };
-
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -178,26 +149,18 @@ export const FinanceAccountsPage = () => {
     setDeletingAccount(null);
   };
 
-  const submitAdjustment = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!adjustingAccount) return;
-    setAdjustmentSaving(true);
-    try {
-      await apiFetch(`/finance/accounts/${adjustingAccount.id}/adjustments`, {
-        method: 'POST',
-        token: user?.token,
-        body: JSON.stringify(adjustmentForm)
-      });
-      invalidateQueryCache(financeAccountsSummaryKey);
-      invalidateQueryCache(financeDashboardKey);
-      invalidateQueryCache(financeManualSalesKey);
-      invalidateQueryCache(financeExpensesKey);
-      await accountsSummaryQuery.refetch();
-      setAdjustingAccount(null);
-      resetAdjustmentForm(null);
-    } finally {
-      setAdjustmentSaving(false);
-    }
+  const confirmDeleteAdjustment = async () => {
+    if (!deletingAdjustment) return;
+    await apiFetch(`/finance/account-adjustments/${deletingAdjustment.kind}/${deletingAdjustment.id}`, {
+      method: 'DELETE',
+      token: user?.token
+    });
+    invalidateQueryCache(financeAccountsSummaryKey);
+    invalidateQueryCache(financeDashboardKey);
+    invalidateQueryCache(financeManualSalesKey);
+    invalidateQueryCache(financeExpensesKey);
+    await accountsSummaryQuery.refetch();
+    setDeletingAdjustment(null);
   };
 
   const filtered = (accountsQuery.data ?? []).filter((item) =>
@@ -244,6 +207,7 @@ export const FinanceAccountsPage = () => {
   }, [from, to]);
 
   const theme = getThemeTokens();
+  const currentBalanceMap = new Map((accountsSummaryQuery.data?.accounts ?? []).map((item) => [item.accountId, item.currentBalance]));
 
   const historyChartOptions = useMemo<Highcharts.Options>(() => ({
     chart: {
@@ -357,66 +321,6 @@ export const FinanceAccountsPage = () => {
             </div>
           </div>
 
-          {adjustingAccount ? (
-            <div className="panel finance-dashboard-panel">
-              <FinanceHeader title={`Lancar ajuste - ${adjustingAccount.name}`} backTo="/app/financeiro/contas" />
-              <form className="form" onSubmit={submitAdjustment}>
-                <div className="grid-2">
-                  <label>
-                    Tipo de ajuste
-                    <SelectField
-                      value={adjustmentForm.kind}
-                      onChange={(value) => setAdjustmentForm((current) => ({ ...current, kind: value as AdjustmentKind }))}
-                      options={[
-                        { value: 'EXIT', label: 'Saida' },
-                        { value: 'ENTRY', label: 'Entrada' }
-                      ]}
-                    />
-                  </label>
-                  <label>
-                    Forma de pagamento
-                    <SelectField
-                      value={adjustmentForm.paymentMethod}
-                      onChange={(value) => setAdjustmentForm((current) => ({ ...current, paymentMethod: value as PaymentMethod }))}
-                      options={paymentMethodOptions.map((method) => ({ value: method, label: methodLabels[method] }))}
-                    />
-                  </label>
-                </div>
-                <div className="grid-2">
-                  <label>Data e hora<input type="datetime-local" value={adjustmentForm.occurredAt} onChange={(event) => setAdjustmentForm((current) => ({ ...current, occurredAt: event.target.value }))} required /></label>
-                  <label>Valor<MoneyInput value={adjustmentForm.amount} onChange={(value) => setAdjustmentForm((current) => ({ ...current, amount: value }))} /></label>
-                </div>
-                <label>Descricao<input value={adjustmentForm.description} onChange={(event) => setAdjustmentForm((current) => ({ ...current, description: event.target.value }))} required /></label>
-                {adjustmentForm.kind === 'EXIT' ? (
-                  <label>
-                    Categoria
-                    <SelectField
-                      value={adjustmentForm.category}
-                      onChange={(value) => setAdjustmentForm((current) => ({ ...current, category: value as ExpenseCategory }))}
-                      options={expenseCategoryKeys.map((key) => ({ value: key, label: expenseCategoryLabels[key] }))}
-                    />
-                  </label>
-                ) : null}
-                <label>Observacoes<input value={adjustmentForm.notes} onChange={(event) => setAdjustmentForm((current) => ({ ...current, notes: event.target.value }))} /></label>
-                <div className="actions">
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => {
-                      setAdjustingAccount(null);
-                      resetAdjustmentForm(null);
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={adjustmentSaving || adjustmentForm.amount <= 0}>
-                    {adjustmentSaving ? 'Salvando...' : 'Salvar ajuste'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          ) : null}
-
           <div className="panel">
             <FinanceHeader title="Contas cadastradas" backTo="/app/financeiro" />
             <ListToolbar
@@ -431,15 +335,14 @@ export const FinanceAccountsPage = () => {
                 <div key={item.id} className="list-row finance-account-row">
                   <div>
                     <strong>{item.name}</strong>
-                    <span className="muted">{accountTypeLabels[item.accountType]} • {item.institution || '-'} • {item.balanceDate} • {formatCurrency(item.balanceAmount)}</span>
+                    <span className="muted">
+                      {accountTypeLabels[item.accountType]} • {item.institution || '-'} • base {item.balanceDate} • atual {formatCurrency(currentBalanceMap.get(item.id) ?? item.balanceAmount)}
+                    </span>
                   </div>
                   <button
                     type="button"
                     className="finance-dashboard-action-link"
-                    onClick={() => {
-                      setAdjustingAccount(item);
-                      resetAdjustmentForm(item);
-                    }}
+                    onClick={() => navigate(`/app/financeiro/contas/ajustes/novo?accountId=${item.id}`)}
                   >
                     Lancar ajuste
                   </button>
@@ -475,7 +378,25 @@ export const FinanceAccountsPage = () => {
                     <strong>{item.description}</strong>
                     <span>{new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : 'Saida'}</span>
                   </div>
-                  <strong>{formatCurrency(item.amount)}</strong>
+                  <div className="finance-accounts-adjustment-actions">
+                    <strong>{formatCurrency(item.amount)}</strong>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Editar ajuste"
+                      onClick={() => navigate(`/app/financeiro/contas/ajustes/${item.kind}/${item.id}`)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Excluir ajuste"
+                      onClick={() => setDeletingAdjustment({ id: item.id, kind: item.kind, description: item.description })}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                  </div>
                 </div>
               ))}
               {(accountsSummaryQuery.data?.adjustments ?? []).length === 0 ? (
@@ -528,6 +449,14 @@ export const FinanceAccountsPage = () => {
         confirmLabel="Excluir"
         onConfirm={confirmDeleteAccount}
         onCancel={() => setDeletingAccount(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(deletingAdjustment)}
+        title="Excluir ajuste"
+        message={deletingAdjustment ? `Deseja excluir o ajuste "${deletingAdjustment.description}"?` : ''}
+        confirmLabel="Excluir"
+        onConfirm={confirmDeleteAdjustment}
+        onCancel={() => setDeletingAdjustment(null)}
       />
     </div>
   );

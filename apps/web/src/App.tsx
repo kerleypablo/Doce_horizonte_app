@@ -15,6 +15,7 @@ import { SettingsPage } from './modules/settings/SettingsPage.tsx';
 import { TasksBoardPage } from './modules/tasks/TasksBoardPage.tsx';
 import { BackofficePage } from './modules/backoffice/BackofficePage.tsx';
 import {
+  FinanceAccountAdjustmentsPage,
   FinanceAccountsPage,
   FinanceDashboardPage,
   FinanceExpensesPage,
@@ -51,6 +52,8 @@ const App = () => {
         <Route path="/app/financeiro/contas" element={<FinanceAccountsPage />} />
         <Route path="/app/financeiro/contas/novo" element={<FinanceAccountsPage />} />
         <Route path="/app/financeiro/contas/editar/:accountId" element={<FinanceAccountsPage />} />
+        <Route path="/app/financeiro/contas/ajustes/novo" element={<FinanceAccountAdjustmentsPage />} />
+        <Route path="/app/financeiro/contas/ajustes/:kind/:adjustmentId" element={<FinanceAccountAdjustmentsPage />} />
         <Route path="/app/financeiro/regras" element={<FinanceRulesPage />} />
         <Route path="/app/financeiro/vendas-manuais" element={<FinanceManualSalesPage />} />
         <Route path="/app/financeiro/vendas-manuais/novo" element={<FinanceManualSalesPage />} />

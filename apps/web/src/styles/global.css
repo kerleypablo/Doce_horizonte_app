@@ -4258,6 +4258,12 @@ button.finance-dashboard-action-link {
   margin-top: 18px;
 }
 
+.finance-accounts-adjustment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .finance-dashboard-side-card.accent {
   background:
     linear-gradient(140deg, color-mix(in srgb, var(--accent-strong) 88%, white) 0%, color-mix(in srgb, var(--accent) 72%, white) 100%);

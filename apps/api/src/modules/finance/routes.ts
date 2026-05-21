@@ -57,12 +57,19 @@ const reconciliationAdjustmentSchema = z.object({
 
 const accountAdjustmentSchema = z.object({
   kind: z.enum(['ENTRY', 'EXIT']),
+  accountId: z.string().uuid().optional(),
+  origin: z.enum(['balcao', 'rua', 'porta-a-porta', 'ifood', 'outros']).optional(),
   occurredAt: z.string().min(1),
   paymentMethod: paymentMethodSchema,
   amount: z.number().positive(),
   description: z.string().min(2).optional(),
   category: expenseCategorySchema.optional(),
   notes: z.string().optional()
+});
+
+const accountAdjustmentParamsSchema = z.object({
+  kind: z.enum(['ENTRY', 'EXIT']),
+  id: z.string().uuid()
 });
 
 const methodRuleSchema = z.object({
@@ -329,6 +336,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     id: row.id,
     accountId: row.account_id ?? undefined,
     kind,
+    origin: kind === 'ENTRY' ? getSaleOrigin(row.tags) : undefined,
     occurredAt: row.occurred_at,
     description: row.description,
     paymentMethod: row.payment_method as z.infer<typeof paymentMethodSchema>,
@@ -337,6 +345,14 @@ export const financeRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? '',
     createdAt: row.created_at
   });
+
+  const formatExitAdjustmentDescription = (description?: string) => {
+    const baseDescription = description?.trim() || 'Ajuste de saldo';
+    return baseDescription.startsWith('Ajuste de saldo') ? baseDescription : `Ajuste de saldo - ${baseDescription}`;
+  };
+
+  const isAdjustmentSale = (row: any) => Array.isArray(row?.tags) && row.tags.includes('ajuste');
+  const isAdjustmentExpense = (row: any) => String(row?.description ?? '').startsWith('Ajuste de saldo');
 
 	  const getRules = async (companyId: string): Promise<MethodRule[]> => {
     const { data, error } = await supabaseAdmin
@@ -416,10 +432,12 @@ export const financeRoutes = async (app: FastifyInstance) => {
   app.get('/finance/accounts/summary', financeGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const range = parseDateRange(request.query);
-    const [{ data: accounts }, { data: closings }, { data: adjustmentSales }, { data: adjustmentExpenses }] = await Promise.all([
+    const rules = await getRules(auth.companyId);
+    const rulesMap = new Map(rules.map((item) => [item.method, item]));
+    const [{ data: accounts }, { data: closings }, { data: adjustmentSales }, { data: adjustmentExpenses }, { data: accountSales }, { data: accountExpenses }] = await Promise.all([
       supabaseAdmin
         .from('financial_accounts')
-        .select('id, balance_date, balance_amount')
+        .select('id, name, account_type, institution, balance_date, balance_amount')
         .eq('company_id', auth.companyId),
       supabaseAdmin
         .from('financial_daily_closings')
@@ -443,6 +461,19 @@ export const financeRoutes = async (app: FastifyInstance) => {
         .ilike('description', 'Ajuste de saldo%')
         .gte('occurred_at', range.fromIso)
         .lte('occurred_at', range.toIso)
+        .order('occurred_at', { ascending: false }),
+      supabaseAdmin
+        .from('financial_manual_sales')
+        .select('*')
+        .eq('company_id', auth.companyId)
+        .not('account_id', 'is', null)
+        .lte('occurred_at', range.toIso),
+      supabaseAdmin
+        .from('financial_expenses')
+        .select('*')
+        .eq('company_id', auth.companyId)
+        .not('account_id', 'is', null)
+        .lte('occurred_at', range.toIso)
         .order('occurred_at', { ascending: false })
     ]);
 
@@ -462,11 +493,38 @@ export const financeRoutes = async (app: FastifyInstance) => {
       historyMap.set(closingDate, (historyMap.get(closingDate) ?? 0) + Number(closing.checked_balance ?? 0));
     }
 
+    const accountsWithCurrentBalance = (accounts ?? []).map((account) => {
+      const accountId = String(account.id);
+      const balanceDate = String(account.balance_date ?? '');
+      const salesNet = (accountSales ?? []).reduce((sum, row) => {
+        if (String(row.account_id ?? '') !== accountId) return sum;
+        const occurredDate = String(row.occurred_at ?? '').slice(0, 10);
+        if (balanceDate && occurredDate < balanceDate) return sum;
+        const amount = Number(row.amount ?? 0);
+        const rule = rulesMap.get(toMethodKey(row.payment_method));
+        return sum + calcLiquidByRule(amount, rule);
+      }, 0);
+      const expensesNet = (accountExpenses ?? []).reduce((sum, row) => {
+        if (String(row.account_id ?? '') !== accountId) return sum;
+        const occurredDate = String(row.occurred_at ?? '').slice(0, 10);
+        if (balanceDate && occurredDate < balanceDate) return sum;
+        const amount = Number(row.amount ?? 0);
+        const rule = rulesMap.get(toMethodKey(row.payment_method));
+        return sum + calcLiquidByRule(amount, rule);
+      }, 0);
+
+      return {
+        accountId,
+        currentBalance: Number(account.balance_amount ?? 0) + salesNet - expensesNet
+      };
+    });
+
     return {
       range: { from: range.from, to: range.to },
       history: Array.from(historyMap.entries())
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([date, totalBalance]) => ({ date, totalBalance })),
+      accounts: accountsWithCurrentBalance,
       adjustments: [
         ...((adjustmentSales ?? []).map((row) => mapAccountAdjustment(row, 'ENTRY'))),
         ...((adjustmentExpenses ?? []).map((row) => mapAccountAdjustment(row, 'EXIT')))
@@ -606,13 +664,13 @@ export const financeRoutes = async (app: FastifyInstance) => {
         .from('financial_manual_sales')
         .insert({
           company_id: auth.companyId,
-          account_id: params.id,
+          account_id: body.accountId ?? params.id,
           occurred_at: body.occurredAt,
           description: baseDescription,
           payment_method: body.paymentMethod,
           amount: body.amount,
           products: [],
-          tags: normalizeTags(['ajuste']),
+          tags: normalizeTags(['ajuste', body.origin ?? 'outros']),
           notes: body.notes ?? null
         })
         .select('*')
@@ -621,12 +679,12 @@ export const financeRoutes = async (app: FastifyInstance) => {
       return reply.status(201).send({ kind: 'ENTRY', item: mapAccountAdjustment(data, 'ENTRY') });
     }
 
-    const expenseDescription = baseDescription.startsWith('Ajuste de saldo') ? baseDescription : `Ajuste de saldo - ${baseDescription}`;
+    const expenseDescription = formatExitAdjustmentDescription(baseDescription);
     const { data, error } = await supabaseAdmin
-      .from('financial_expenses')
+        .from('financial_expenses')
       .insert({
         company_id: auth.companyId,
-        account_id: params.id,
+        account_id: body.accountId ?? params.id,
         occurred_at: body.occurredAt,
         description: expenseDescription,
         category: body.category ?? 'OUTROS',
@@ -639,6 +697,118 @@ export const financeRoutes = async (app: FastifyInstance) => {
       .single();
     if (error) return reply.status(400).send({ message: 'Erro ao lancar ajuste de saida', detail: error.message });
     return reply.status(201).send({ kind: 'EXIT', item: mapAccountAdjustment(data, 'EXIT') });
+  });
+
+  app.get('/finance/account-adjustments/:kind/:id', financeGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const params = accountAdjustmentParamsSchema.parse(request.params);
+
+    if (params.kind === 'ENTRY') {
+      const { data, error } = await supabaseAdmin
+        .from('financial_manual_sales')
+        .select('*')
+        .eq('id', params.id)
+        .eq('company_id', auth.companyId)
+        .single();
+      if (error || !data || !isAdjustmentSale(data)) {
+        return reply.status(404).send({ message: 'Ajuste nao encontrado' });
+      }
+      return { kind: 'ENTRY', item: mapAccountAdjustment(data, 'ENTRY') };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('financial_expenses')
+      .select('*')
+      .eq('id', params.id)
+      .eq('company_id', auth.companyId)
+      .single();
+    if (error || !data || !isAdjustmentExpense(data)) {
+      return reply.status(404).send({ message: 'Ajuste nao encontrado' });
+    }
+    return { kind: 'EXIT', item: mapAccountAdjustment(data, 'EXIT') };
+  });
+
+  app.put('/finance/account-adjustments/:kind/:id', financeGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const params = accountAdjustmentParamsSchema.parse(request.params);
+    const body = accountAdjustmentSchema.parse(request.body);
+
+    if (params.kind === 'ENTRY') {
+      const { data, error } = await supabaseAdmin
+        .from('financial_manual_sales')
+        .update({
+          account_id: body.accountId ?? null,
+          occurred_at: body.occurredAt,
+          description: body.description?.trim() || 'Ajuste de saldo',
+          payment_method: body.paymentMethod,
+          amount: body.amount,
+          products: [],
+          tags: normalizeTags(['ajuste', body.origin ?? 'outros']),
+          notes: body.notes ?? null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.id)
+        .eq('company_id', auth.companyId)
+        .select('*')
+        .single();
+      if (error || !data || !isAdjustmentSale(data)) {
+        return reply.status(400).send({ message: 'Erro ao atualizar ajuste de entrada', detail: error?.message });
+      }
+      return reply.send({ kind: 'ENTRY', item: mapAccountAdjustment(data, 'ENTRY') });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('financial_expenses')
+      .update({
+        account_id: body.accountId ?? null,
+        occurred_at: body.occurredAt,
+        description: formatExitAdjustmentDescription(body.description),
+        category: body.category ?? 'OUTROS',
+        payment_method: body.paymentMethod,
+        amount: body.amount,
+        recurring: false,
+        notes: body.notes ?? null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', params.id)
+      .eq('company_id', auth.companyId)
+      .select('*')
+      .single();
+    if (error || !data || !isAdjustmentExpense(data)) {
+      return reply.status(400).send({ message: 'Erro ao atualizar ajuste de saida', detail: error?.message });
+    }
+    return reply.send({ kind: 'EXIT', item: mapAccountAdjustment(data, 'EXIT') });
+  });
+
+  app.delete('/finance/account-adjustments/:kind/:id', financeGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const params = accountAdjustmentParamsSchema.parse(request.params);
+
+    if (params.kind === 'ENTRY') {
+      const { data, error } = await supabaseAdmin
+        .from('financial_manual_sales')
+        .delete()
+        .eq('id', params.id)
+        .eq('company_id', auth.companyId)
+        .select('*')
+        .single();
+      if (error || !data || !isAdjustmentSale(data)) {
+        return reply.status(400).send({ message: 'Erro ao remover ajuste de entrada', detail: error?.message });
+      }
+      return reply.status(204).send();
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('financial_expenses')
+      .delete()
+      .eq('id', params.id)
+      .eq('company_id', auth.companyId)
+      .select('*')
+      .single();
+    if (error || !data || !isAdjustmentExpense(data)) {
+      return reply.status(400).send({ message: 'Erro ao remover ajuste de saida', detail: error?.message });
+    }
+    return reply.status(204).send();
   });
 
 	  app.delete('/finance/accounts/:id', financeGuard, async (request, reply) => {
