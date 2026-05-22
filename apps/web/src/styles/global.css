@@ -4484,6 +4484,45 @@ button.finance-dashboard-action-link {
 }
 
 @media (max-width: 720px) {
+  .order-editor .tabs {
+    justify-content: flex-start;
+  }
+
+  .order-tabs {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .order-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .order-tabs-indicator {
+    width: 56px;
+    height: 52px;
+    border-radius: 14px;
+    transform: translateX(calc(var(--order-tab-index, 0) * 64px));
+  }
+
+  .tab-icon {
+    width: 56px;
+    min-width: 56px;
+    height: 52px;
+    border-radius: 14px;
+    padding: 6px 2px;
+  }
+
+  .tab-icon .material-symbols-outlined {
+    font-size: 17px;
+  }
+
+  .tab-icon-label {
+    font-size: 9px;
+  }
+
   .finance-dashboard-hero,
   .finance-dashboard-panel,
   .finance-dashboard-side-card,
