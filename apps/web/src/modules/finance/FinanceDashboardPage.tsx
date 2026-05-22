@@ -181,7 +181,10 @@ const buildBarChart = ({
     shared: true,
     backgroundColor: theme.bg,
     borderColor: theme.border,
-    style: { color: theme.text }
+    style: { color: theme.text },
+    pointFormatter() {
+      return `<span style="color:${this.color}">\u25cf</span> ${this.series.name}: <b>${formatCompactCurrency(Number(this.y ?? 0))}</b><br/>`;
+    }
   },
   plotOptions: {
     bar: {
@@ -608,134 +611,127 @@ export const FinanceDashboardPage = () => {
   );
 
   const salesContent = (
-    <div className="finance-dashboard-content-grid">
-      <div className="finance-dashboard-main">
-        <article className="finance-dashboard-panel">
-          <div className="finance-dashboard-panel-head compact">
-            <div>
-              <span className="finance-dashboard-section-label">Performance</span>
-              <h3>Origem e retorno das vendas</h3>
-            </div>
-            <div className="finance-dashboard-action-row">
-              <Link to="/app/financeiro/vendas-manuais" className="finance-dashboard-action-link">Ver vendas</Link>
-              <Link to="/app/financeiro/vendas-manuais/novo" className="finance-dashboard-action-link primary">Nova venda</Link>
-            </div>
-          </div>
-          <HighchartsReact highcharts={Highcharts} options={originChartOptions} />
-        </article>
+    <>
+      <div className="finance-dashboard-toolbar">
+        <Link to="/app/financeiro/vendas-manuais" className="finance-dashboard-action-link">Ver vendas</Link>
+        <Link to="/app/financeiro/vendas-manuais/novo" className="finance-dashboard-action-link primary">Nova venda</Link>
       </div>
+      <div className="finance-dashboard-content-grid">
+        <div className="finance-dashboard-main">
+          <article className="finance-dashboard-panel">
+            <div className="finance-dashboard-panel-head compact">
+              <div>
+                <span className="finance-dashboard-section-label">Performance</span>
+                <h3>Origem e retorno das vendas</h3>
+              </div>
+            </div>
+            <HighchartsReact highcharts={Highcharts} options={originChartOptions} />
+          </article>
+        </div>
 
-      <aside className="finance-dashboard-side">
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Ultimas vendas</h4>
-          </div>
-          {renderListRows(salesHighlights)}
-        </article>
+        <aside className="finance-dashboard-side">
+          <article className="finance-dashboard-side-card">
+            <div className="finance-dashboard-list-head">
+              <h4>Ultimas vendas</h4>
+            </div>
+            {renderListRows(salesHighlights)}
+          </article>
 
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Liquido por metodo</h4>
-          </div>
-          <HighchartsReact highcharts={Highcharts} options={methodChartOptions} />
-        </article>
-      </aside>
-    </div>
+          <article className="finance-dashboard-side-card">
+            <div className="finance-dashboard-list-head">
+              <h4>Liquido por metodo</h4>
+            </div>
+            <HighchartsReact highcharts={Highcharts} options={methodChartOptions} />
+          </article>
+        </aside>
+      </div>
+    </>
   );
 
   const expensesContent = (
-    <div className="finance-dashboard-content-grid">
-      <div className="finance-dashboard-main">
-        <article className="finance-dashboard-panel">
-          <div className="finance-dashboard-panel-head compact">
-            <div>
-              <span className="finance-dashboard-section-label">Saidas</span>
-              <h3>Despesas por categoria</h3>
-            </div>
-            <div className="finance-dashboard-action-row">
-              <Link to="/app/financeiro/despesas" className="finance-dashboard-action-link">Ver despesas</Link>
-              <Link to="/app/financeiro/despesas/novo" className="finance-dashboard-action-link primary">Nova despesa</Link>
-            </div>
-          </div>
-          <HighchartsReact highcharts={Highcharts} options={expenseChartOptions} />
-        </article>
+    <>
+      <div className="finance-dashboard-toolbar">
+        <Link to="/app/financeiro/despesas" className="finance-dashboard-action-link">Ver despesas</Link>
+        <Link to="/app/financeiro/despesas/novo" className="finance-dashboard-action-link primary">Nova despesa</Link>
       </div>
+      <div className="finance-dashboard-content-grid">
+        <div className="finance-dashboard-main">
+          <article className="finance-dashboard-panel">
+            <div className="finance-dashboard-panel-head compact">
+              <div>
+                <span className="finance-dashboard-section-label">Saidas</span>
+                <h3>Despesas por categoria</h3>
+              </div>
+            </div>
+            <HighchartsReact highcharts={Highcharts} options={expenseChartOptions} />
+          </article>
+        </div>
 
-      <aside className="finance-dashboard-side">
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Ultimas despesas</h4>
-          </div>
-          {renderListRows(expenseHighlights)}
-        </article>
+        <aside className="finance-dashboard-side">
+          <article className="finance-dashboard-side-card">
+            <div className="finance-dashboard-list-head">
+              <h4>Ultimas despesas</h4>
+            </div>
+            {renderListRows(expenseHighlights)}
+          </article>
 
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Pontos de atencao</h4>
-          </div>
-          <div className="finance-dashboard-kpi-stack">
-            <div className="finance-dashboard-inline-metric">
-              <span>Despesas no periodo</span>
-              <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
+          <article className="finance-dashboard-side-card">
+            <div className="finance-dashboard-list-head">
+              <h4>Pontos de atencao</h4>
             </div>
-            <div className="finance-dashboard-inline-metric">
-              <span>Maior categoria</span>
-              <strong>
-                {topExpenseCategory ? expenseCategoryLabels[topExpenseCategory.category] : 'Sem dados'}
-              </strong>
+            <div className="finance-dashboard-kpi-stack">
+              <div className="finance-dashboard-inline-metric">
+                <span>Despesas no periodo</span>
+                <strong>{formatCurrency(data?.totals.expensesNet ?? 0)}</strong>
+              </div>
+              <div className="finance-dashboard-inline-metric">
+                <span>Maior categoria</span>
+                <strong>
+                  {topExpenseCategory ? expenseCategoryLabels[topExpenseCategory.category] : 'Sem dados'}
+                </strong>
+              </div>
+              <div className="finance-dashboard-inline-metric">
+                <span>Recorrentes</span>
+                <strong>
+                  {formatCurrency(data?.totals.recurringExpensesNet ?? 0)}
+                </strong>
+              </div>
             </div>
-            <div className="finance-dashboard-inline-metric">
-              <span>Recorrentes</span>
-              <strong>
-                {formatCurrency(data?.totals.recurringExpensesNet ?? 0)}
-              </strong>
-            </div>
-          </div>
-        </article>
-      </aside>
-    </div>
+          </article>
+        </aside>
+      </div>
+    </>
   );
 
   const accountsContent = (
-    <div className="finance-dashboard-content-grid">
-      <div className="finance-dashboard-main">
-        <article className="finance-dashboard-panel">
-          <div className="finance-dashboard-panel-head compact">
-            <div>
-              <span className="finance-dashboard-section-label">Contas</span>
-              <h3>Saldos por tipo de conta</h3>
-            </div>
-            <div className="finance-dashboard-action-row">
-              <Link to="/app/financeiro/contas" className="finance-dashboard-action-link">Contas</Link>
-              <Link to="/app/financeiro/contas/novo" className="finance-dashboard-action-link primary">Nova conta</Link>
-            </div>
-          </div>
-          <HighchartsReact highcharts={Highcharts} options={accountsChartOptions} />
-        </article>
-
-        <article className="finance-dashboard-panel">
-          <div className="finance-dashboard-panel-head compact">
-            <div>
-              <span className="finance-dashboard-section-label">Operacao</span>
-              <h3>Cadastrar e ajustar contas</h3>
-            </div>
-            <div className="finance-dashboard-action-row">
-              <Link to="/app/financeiro/contas" className="finance-dashboard-action-link">Ver contas</Link>
-            </div>
-          </div>
-          {renderListRows(accountHighlights)}
-        </article>
+    <>
+      <div className="finance-dashboard-toolbar">
+        <Link to="/app/financeiro/contas" className="finance-dashboard-action-link">Ver contas</Link>
+        <Link to="/app/financeiro/contas/novo" className="finance-dashboard-action-link primary">Nova conta</Link>
       </div>
+      <div className="finance-dashboard-content-grid">
+        <div className="finance-dashboard-main">
+          <article className="finance-dashboard-panel">
+            <div className="finance-dashboard-panel-head compact">
+              <div>
+                <span className="finance-dashboard-section-label">Contas</span>
+                <h3>Saldos por tipo de conta</h3>
+              </div>
+            </div>
+            <HighchartsReact highcharts={Highcharts} options={accountsChartOptions} />
+          </article>
+        </div>
 
-      <aside className="finance-dashboard-side">
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Contas organizadas</h4>
-          </div>
-          {renderListRows(accountHighlights)}
-        </article>
-      </aside>
-    </div>
+        <aside className="finance-dashboard-side">
+          <article className="finance-dashboard-side-card">
+            <div className="finance-dashboard-list-head">
+              <h4>Contas organizadas</h4>
+            </div>
+            {renderListRows(accountHighlights)}
+          </article>
+        </aside>
+      </div>
+    </>
   );
 
   const ratesContent = (
@@ -748,27 +744,8 @@ export const FinanceDashboardPage = () => {
               <h3>Ajuste por metodo de pagamento</h3>
             </div>
             <div className="finance-dashboard-action-row">
-              <Link to="/app/financeiro/regras" className="finance-dashboard-action-link primary">Abrir tela de regras</Link>
+              <Link to="/app/financeiro/regras" className="finance-dashboard-action-link primary">Editar regras</Link>
             </div>
-          </div>
-          <div className="finance-dashboard-cost-grid">
-            {(['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'] as const).map((method) => {
-              const rule = data?.methodRules?.find((item) => item.method === method);
-              return (
-                <label key={method}>
-                  <span>{methodLabels[method as keyof typeof methodLabels]}</span>
-                  <input value={rule ? `${modeLabels[rule.mode]} • ${rule.value ? formatCurrency(rule.value) : '0,00'}` : 'Sem regra'} readOnly />
-                </label>
-              );
-            })}
-          </div>
-        </article>
-      </div>
-
-      <aside className="finance-dashboard-side">
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Metodos configurados</h4>
           </div>
           {renderListRows(
             (data?.methodRules ?? [])
@@ -779,7 +756,7 @@ export const FinanceDashboardPage = () => {
               }))
           )}
         </article>
-      </aside>
+      </div>
     </div>
   );
 
@@ -875,40 +852,42 @@ export const FinanceDashboardPage = () => {
           ))}
         </div>
 
-        <div className={`finance-dashboard-hero ${activeHomeTab !== 'dashboard' ? 'finance-dashboard-hero-compact' : ''}`}>
-          {activeHomeTab === 'dashboard' ? (
-            <div className="finance-dashboard-balance-card">
-              <span className="finance-dashboard-section-label">Entradas no periodo</span>
-              <strong>{formatCurrency(data?.totals.totalEntries ?? 0)}</strong>
-              <small>
-                {formatRangeDate(from)} ate {formatRangeDate(to)}
-              </small>
-            </div>
-          ) : <div />}
-
-          <div className="finance-dashboard-period">
-            <div className="finance-dashboard-pill-row">
-              <button type="button" className={activeRangePreset === 'today' ? 'active' : 'ghost'} onClick={setTodayRange}>Hoje</button>
-              <button type="button" className={activeRangePreset === 'week' ? 'active' : 'ghost'} onClick={setLast7DaysRange}>7 dias</button>
-              <button type="button" className={activeRangePreset === 'month' ? 'active' : 'ghost'} onClick={setMonthRange}>Mes</button>
-            </div>
-
-            <div className="finance-dashboard-date-card">
-              <span>Periodo analisado</span>
-              <div className="finance-range-display">
-                <button type="button" className="finance-range-date-button" onClick={() => openPicker(fromPickerRef)}>
-                  {formatRangeDate(from)}
-                </button>
-                <span className="finance-range-divider">-</span>
-                <button type="button" className="finance-range-date-button" onClick={() => openPicker(toPickerRef)}>
-                  {formatRangeDate(to)}
-                </button>
+        {activeHomeTab !== 'rates' ? (
+          <div className={`finance-dashboard-hero ${activeHomeTab !== 'dashboard' ? 'finance-dashboard-hero-compact' : ''}`}>
+            {activeHomeTab === 'dashboard' ? (
+              <div className="finance-dashboard-balance-card">
+                <span className="finance-dashboard-section-label">Entradas no periodo</span>
+                <strong>{formatCurrency(data?.totals.totalEntries ?? 0)}</strong>
+                <small>
+                  {formatRangeDate(from)} ate {formatRangeDate(to)}
+                </small>
               </div>
-              <input ref={fromPickerRef} className="finance-date-hidden" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-              <input ref={toPickerRef} className="finance-date-hidden" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+            ) : <div />}
+
+            <div className="finance-dashboard-period">
+              <div className="finance-dashboard-pill-row">
+                <button type="button" className={activeRangePreset === 'today' ? 'active' : 'ghost'} onClick={setTodayRange}>Hoje</button>
+                <button type="button" className={activeRangePreset === 'week' ? 'active' : 'ghost'} onClick={setLast7DaysRange}>7 dias</button>
+                <button type="button" className={activeRangePreset === 'month' ? 'active' : 'ghost'} onClick={setMonthRange}>Mes</button>
+              </div>
+
+              <div className="finance-dashboard-date-card">
+                <span>Periodo analisado</span>
+                <div className="finance-range-display">
+                  <button type="button" className="finance-range-date-button" onClick={() => openPicker(fromPickerRef)}>
+                    {formatRangeDate(from)}
+                  </button>
+                  <span className="finance-range-divider">-</span>
+                  <button type="button" className="finance-range-date-button" onClick={() => openPicker(toPickerRef)}>
+                    {formatRangeDate(to)}
+                  </button>
+                </div>
+                <input ref={fromPickerRef} className="finance-date-hidden" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+                <input ref={toPickerRef} className="finance-date-hidden" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
         {activeHomeTab === 'dashboard' ? (
           <div className="finance-dashboard-headline-grid">

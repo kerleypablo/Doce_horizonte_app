@@ -4122,6 +4122,13 @@ button:disabled {
   gap: 10px;
 }
 
+.finance-dashboard-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .finance-dashboard-action-row-left {
   justify-content: flex-start;
   margin-top: 14px;
@@ -4443,6 +4450,10 @@ button.finance-dashboard-action-link {
   }
 
   .finance-dashboard-action-row {
+    justify-content: flex-start;
+  }
+
+  .finance-dashboard-toolbar {
     justify-content: flex-start;
   }
 
