@@ -214,6 +214,57 @@ const buildBarChart = ({
   ]
 });
 
+const buildPieChart = ({
+  data,
+  theme
+}: {
+  data: Array<{ name: string; y: number }>;
+  theme: ReturnType<typeof getThemeTokens>;
+}): Highcharts.Options => ({
+  chart: {
+    type: 'pie',
+    backgroundColor: 'transparent',
+    spacing: [8, 8, 0, 8],
+    height: 290
+  },
+  title: { text: undefined },
+  credits: { enabled: false },
+  tooltip: {
+    backgroundColor: theme.bg,
+    borderColor: theme.border,
+    style: { color: theme.text },
+    pointFormatter() {
+      return `<span>${this.name}: <b>${formatCompactCurrency(Number(this.y ?? 0))}</b></span>`;
+    }
+  },
+  plotOptions: {
+    pie: {
+      innerSize: '52%',
+      borderWidth: 0,
+      dataLabels: {
+        enabled: true,
+        formatter() {
+          return `${this.point.name}<br/>${formatCompactCurrency(Number(this.y ?? 0))}`;
+        },
+        style: {
+          color: theme.text,
+          fontSize: '11px',
+          fontWeight: '600',
+          textOutline: 'none'
+        }
+      }
+    }
+  },
+  series: [
+    {
+      type: 'pie',
+      name: 'Distribuicao',
+      data,
+      colors: [theme.accentStrong, theme.accent, `${theme.accentStrong}88`]
+    }
+  ]
+});
+
 const renderListRows = (
   items: Array<{ title: string; subtitle: string; value: string }>
 ) => (
@@ -430,6 +481,19 @@ export const FinanceDashboardPage = () => {
     [data?.salesByMethod, theme]
   );
 
+  const overviewChartOptions = useMemo(
+    () =>
+      buildPieChart({
+        data: [
+          { name: 'Pedidos do app', y: data?.totals.ordersTotal ?? 0 },
+          { name: 'Vendas avulsas', y: data?.totals.manualSalesNet ?? 0 },
+          { name: 'Despesas', y: data?.totals.expensesNet ?? 0 }
+        ],
+        theme
+      }),
+    [data?.totals.expensesNet, data?.totals.manualSalesNet, data?.totals.ordersTotal, theme]
+  );
+
   const originChartOptions = useMemo(
     () =>
       buildBarChart({
@@ -516,7 +580,7 @@ export const FinanceDashboardPage = () => {
               ))}
             </div>
 
-            {activeDashboardTab === 'overview' ? <HighchartsReact highcharts={Highcharts} options={flowChartOptions} /> : null}
+            {activeDashboardTab === 'overview' ? <HighchartsReact highcharts={Highcharts} options={overviewChartOptions} /> : null}
             {activeDashboardTab === 'cashflow' ? <HighchartsReact highcharts={Highcharts} options={flowChartOptions} /> : null}
             {activeDashboardTab === 'sources' ? <HighchartsReact highcharts={Highcharts} options={originChartOptions} /> : null}
           </article>
