@@ -64,6 +64,9 @@ const getOrderDateKeys = (order: OrderItem) => {
   return deliveryKey ? [deliveryKey] : [];
 };
 
+const getOrderReferenceDateKey = (order: OrderItem) =>
+  normalizeDateKey(order.deliveryDate) ?? normalizeDateKey(order.orderDateTime);
+
 const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' });
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
@@ -190,10 +193,19 @@ export const DashboardPage = () => {
         : discountValue;
       return productsTotal + additionsTotal - discountTotal + Number(order.shippingValue ?? 0);
     };
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
     return orders
       .filter((order) => order.status === 'CONFIRMADO' || order.status === 'CONCLUIDO')
+      .filter((order) => {
+        const dateKey = getOrderReferenceDateKey(order);
+        if (!dateKey) return false;
+        const orderDate = new Date(`${dateKey}T12:00:00`);
+        if (Number.isNaN(orderDate.getTime())) return false;
+        return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
+      })
       .reduce((sum, order) => sum + calcTotal(order), 0);
-  }, [orders]);
+  }, [orders, today]);
 
   const revenueLabel = showRevenue
     ? `R$ ${confirmedRevenue.toFixed(2).replace('.', ',')}`
@@ -207,7 +219,7 @@ export const DashboardPage = () => {
           <h3>{settings?.companyName ?? 'Minha empresa'}</h3>
         </div>
         <div className="home-revenue-row">
-          <span>Total de pedidos</span>
+          <span>Total de pedidos no mes</span>
           <div className="home-revenue-value-row">
             <strong>{revenueLabel}</strong>
             <button

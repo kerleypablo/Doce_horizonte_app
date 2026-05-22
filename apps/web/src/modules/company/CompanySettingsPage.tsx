@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
@@ -214,23 +213,20 @@ export const CompanySettingsPage = () => {
   if (settingsQuery.loading && !settings) return <div className="panel">Carregando...</div>;
   if (!settings) return <div className="panel">Carregando...</div>;
 
-  const activeTabIndex = companyTabs.findIndex((item) => item.key === tab);
-
   return (
     <div className="page company-settings-page">
       <div className="panel">
-        <div className="tabs order-tabs" style={{ '--order-tab-index': Math.max(activeTabIndex, 0) } as CSSProperties}>
-          <span className="order-tabs-indicator" aria-hidden="true" />
+        <div className="company-settings-tabs" role="tablist" aria-label="Abas da empresa">
           {companyTabs.map((item) => (
             <button
               key={item.key}
               type="button"
-              className={`tab-icon ${tab === item.key ? 'active' : ''}`}
+              className={tab === item.key ? 'active' : ''}
               onClick={() => setTab(item.key)}
-              aria-label={item.label}
-              title={item.label}
+              aria-pressed={tab === item.key}
             >
               <span className="material-symbols-outlined" aria-hidden="true">{item.icon}</span>
+              <span>{item.label}</span>
             </button>
           ))}
         </div>

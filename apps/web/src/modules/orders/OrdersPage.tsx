@@ -315,6 +315,29 @@ export const OrdersPage = () => {
     latestOrderDefaultsRef.current = orderDefaults;
   }, [orderDefaults]);
 
+  useEffect(() => {
+    if (!isCreateView || !settingsQuery.data) return;
+    setForm((current) => {
+      const shouldHydrateDefaults =
+        !current.customerId &&
+        current.products.length === 0 &&
+        current.additions.length === 0 &&
+        current.payments.length === 0 &&
+        current.notesDelivery === '' &&
+        current.notesGeneral === '' &&
+        current.notesPayment === '';
+
+      if (!shouldHydrateDefaults) return current;
+
+      return {
+        ...current,
+        notesDelivery: settingsQuery.data.defaultNotesDelivery ?? '',
+        notesGeneral: settingsQuery.data.defaultNotesGeneral ?? '',
+        notesPayment: settingsQuery.data.defaultNotesPayment ?? ''
+      };
+    });
+  }, [isCreateView, settingsQuery.data]);
+
   const resetForm = () => {
     setForm(newOrderForm(orderDefaults));
     setEditingId(null);
@@ -1082,6 +1105,7 @@ export const OrdersPage = () => {
                 onClick={() => setTab(item.key)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">{item.icon}</span>
+                <span className="tab-icon-label">{item.label}</span>
               </button>
             ))}
           </div>
