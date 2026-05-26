@@ -269,14 +269,17 @@ export const CompanySettingsPage = () => {
         defaultNotesGeneral: saved.defaultNotesGeneral ?? settings.defaultNotesGeneral,
         defaultNotesPayment: saved.defaultNotesPayment ?? settings.defaultNotesPayment,
         productiveHoursPerMonth: Number(saved.productiveHoursPerMonth ?? settings.productiveHoursPerMonth ?? 0),
-        laborCostItems: saved.laborCostItems ?? settings.laborCostItems,
-        fixedCostItems: saved.fixedCostItems ?? settings.fixedCostItems,
+        laborCostItems: (saved.laborCostItems?.length ?? 0) > 0 || settings.laborCostItems.length === 0
+          ? (saved.laborCostItems ?? settings.laborCostItems)
+          : settings.laborCostItems,
+        fixedCostItems: (saved.fixedCostItems?.length ?? 0) > 0 || settings.fixedCostItems.length === 0
+          ? (saved.fixedCostItems ?? settings.fixedCostItems)
+          : settings.fixedCostItems,
         laborCostPerHour: Number(saved.laborCostPerHour ?? settings.laborCostPerHour ?? 0),
         fixedCostPerHour: Number(saved.fixedCostPerHour ?? settings.fixedCostPerHour ?? 0),
         taxesPercent: Number(saved.taxesPercent ?? settings.taxesPercent ?? 0),
         salesChannels: saved.salesChannels ?? settings.salesChannels
       });
-      invalidateQueryCache(queryKeys.companySettings);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar configuracoes';
       setSubmitError(message);
