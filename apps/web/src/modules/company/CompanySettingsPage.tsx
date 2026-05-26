@@ -250,13 +250,33 @@ export const CompanySettingsPage = () => {
     setSaving(true);
     setSubmitError(null);
     try {
-      await apiFetch('/company/settings', {
+      const saved = await apiFetch<Settings>('/company/settings', {
         method: 'PUT',
         token: user?.token,
         body: JSON.stringify(settings)
       });
+      setSettings({
+        ...saved,
+        companyName: saved.companyName ?? settings.companyName,
+        companyCode: settings.companyCode,
+        companyPhone: saved.companyPhone ?? settings.companyPhone,
+        companyEmail: saved.companyEmail ?? settings.companyEmail,
+        pixKey: saved.pixKey ?? settings.pixKey,
+        logoDataUrl: saved.logoDataUrl ?? settings.logoDataUrl,
+        appTheme: saved.appTheme ?? settings.appTheme,
+        darkMode: saved.darkMode ?? settings.darkMode,
+        defaultNotesDelivery: saved.defaultNotesDelivery ?? settings.defaultNotesDelivery,
+        defaultNotesGeneral: saved.defaultNotesGeneral ?? settings.defaultNotesGeneral,
+        defaultNotesPayment: saved.defaultNotesPayment ?? settings.defaultNotesPayment,
+        productiveHoursPerMonth: Number(saved.productiveHoursPerMonth ?? settings.productiveHoursPerMonth ?? 0),
+        laborCostItems: saved.laborCostItems ?? settings.laborCostItems,
+        fixedCostItems: saved.fixedCostItems ?? settings.fixedCostItems,
+        laborCostPerHour: Number(saved.laborCostPerHour ?? settings.laborCostPerHour ?? 0),
+        fixedCostPerHour: Number(saved.fixedCostPerHour ?? settings.fixedCostPerHour ?? 0),
+        taxesPercent: Number(saved.taxesPercent ?? settings.taxesPercent ?? 0),
+        salesChannels: saved.salesChannels ?? settings.salesChannels
+      });
       invalidateQueryCache(queryKeys.companySettings);
-      await settingsQuery.refetch();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar configuracoes';
       setSubmitError(message);
@@ -559,11 +579,11 @@ export const CompanySettingsPage = () => {
                 {settings.laborCostItems.length === 0 ? <p className="muted">Nenhum custo de equipe cadastrado.</p> : null}
               </div>
               <div className="company-settings-cost-summary">
-                <div>
+                <div className="company-settings-cost-summary-item">
                   <span>Total mensal de equipe</span>
                   <strong>{formatCurrency(monthlyLaborTotal)}</strong>
                 </div>
-                <div>
+                <div className="company-settings-cost-summary-item highlight">
                   <span>Custo por hora calculado</span>
                   <strong>{formatCurrency(displayedLaborPerHour)}</strong>
                 </div>
@@ -671,11 +691,11 @@ export const CompanySettingsPage = () => {
                 {settings.fixedCostItems.length === 0 ? <p className="muted">Nenhum custo fixo cadastrado.</p> : null}
               </div>
               <div className="company-settings-cost-summary">
-                <div>
+                <div className="company-settings-cost-summary-item">
                   <span>Total mensal de estrutura</span>
                   <strong>{formatCurrency(monthlyFixedTotal)}</strong>
                 </div>
-                <div>
+                <div className="company-settings-cost-summary-item highlight">
                   <span>Custo por hora calculado</span>
                   <strong>{formatCurrency(displayedFixedPerHour)}</strong>
                 </div>

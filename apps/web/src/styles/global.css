@@ -2583,6 +2583,8 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   padding: 10px 12px;
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, white) 0%, rgba(255, 255, 255, 0.92) 58%);
 }
 
 .company-settings-cost-toggle {
@@ -2596,6 +2598,7 @@ button:disabled {
 
 .company-settings-cost-display strong {
   font-size: 14px;
+  color: color-mix(in srgb, var(--accent-strong) 82%, var(--text));
 }
 
 .company-settings-cost-display span,
@@ -2649,6 +2652,11 @@ button:disabled {
   border: 1px solid var(--border);
 }
 
+.company-settings-cost-summary-item.highlight {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, white) 0%, rgba(255, 255, 255, 0.96) 100%);
+}
+
 .company-settings-cost-summary span {
   display: block;
   color: var(--muted);
@@ -2658,6 +2666,7 @@ button:disabled {
 
 .company-settings-cost-summary strong {
   font-size: 16px;
+  color: color-mix(in srgb, var(--accent-strong) 88%, var(--text));
 }
 
 .order-product-row {
