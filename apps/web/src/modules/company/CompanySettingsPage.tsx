@@ -17,6 +17,13 @@ type SalesChannel = {
   active: boolean;
 };
 
+type CostItem = {
+  id?: string;
+  name: string;
+  monthlyAmount: number;
+  active: boolean;
+};
+
 type Settings = {
   companyName: string;
   companyCode?: string;
@@ -29,13 +36,15 @@ type Settings = {
   defaultNotesDelivery: string;
   defaultNotesGeneral: string;
   defaultNotesPayment: string;
+  productiveHoursPerMonth: number;
   overheadMethod: 'PERCENT_DIRECT' | 'PER_UNIT';
   overheadPercent: number;
   overheadPerUnit: number;
+  laborCostItems: CostItem[];
+  fixedCostItems: CostItem[];
   laborCostPerHour: number;
   fixedCostPerHour: number;
   taxesPercent: number;
-  defaultProfitPercent: number;
   salesChannels: SalesChannel[];
 };
 
@@ -58,6 +67,7 @@ export const CompanySettingsPage = () => {
   const { user } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [tab, setTab] = useState<'empresa' | 'custos' | 'canais'>('empresa');
+  const [showAdvancedRateio, setShowAdvancedRateio] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [roleSavingUserId, setRoleSavingUserId] = useState<string | null>(null);
@@ -88,7 +98,14 @@ export const CompanySettingsPage = () => {
 
   useEffect(() => {
     if (settingsQuery.data) {
-      setSettings(settingsQuery.data);
+      setSettings({
+        ...settingsQuery.data,
+        productiveHoursPerMonth: Number(settingsQuery.data.productiveHoursPerMonth ?? 0),
+        laborCostItems: settingsQuery.data.laborCostItems ?? [],
+        fixedCostItems: settingsQuery.data.fixedCostItems ?? [],
+        laborCostPerHour: Number(settingsQuery.data.laborCostPerHour ?? 0),
+        fixedCostPerHour: Number(settingsQuery.data.fixedCostPerHour ?? 0)
+      });
     }
   }, [settingsQuery.data]);
 
@@ -107,6 +124,38 @@ export const CompanySettingsPage = () => {
         ...settings.salesChannels,
         { name: 'Novo canal', feePercent: 0, paymentFeePercent: 0, feeFixed: 0, active: true }
       ]
+    });
+  };
+
+  const buildCostItem = (fallbackName: string): CostItem => ({
+    id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: fallbackName,
+    monthlyAmount: 0,
+    active: true
+  });
+
+  const updateCostItem = (kind: 'laborCostItems' | 'fixedCostItems', index: number, field: keyof CostItem, value: string | number | boolean) => {
+    if (!settings) return;
+    const next = [...settings[kind]];
+    next[index] = { ...next[index], [field]: value };
+    setSettings({ ...settings, [kind]: next });
+  };
+
+  const addCostItem = (kind: 'laborCostItems' | 'fixedCostItems', fallbackName: string) => {
+    if (!settings) return;
+    setSettings({
+      ...settings,
+      [kind]: [...settings[kind], buildCostItem(fallbackName)]
+    });
+  };
+
+  const removeCostItem = (kind: 'laborCostItems' | 'fixedCostItems', index: number) => {
+    if (!settings) return;
+    setSettings({
+      ...settings,
+      [kind]: settings[kind].filter((_, itemIndex) => itemIndex !== index)
     });
   };
 
@@ -212,6 +261,21 @@ export const CompanySettingsPage = () => {
 
   if (settingsQuery.loading && !settings) return <div className="panel">Carregando...</div>;
   if (!settings) return <div className="panel">Carregando...</div>;
+
+  const itemizedMonthlyLaborTotal = settings.laborCostItems.reduce((sum, item) => sum + (item.active ? item.monthlyAmount : 0), 0);
+  const itemizedMonthlyFixedTotal = settings.fixedCostItems.reduce((sum, item) => sum + (item.active ? item.monthlyAmount : 0), 0);
+  const productiveHours = Number(settings.productiveHoursPerMonth || 0);
+  const derivedLaborPerHour = productiveHours > 0 ? itemizedMonthlyLaborTotal / productiveHours : 0;
+  const derivedFixedPerHour = productiveHours > 0 ? itemizedMonthlyFixedTotal / productiveHours : 0;
+  const monthlyLaborTotal = settings.laborCostItems.length > 0
+    ? itemizedMonthlyLaborTotal
+    : Number(settings.laborCostPerHour ?? 0) * productiveHours;
+  const monthlyFixedTotal = settings.fixedCostItems.length > 0
+    ? itemizedMonthlyFixedTotal
+    : Number(settings.fixedCostPerHour ?? 0) * productiveHours;
+  const displayedLaborPerHour = settings.laborCostItems.length > 0 ? derivedLaborPerHour : Number(settings.laborCostPerHour ?? 0);
+  const displayedFixedPerHour = settings.fixedCostItems.length > 0 ? derivedFixedPerHour : Number(settings.fixedCostPerHour ?? 0);
+  const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
     <div className="page company-settings-page">
@@ -322,36 +386,135 @@ export const CompanySettingsPage = () => {
         {tab === 'custos' ? (
           <div className="form">
             <h3>Custos e taxas</h3>
-            <div className="grid-2">
+            <div className="company-settings-cost-card">
+              <div className="company-settings-cost-head">
+                <div>
+                  <h4>Horas produtivas do mes</h4>
+                  <p>Use a quantidade media de horas realmente dedicadas a produzir. O sistema divide os custos mensais por essas horas.</p>
+                </div>
+              </div>
               <label>
-                Metodo de rateio
-                <SelectField
-                  value={settings.overheadMethod}
-                  onChange={(value) => setSettings({ ...settings, overheadMethod: value as Settings['overheadMethod'] })}
-                  options={[
-                    { value: 'PERCENT_DIRECT', label: 'Percentual do custo direto' },
-                    { value: 'PER_UNIT', label: 'Valor fixo por unidade' }
-                  ]}
-                />
-              </label>
-              <label>
-                Percentual de rateio (%)
+                Horas produtivas por mes
                 <input
                   type="number"
-                  value={settings.overheadPercent === 0 ? '' : settings.overheadPercent}
-                  onChange={(e) => setSettings({ ...settings, overheadPercent: Number(e.target.value || 0) })}
+                  value={settings.productiveHoursPerMonth === 0 ? '' : settings.productiveHoursPerMonth}
+                  onChange={(e) => setSettings({ ...settings, productiveHoursPerMonth: Number(e.target.value || 0) })}
                   min={0}
                 />
               </label>
             </div>
+
+            <div className="company-settings-cost-card">
+              <div className="company-settings-cost-head">
+                <div>
+                  <h4>Equipe e mao de obra</h4>
+                  <p>Cadastre salarios, pro-labore ou qualquer custo mensal de quem produz. O sistema soma tudo e converte para custo por hora.</p>
+                </div>
+                <button type="button" className="ghost" onClick={() => addCostItem('laborCostItems', 'Novo custo de equipe')}>
+                  + Adicionar custo de equipe
+                </button>
+              </div>
+              <div className="company-settings-cost-list">
+                {settings.laborCostItems.map((item, index) => (
+                  <div key={item.id ?? `${item.name}-${index}`} className="company-settings-cost-row">
+                    <label>
+                      Nome
+                      <input
+                        value={item.name}
+                        onChange={(e) => updateCostItem('laborCostItems', index, 'name', e.target.value)}
+                        placeholder="Ex.: Funcionario confeitaria"
+                      />
+                    </label>
+                    <label>
+                      Valor mensal
+                      <MoneyInput
+                        value={item.monthlyAmount}
+                        onChange={(value) => updateCostItem('laborCostItems', index, 'monthlyAmount', value)}
+                      />
+                    </label>
+                    <label className="settings-switch compact company-settings-cost-toggle">
+                      <span>Ativo</span>
+                      <input
+                        type="checkbox"
+                        checked={item.active}
+                        onChange={(e) => updateCostItem('laborCostItems', index, 'active', e.target.checked)}
+                      />
+                    </label>
+                    <button type="button" className="ghost danger" onClick={() => removeCostItem('laborCostItems', index)}>
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                {settings.laborCostItems.length === 0 ? <p className="muted">Nenhum custo de equipe cadastrado.</p> : null}
+              </div>
+              <div className="company-settings-cost-summary">
+                <div>
+                  <span>Total mensal de equipe</span>
+                  <strong>{formatCurrency(monthlyLaborTotal)}</strong>
+                </div>
+                <div>
+                  <span>Custo por hora calculado</span>
+                  <strong>{formatCurrency(displayedLaborPerHour)}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="company-settings-cost-card">
+              <div className="company-settings-cost-head">
+                <div>
+                  <h4>Estrutura e custos fixos</h4>
+                  <p>Cadastre aluguel, condominio, energia, gas, internet e outros custos mensais de estrutura. O sistema soma tudo e divide pelas horas produtivas.</p>
+                </div>
+                <button type="button" className="ghost" onClick={() => addCostItem('fixedCostItems', 'Novo custo fixo')}>
+                  + Adicionar custo fixo
+                </button>
+              </div>
+              <div className="company-settings-cost-list">
+                {settings.fixedCostItems.map((item, index) => (
+                  <div key={item.id ?? `${item.name}-${index}`} className="company-settings-cost-row">
+                    <label>
+                      Nome
+                      <input
+                        value={item.name}
+                        onChange={(e) => updateCostItem('fixedCostItems', index, 'name', e.target.value)}
+                        placeholder="Ex.: Aluguel"
+                      />
+                    </label>
+                    <label>
+                      Valor mensal
+                      <MoneyInput
+                        value={item.monthlyAmount}
+                        onChange={(value) => updateCostItem('fixedCostItems', index, 'monthlyAmount', value)}
+                      />
+                    </label>
+                    <label className="settings-switch compact company-settings-cost-toggle">
+                      <span>Ativo</span>
+                      <input
+                        type="checkbox"
+                        checked={item.active}
+                        onChange={(e) => updateCostItem('fixedCostItems', index, 'active', e.target.checked)}
+                      />
+                    </label>
+                    <button type="button" className="ghost danger" onClick={() => removeCostItem('fixedCostItems', index)}>
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                {settings.fixedCostItems.length === 0 ? <p className="muted">Nenhum custo fixo cadastrado.</p> : null}
+              </div>
+              <div className="company-settings-cost-summary">
+                <div>
+                  <span>Total mensal de estrutura</span>
+                  <strong>{formatCurrency(monthlyFixedTotal)}</strong>
+                </div>
+                <div>
+                  <span>Custo por hora calculado</span>
+                  <strong>{formatCurrency(displayedFixedPerHour)}</strong>
+                </div>
+              </div>
+            </div>
+
             <div className="grid-2">
-              <label>
-                Rateio fixo por unidade (R$)
-                <MoneyInput
-                  value={settings.overheadPerUnit}
-                  onChange={(value) => setSettings({ ...settings, overheadPerUnit: value })}
-                />
-              </label>
               <label>
                 Impostos (%)
                 <input
@@ -361,33 +524,66 @@ export const CompanySettingsPage = () => {
                   min={0}
                 />
               </label>
-            </div>
-            <div className="grid-2">
               <label>
-                Custo hora de mao de obra (R$)
-                <MoneyInput
-                  value={settings.laborCostPerHour}
-                  onChange={(value) => setSettings({ ...settings, laborCostPerHour: value })}
-                />
-              </label>
-              <label>
-                Custo fixo por hora (R$)
-                <MoneyInput
-                  value={settings.fixedCostPerHour}
-                  onChange={(value) => setSettings({ ...settings, fixedCostPerHour: value })}
-                />
+                Custo hora de mao de obra calculado (R$)
+                <MoneyInput value={displayedLaborPerHour} onChange={() => undefined} disabled />
               </label>
             </div>
             <div className="grid-2">
               <label>
-                Margem padrao (%)
-                <input
-                  type="number"
-                  value={settings.defaultProfitPercent === 0 ? '' : settings.defaultProfitPercent}
-                  onChange={(e) => setSettings({ ...settings, defaultProfitPercent: Number(e.target.value || 0) })}
-                  min={0}
-                />
+                Custo fixo por hora calculado (R$)
+                <MoneyInput value={displayedFixedPerHour} onChange={() => undefined} disabled />
               </label>
+              <label>
+                Total mensal considerado
+                <MoneyInput value={monthlyLaborTotal + monthlyFixedTotal} onChange={() => undefined} disabled />
+              </label>
+            </div>
+            <div className="company-settings-cost-card subtle">
+              <div className="company-settings-cost-head">
+                <div>
+                  <h4>Rateio extra opcional</h4>
+                  <p>Use apenas se quiser acrescentar uma gordura extra alem dos custos mensais acima. Se nao precisar, deixe zerado.</p>
+                </div>
+                <button type="button" className="ghost" onClick={() => setShowAdvancedRateio((current) => !current)}>
+                  {showAdvancedRateio ? 'Ocultar' : 'Mostrar'} rateio extra
+                </button>
+              </div>
+              {showAdvancedRateio ? (
+                <>
+                  <div className="grid-2">
+                    <label>
+                      Metodo de rateio
+                      <SelectField
+                        value={settings.overheadMethod}
+                        onChange={(value) => setSettings({ ...settings, overheadMethod: value as Settings['overheadMethod'] })}
+                        options={[
+                          { value: 'PERCENT_DIRECT', label: 'Percentual do custo direto' },
+                          { value: 'PER_UNIT', label: 'Valor fixo por unidade' }
+                        ]}
+                      />
+                    </label>
+                    <label>
+                      Percentual de rateio (%)
+                      <input
+                        type="number"
+                        value={settings.overheadPercent === 0 ? '' : settings.overheadPercent}
+                        onChange={(e) => setSettings({ ...settings, overheadPercent: Number(e.target.value || 0) })}
+                        min={0}
+                      />
+                    </label>
+                  </div>
+                  <div className="grid-2">
+                    <label>
+                      Rateio fixo por unidade (R$)
+                      <MoneyInput
+                        value={settings.overheadPerUnit}
+                        onChange={(value) => setSettings({ ...settings, overheadPerUnit: value })}
+                      />
+                    </label>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         ) : null}

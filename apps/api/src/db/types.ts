@@ -1,5 +1,12 @@
 export type Role = 'master' | 'admin' | 'common';
 
+export type CostItem = {
+  id?: string;
+  name: string;
+  monthlyAmount: number;
+  active: boolean;
+};
+
 export type CompanySettings = {
   companyName?: string;
   logoDataUrl?: string;
@@ -8,9 +15,12 @@ export type CompanySettings = {
   defaultNotesDelivery?: string;
   defaultNotesGeneral?: string;
   defaultNotesPayment?: string;
+  productiveHoursPerMonth?: number;
   overheadMethod: 'PERCENT_DIRECT' | 'PER_UNIT';
   overheadPercent: number;
   overheadPerUnit: number;
+  laborCostItems?: CostItem[];
+  fixedCostItems?: CostItem[];
   laborCostPerHour: number;
   fixedCostPerHour: number;
   taxesPercent: number;

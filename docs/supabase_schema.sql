@@ -31,9 +31,12 @@ create table if not exists company_settings (
   default_notes_delivery text not null default '',
   default_notes_general text not null default '',
   default_notes_payment text not null default '',
+  productive_hours_per_month numeric not null default 0,
   overhead_method text not null default 'PERCENT_DIRECT',
   overhead_percent numeric not null default 0,
   overhead_per_unit numeric not null default 0,
+  labor_cost_items jsonb not null default '[]',
+  fixed_cost_items jsonb not null default '[]',
   labor_cost_per_hour numeric not null default 0,
   fixed_cost_per_hour numeric not null default 0,
   taxes_percent numeric not null default 0,
@@ -49,6 +52,9 @@ alter table company_settings add column if not exists pix_key text not null defa
 alter table company_settings add column if not exists default_notes_delivery text not null default '';
 alter table company_settings add column if not exists default_notes_general text not null default '';
 alter table company_settings add column if not exists default_notes_payment text not null default '';
+alter table company_settings add column if not exists productive_hours_per_month numeric not null default 0;
+alter table company_settings add column if not exists labor_cost_items jsonb not null default '[]';
+alter table company_settings add column if not exists fixed_cost_items jsonb not null default '[]';
 
 create table if not exists sales_channels (
   id uuid primary key default gen_random_uuid(),

@@ -54,7 +54,6 @@ type Settings = {
   laborCostPerHour: number;
   fixedCostPerHour: number;
   taxesPercent: number;
-  defaultProfitPercent: number;
   salesChannels: {
     id: string;
     name: string;
@@ -120,7 +119,7 @@ export const ProductsPage = () => {
     notes: '',
     channelId: '',
     unitsCount: 1,
-    targetProfitPercent: 30,
+    targetProfitPercent: 0,
     extraPercent: 0,
     manualUnitPrice: 0,
     extraRecipes: [] as { recipeId: string; quantity: number }[],
@@ -135,7 +134,7 @@ export const ProductsPage = () => {
     prepTimeMinutes: 0,
     notes: '',
     unitsCount: 1,
-    targetProfitPercent: 30,
+    targetProfitPercent: 0,
     extraPercent: 0,
     unitPrice: 0,
     channelId: '',
@@ -149,7 +148,7 @@ export const ProductsPage = () => {
     prepTimeMinutes: 0,
     notes: '',
     unitsCount: 1,
-    targetProfitPercent: settings?.defaultProfitPercent ?? 30,
+    targetProfitPercent: 0,
     extraPercent: 0,
     unitPrice: 0,
     channelId: settings?.salesChannels[0]?.id ?? '',
@@ -388,7 +387,7 @@ export const ProductsPage = () => {
         notes: '',
         channelId: form.channelId || settings?.salesChannels[0]?.id || '',
         unitsCount: 1,
-        targetProfitPercent: settings?.defaultProfitPercent ?? 30,
+        targetProfitPercent: 0,
         extraPercent: 0,
         manualUnitPrice: 0,
         extraRecipes: [],
@@ -773,7 +772,7 @@ export const ProductsPage = () => {
                             prepTimeMinutes: product.prepTimeMinutes ?? 0,
                             notes: product.notes ?? '',
                             unitsCount: product.unitsCount ?? 1,
-                            targetProfitPercent: product.targetProfitPercent ?? (settings?.defaultProfitPercent ?? 30),
+                            targetProfitPercent: product.targetProfitPercent ?? 0,
                             extraPercent: product.extraPercent ?? 0,
                             unitPrice: product.unitPrice ?? 0,
                             channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',

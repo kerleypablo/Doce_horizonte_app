@@ -2521,6 +2521,86 @@ button:disabled {
   font-size: 11px;
 }
 
+.company-settings-cost-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-alt) 52%, white);
+}
+
+.company-settings-cost-card.subtle {
+  background: color-mix(in srgb, var(--surface-alt) 28%, white);
+}
+
+.company-settings-cost-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.company-settings-cost-head h4 {
+  margin: 0 0 4px;
+}
+
+.company-settings-cost-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.company-settings-cost-list {
+  display: grid;
+  gap: 10px;
+}
+
+.company-settings-cost-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.company-settings-cost-toggle {
+  align-self: center;
+}
+
+.company-settings-cost-row .ghost.danger {
+  border-color: color-mix(in srgb, #b42318 28%, var(--border));
+  color: #b42318;
+}
+
+.company-settings-cost-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.company-settings-cost-summary div {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--border);
+}
+
+.company-settings-cost-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.company-settings-cost-summary strong {
+  font-size: 16px;
+}
+
 .order-product-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 68px auto;
@@ -3637,6 +3717,19 @@ button:disabled {
   .company-user-actions {
     gap: 3px;
     min-width: 0;
+  }
+
+  .company-settings-cost-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .company-settings-cost-row {
+    grid-template-columns: 1fr;
+  }
+
+  .company-settings-cost-summary {
+    grid-template-columns: 1fr;
   }
 
   .finance-kpi-grid {

@@ -55,24 +55,27 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
       default_notes_delivery: '',
       default_notes_general: '',
       default_notes_payment: '',
+      productive_hours_per_month: 0,
       overhead_method: 'PERCENT_DIRECT',
-      overhead_percent: 12,
+      overhead_percent: 0,
       overhead_per_unit: 0,
+      labor_cost_items: [],
+      fixed_cost_items: [],
       labor_cost_per_hour: 0,
       fixed_cost_per_hour: 0,
       taxes_percent: 4,
-      default_profit_percent: 30
+      default_profit_percent: 0
     });
     if (settingsError) {
       const { error: legacySettingsError } = await supabaseAdmin.from('company_settings').insert({
         company_id: company.id,
         overhead_method: 'PERCENT_DIRECT',
-        overhead_percent: 12,
+        overhead_percent: 0,
         overhead_per_unit: 0,
         labor_cost_per_hour: 0,
         fixed_cost_per_hour: 0,
         taxes_percent: 4,
-        default_profit_percent: 30
+        default_profit_percent: 0
       });
       if (legacySettingsError) {
         return reply.status(400).send({ message: 'Erro ao criar configuracoes', detail: legacySettingsError.message });

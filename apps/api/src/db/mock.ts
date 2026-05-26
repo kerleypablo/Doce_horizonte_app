@@ -17,9 +17,12 @@ export type Company = {
 };
 
 export type CompanySettings = {
+  productiveHoursPerMonth?: number;
   overheadMethod: 'PERCENT_DIRECT' | 'PER_UNIT';
   overheadPercent: number; // percent of direct cost
   overheadPerUnit: number; // R$ per unit
+  laborCostItems?: { id?: string; name: string; monthlyAmount: number; active: boolean }[];
+  fixedCostItems?: { id?: string; name: string; monthlyAmount: number; active: boolean }[];
   laborCostPerHour: number;
   fixedCostPerHour: number;
   taxesPercent: number; // taxes over sale price
@@ -103,9 +106,12 @@ export const seed = () => {
     id: companyId,
     name: 'Confeitaria Demo',
     settings: {
+      productiveHoursPerMonth: 0,
       overheadMethod: 'PERCENT_DIRECT',
       overheadPercent: 12,
       overheadPerUnit: 0,
+      laborCostItems: [],
+      fixedCostItems: [],
       laborCostPerHour: 0,
       fixedCostPerHour: 0,
       taxesPercent: 4,

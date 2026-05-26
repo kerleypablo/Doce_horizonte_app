@@ -3,6 +3,13 @@ import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
 import { MODULE_DEFINITIONS, MODULE_KEYS, isModuleKey, type AppModuleKey } from '../common/modules.js';
 
+const costItemSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1),
+  monthlyAmount: z.number().min(0),
+  active: z.boolean()
+});
+
 const salesChannelSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2),
@@ -23,13 +30,16 @@ const settingsSchema = z.object({
   defaultNotesDelivery: z.string().optional(),
   defaultNotesGeneral: z.string().optional(),
   defaultNotesPayment: z.string().optional(),
+  productiveHoursPerMonth: z.number().min(0).optional().default(0),
   overheadMethod: z.enum(['PERCENT_DIRECT', 'PER_UNIT']),
   overheadPercent: z.number().min(0),
   overheadPerUnit: z.number().min(0),
+  laborCostItems: z.array(costItemSchema).optional().default([]),
+  fixedCostItems: z.array(costItemSchema).optional().default([]),
   laborCostPerHour: z.number().min(0),
   fixedCostPerHour: z.number().min(0),
   taxesPercent: z.number().min(0),
-  defaultProfitPercent: z.number().min(0),
+  defaultProfitPercent: z.number().min(0).optional().default(0),
   salesChannels: z.array(salesChannelSchema)
 });
 
@@ -62,6 +72,39 @@ const isModulesInfraMissing = (error: unknown) => {
 
 const hasAdminAccess = (role: string) => role === 'admin' || role === 'master';
 const isMasterAccess = (role: string) => role === 'master';
+type NormalizedCostItem = {
+  id?: string;
+  name: string;
+  monthlyAmount: number;
+  active: boolean;
+};
+const normalizeCostItems = (value: unknown): NormalizedCostItem[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map<NormalizedCostItem | null>((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const row = item as {
+        id?: unknown;
+        name?: unknown;
+        monthlyAmount?: unknown;
+        active?: unknown;
+      };
+      const name = String(row.name ?? '').trim();
+      const monthlyAmount = Number(row.monthlyAmount ?? 0);
+      if (!name) return null;
+      return {
+        id: row.id ? String(row.id) : undefined,
+        name,
+        monthlyAmount: Number.isFinite(monthlyAmount) ? monthlyAmount : 0,
+        active: row.active !== false
+      };
+    })
+    .filter((item): item is NormalizedCostItem => item !== null);
+};
+const sumActiveMonthlyCost = (items: NormalizedCostItem[]) =>
+  items.reduce((sum, item) => sum + (item.active ? Number(item.monthlyAmount ?? 0) : 0), 0);
+const calcHourlyCost = (monthlyTotal: number, productiveHoursPerMonth: number) =>
+  productiveHoursPerMonth > 0 ? monthlyTotal / productiveHoursPerMonth : 0;
 
 export const companyRoutes = async (app: FastifyInstance) => {
   const empresaGuard = { preHandler: [app.authenticate, app.requireModule('empresa')] };
@@ -83,6 +126,12 @@ export const companyRoutes = async (app: FastifyInstance) => {
 
     if (!settings) return reply.status(404).send({ message: 'Empresa nao encontrada' });
 
+    const productiveHoursPerMonth = Number(settings.productive_hours_per_month ?? 0);
+    const laborCostItems = normalizeCostItems(settings.labor_cost_items);
+    const fixedCostItems = normalizeCostItems(settings.fixed_cost_items);
+    const derivedLaborCostPerHour = calcHourlyCost(sumActiveMonthlyCost(laborCostItems), productiveHoursPerMonth);
+    const derivedFixedCostPerHour = calcHourlyCost(sumActiveMonthlyCost(fixedCostItems), productiveHoursPerMonth);
+
     const { data: channels } = await supabaseAdmin
       .from('sales_channels')
       .select('*')
@@ -101,13 +150,16 @@ export const companyRoutes = async (app: FastifyInstance) => {
       defaultNotesDelivery: settings.default_notes_delivery ?? '',
       defaultNotesGeneral: settings.default_notes_general ?? '',
       defaultNotesPayment: settings.default_notes_payment ?? '',
+      productiveHoursPerMonth,
       overheadMethod: settings.overhead_method,
       overheadPercent: settings.overhead_percent,
       overheadPerUnit: settings.overhead_per_unit,
-      laborCostPerHour: settings.labor_cost_per_hour,
-      fixedCostPerHour: settings.fixed_cost_per_hour,
+      laborCostItems,
+      fixedCostItems,
+      laborCostPerHour: laborCostItems.length > 0 ? derivedLaborCostPerHour : Number(settings.labor_cost_per_hour ?? 0),
+      fixedCostPerHour: fixedCostItems.length > 0 ? derivedFixedCostPerHour : Number(settings.fixed_cost_per_hour ?? 0),
       taxesPercent: settings.taxes_percent,
-      defaultProfitPercent: settings.default_profit_percent,
+      defaultProfitPercent: Number(settings.default_profit_percent ?? 0),
       salesChannels: (channels ?? []).map((channel) => ({
         id: channel.id,
         name: channel.name,
@@ -124,6 +176,15 @@ export const companyRoutes = async (app: FastifyInstance) => {
     if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
 
     const data = settingsSchema.parse(request.body);
+    const laborCostItems = normalizeCostItems(data.laborCostItems);
+    const fixedCostItems = normalizeCostItems(data.fixedCostItems);
+    const productiveHoursPerMonth = Number(data.productiveHoursPerMonth ?? 0);
+    const laborCostPerHour = laborCostItems.length > 0
+      ? calcHourlyCost(sumActiveMonthlyCost(laborCostItems), productiveHoursPerMonth)
+      : data.laborCostPerHour;
+    const fixedCostPerHour = fixedCostItems.length > 0
+      ? calcHourlyCost(sumActiveMonthlyCost(fixedCostItems), productiveHoursPerMonth)
+      : data.fixedCostPerHour;
 
     if (data.companyName) {
       const { error: companyError } = await supabaseAdmin
@@ -147,11 +208,14 @@ export const companyRoutes = async (app: FastifyInstance) => {
         default_notes_delivery: data.defaultNotesDelivery ?? '',
         default_notes_general: data.defaultNotesGeneral ?? '',
         default_notes_payment: data.defaultNotesPayment ?? '',
+        productive_hours_per_month: productiveHoursPerMonth,
         overhead_method: data.overheadMethod,
         overhead_percent: data.overheadPercent,
         overhead_per_unit: data.overheadPerUnit,
-        labor_cost_per_hour: data.laborCostPerHour,
-        fixed_cost_per_hour: data.fixedCostPerHour,
+        labor_cost_items: laborCostItems,
+        fixed_cost_items: fixedCostItems,
+        labor_cost_per_hour: laborCostPerHour,
+        fixed_cost_per_hour: fixedCostPerHour,
         taxes_percent: data.taxesPercent,
         default_profit_percent: data.defaultProfitPercent
       }, { onConflict: 'company_id' });
@@ -161,11 +225,12 @@ export const companyRoutes = async (app: FastifyInstance) => {
         .from('company_settings')
         .upsert({
           company_id: auth.companyId,
+          productive_hours_per_month: productiveHoursPerMonth,
           overhead_method: data.overheadMethod,
           overhead_percent: data.overheadPercent,
           overhead_per_unit: data.overheadPerUnit,
-          labor_cost_per_hour: data.laborCostPerHour,
-          fixed_cost_per_hour: data.fixedCostPerHour,
+          labor_cost_per_hour: laborCostPerHour,
+          fixed_cost_per_hour: fixedCostPerHour,
           taxes_percent: data.taxesPercent,
           default_profit_percent: data.defaultProfitPercent
         }, { onConflict: 'company_id' });
@@ -200,6 +265,11 @@ export const companyRoutes = async (app: FastifyInstance) => {
 
     return reply.send({
       ...data,
+      productiveHoursPerMonth,
+      laborCostItems,
+      fixedCostItems,
+      laborCostPerHour,
+      fixedCostPerHour,
       companyName: data.companyName ?? undefined
     });
   });
