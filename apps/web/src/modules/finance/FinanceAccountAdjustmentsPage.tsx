@@ -23,6 +23,7 @@ import type { ExpenseCategory, PaymentMethod, SaleOrigin } from './types.ts';
 
 type AdjustmentKind = 'ENTRY' | 'EXIT';
 type AdjustmentMode = 'amount' | 'difference';
+type AdjustmentPostingMode = 'FINANCIAL' | 'BALANCE_ONLY';
 
 const paymentMethodOptions: PaymentMethod[] = ['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'];
 
@@ -40,6 +41,7 @@ export const FinanceAccountAdjustmentsPage = () => {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     mode: 'amount' as AdjustmentMode,
+    postingMode: 'FINANCIAL' as AdjustmentPostingMode,
     kind: 'EXIT' as AdjustmentKind,
     accountId: searchParams.get('accountId') ?? '',
     origin: 'outros' as SaleOrigin,
@@ -64,6 +66,7 @@ export const FinanceAccountAdjustmentsPage = () => {
       .then((response) => {
         setForm({
           mode: 'amount',
+          postingMode: 'FINANCIAL',
           kind: response.kind,
           accountId: response.item.accountId,
           origin: response.item.origin ?? 'outros',
@@ -101,27 +104,42 @@ export const FinanceAccountAdjustmentsPage = () => {
   const computedKind = form.mode === 'difference'
     ? form.targetBalance >= selectedCurrentBalance ? 'ENTRY' : 'EXIT'
     : form.kind;
+  const computedTargetBalance = form.mode === 'difference'
+    ? form.targetBalance
+    : selectedCurrentBalance + (computedKind === 'ENTRY' ? computedAmount : -computedAmount);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.accountId) return;
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        kind: computedKind,
-        amount: computedAmount
-      };
-      await apiFetch(
-        isEditing
-          ? `/finance/account-adjustments/${editingKind}/${editingId}`
-          : `/finance/accounts/${form.accountId}/adjustments`,
-        {
-          method: isEditing ? 'PUT' : 'POST',
+      if (!isEditing && form.postingMode === 'BALANCE_ONLY') {
+        await apiFetch(`/finance/accounts/${form.accountId}/reconciliation-adjustments`, {
+          method: 'POST',
           token: user?.token,
-          body: JSON.stringify(payload)
-        }
-      );
+          body: JSON.stringify({
+            date: form.occurredAt.slice(0, 10),
+            checkedBalance: computedTargetBalance,
+            notes: [form.description.trim(), form.notes.trim()].filter(Boolean).join(' - ') || undefined
+          })
+        });
+      } else {
+        const payload = {
+          ...form,
+          kind: computedKind,
+          amount: computedAmount
+        };
+        await apiFetch(
+          isEditing
+            ? `/finance/account-adjustments/${editingKind}/${editingId}`
+            : `/finance/accounts/${form.accountId}/adjustments`,
+          {
+            method: isEditing ? 'PUT' : 'POST',
+            token: user?.token,
+            body: JSON.stringify(payload)
+          }
+        );
+      }
       invalidateQueryCache(financeAccountsSummaryKey);
       invalidateQueryCache(financeDashboardKey);
       invalidateQueryCache(financeManualSalesKey);
@@ -158,6 +176,27 @@ export const FinanceAccountAdjustmentsPage = () => {
               </div>
             </label>
           </div>
+          {!isEditing ? (
+            <label>
+              Como tratar este ajuste
+              <div className="finance-adjustment-mode-row">
+                <button
+                  type="button"
+                  className={form.postingMode === 'FINANCIAL' ? 'active' : ''}
+                  onClick={() => setForm((current) => ({ ...current, postingMode: 'FINANCIAL' }))}
+                >
+                  Lancar no financeiro
+                </button>
+                <button
+                  type="button"
+                  className={form.postingMode === 'BALANCE_ONLY' ? 'active' : ''}
+                  onClick={() => setForm((current) => ({ ...current, postingMode: 'BALANCE_ONLY' }))}
+                >
+                  So ajustar saldo
+                </button>
+              </div>
+            </label>
+          ) : null}
           {form.mode === 'amount' ? (
             <div className="grid-2">
               <label>
@@ -206,7 +245,7 @@ export const FinanceAccountAdjustmentsPage = () => {
                 options={paymentMethodOptions.map((method) => ({ value: method, label: methodLabels[method] }))}
               />
             </label>
-            {(form.mode === 'difference' ? computedKind : form.kind) === 'ENTRY' ? (
+            {form.postingMode === 'FINANCIAL' && (form.mode === 'difference' ? computedKind : form.kind) === 'ENTRY' ? (
               <label>
                 Tipo da entrada
                 <SelectField
@@ -216,7 +255,7 @@ export const FinanceAccountAdjustmentsPage = () => {
                 />
               </label>
             ) : null}
-            {(form.mode === 'difference' ? computedKind : form.kind) === 'EXIT' ? (
+            {form.postingMode === 'FINANCIAL' && (form.mode === 'difference' ? computedKind : form.kind) === 'EXIT' ? (
               <label>
                 Categoria
                 <SelectField
@@ -232,7 +271,7 @@ export const FinanceAccountAdjustmentsPage = () => {
           {form.mode === 'difference' ? (
             <div className="finance-dashboard-inline-metric">
               <span>Tipo calculado</span>
-              <strong>{computedKind === 'ENTRY' ? 'Entrada' : 'Saida'}</strong>
+              <strong>{form.postingMode === 'BALANCE_ONLY' ? 'Ajuste de saldo' : computedKind === 'ENTRY' ? 'Entrada' : 'Saida'}</strong>
             </div>
           ) : null}
           <div className="actions">

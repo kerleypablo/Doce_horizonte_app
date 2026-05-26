@@ -209,6 +209,13 @@ export const FinanceAccountsPage = () => {
   const theme = getThemeTokens();
   const currentBalanceMap = new Map((accountsSummaryQuery.data?.accounts ?? []).map((item) => [item.accountId, item.currentBalance]));
   const accountNameMap = new Map((accountsQuery.data ?? []).map((item) => [item.id, item.name]));
+  const historyCategories = useMemo(() => {
+    const dates = new Set<string>();
+    for (const series of accountsSummaryQuery.data?.historyByAccount ?? []) {
+      for (const point of series.points) dates.add(point.date);
+    }
+    return Array.from(dates).sort((left, right) => left.localeCompare(right));
+  }, [accountsSummaryQuery.data?.historyByAccount]);
 
   const historyChartOptions = useMemo<Highcharts.Options>(() => ({
     chart: {
@@ -219,10 +226,10 @@ export const FinanceAccountsPage = () => {
     },
     title: { text: undefined },
     credits: { enabled: false },
-    legend: { enabled: false },
+    legend: { enabled: true },
     xAxis: {
-      categories: (accountsSummaryQuery.data?.history ?? []).map((item) =>
-        new Date(`${item.date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      categories: historyCategories.map((date) =>
+        new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
       ),
       lineColor: theme.border,
       labels: { style: { color: theme.muted, fontSize: '11px' } }
@@ -250,17 +257,21 @@ export const FinanceAccountsPage = () => {
         lineWidth: 3,
         fillOpacity: 0.18,
         marker: { enabled: false }
+      },
+      series: {
+        marker: { enabled: false }
       }
     },
-    series: [
-      {
-        type: 'areaspline',
-        name: 'Saldo conferido',
-        color: theme.accentStrong,
-        data: (accountsSummaryQuery.data?.history ?? []).map((item) => item.totalBalance)
-      }
-    ]
-  }), [accountsSummaryQuery.data?.history, theme.accentStrong, theme.bg, theme.border, theme.muted, theme.text]);
+    series: (accountsSummaryQuery.data?.historyByAccount ?? []).map((series, index) => {
+      const pointsMap = new Map(series.points.map((point) => [point.date, point.balance]));
+      return {
+        type: 'line',
+        name: series.accountName,
+        data: historyCategories.map((date) => pointsMap.get(date) ?? null),
+        color: index === 0 ? theme.accentStrong : undefined
+      } satisfies Highcharts.SeriesLineOptions;
+    })
+  }), [accountsSummaryQuery.data?.historyByAccount, historyCategories, theme.accentStrong, theme.bg, theme.border, theme.muted, theme.text]);
 
   const totalCurrentBalance = (accountsQuery.data ?? []).reduce((sum, item) => sum + item.balanceAmount, 0);
   const latestAdjustment = accountsSummaryQuery.data?.adjustments?.[0];
@@ -377,26 +388,30 @@ export const FinanceAccountsPage = () => {
                 <div key={item.id} className="finance-dashboard-list-row finance-accounts-adjustment-row">
                   <div>
                     <strong>{item.description}</strong>
-                    <span>{accountNameMap.get(item.accountId) ?? 'Conta'} • {new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : 'Saida'}</span>
+                    <span>{accountNameMap.get(item.accountId) ?? 'Conta'} • {new Date(item.occurredAt).toLocaleDateString('pt-BR')} • {item.kind === 'ENTRY' ? 'Entrada' : item.kind === 'EXIT' ? 'Saida' : 'Saldo apenas'}</span>
                   </div>
                   <div className="finance-accounts-adjustment-actions">
                     <strong>{formatCurrency(item.amount)}</strong>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label="Editar ajuste"
-                      onClick={() => navigate(`/app/financeiro/contas/ajustes/${item.kind}/${item.id}`)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label="Excluir ajuste"
-                      onClick={() => setDeletingAdjustment({ id: item.id, kind: item.kind, description: item.description })}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">delete</span>
-                    </button>
+                    {item.kind === 'ENTRY' || item.kind === 'EXIT' ? (
+                      <>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label="Editar ajuste"
+                          onClick={() => navigate(`/app/financeiro/contas/ajustes/${item.kind}/${item.id}`)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label="Excluir ajuste"
+                          onClick={() => setDeletingAdjustment({ id: item.id, kind: item.kind, description: item.description })}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">delete</span>
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               ))}

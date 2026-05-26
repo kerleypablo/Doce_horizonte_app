@@ -68,7 +68,7 @@ const accountAdjustmentSchema = z.object({
 });
 
 const accountAdjustmentParamsSchema = z.object({
-  kind: z.enum(['ENTRY', 'EXIT']),
+  kind: z.enum(['ENTRY', 'EXIT', 'BALANCE']),
   id: z.string().uuid()
 });
 
@@ -332,6 +332,16 @@ export const financeRoutes = async (app: FastifyInstance) => {
     updatedAt: row.updated_at
   }) : null;
 
+  const mapBalanceOnlyAdjustment = (row: any) => ({
+    id: row.id,
+    accountId: row.account_id ?? undefined,
+    kind: 'BALANCE' as const,
+    occurredAt: `${String(row.adjustment_date ?? '')}T12:00:00`,
+    description: 'Ajuste de saldo sem lancamento',
+    amount: Math.abs(Number(row.delta_amount ?? 0)),
+    notes: row.notes ?? ''
+  });
+
   const mapAccountAdjustment = (row: any, kind: 'ENTRY' | 'EXIT') => ({
     id: row.id,
     accountId: row.account_id ?? undefined,
@@ -434,7 +444,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const range = parseDateRange(request.query);
     const rules = await getRules(auth.companyId);
     const rulesMap = new Map(rules.map((item) => [item.method, item]));
-    const [{ data: accounts }, { data: closings }, { data: adjustmentSales }, { data: adjustmentExpenses }, { data: accountSales }, { data: accountExpenses }] = await Promise.all([
+    const [{ data: accounts }, { data: closings }, { data: adjustmentSales }, { data: adjustmentExpenses }, { data: reconciliationAdjustments }, { data: accountSales }, { data: accountExpenses }] = await Promise.all([
       supabaseAdmin
         .from('financial_accounts')
         .select('id, name, account_type, institution, balance_date, balance_amount')
@@ -451,7 +461,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
         .select('*')
         .eq('company_id', auth.companyId)
         .contains('tags', ['ajuste'])
-        .gte('occurred_at', range.fromIso)
         .lte('occurred_at', range.toIso)
         .order('occurred_at', { ascending: false }),
       supabaseAdmin
@@ -459,9 +468,15 @@ export const financeRoutes = async (app: FastifyInstance) => {
         .select('*')
         .eq('company_id', auth.companyId)
         .ilike('description', 'Ajuste de saldo%')
-        .gte('occurred_at', range.fromIso)
         .lte('occurred_at', range.toIso)
         .order('occurred_at', { ascending: false }),
+      supabaseAdmin
+        .from('financial_reconciliation_adjustments')
+        .select('*')
+        .eq('company_id', auth.companyId)
+        .gte('adjustment_date', range.from)
+        .lte('adjustment_date', range.to)
+        .order('adjustment_date', { ascending: false }),
       supabaseAdmin
         .from('financial_manual_sales')
         .select('*')
@@ -477,20 +492,77 @@ export const financeRoutes = async (app: FastifyInstance) => {
         .order('occurred_at', { ascending: false })
     ]);
 
-    const historyMap = new Map<string, number>();
-    const closingKeys = new Set(
-      (closings ?? []).map((item) => `${String(item.account_id ?? '')}:${String(item.closing_date ?? '')}`)
-    );
-
-    for (const account of accounts ?? []) {
-      const balanceDate = String(account.balance_date ?? '');
-      if (!balanceDate || balanceDate < range.from || balanceDate > range.to) continue;
-      if (closingKeys.has(`${String(account.id)}:${balanceDate}`)) continue;
-      historyMap.set(balanceDate, (historyMap.get(balanceDate) ?? 0) + Number(account.balance_amount ?? 0));
-    }
+    const daysInRange = eachDate(range.from, range.to);
+    const closingsByAccountDate = new Map<string, number>();
     for (const closing of closings ?? []) {
+      const accountId = String(closing.account_id ?? '');
       const closingDate = String(closing.closing_date ?? '');
-      historyMap.set(closingDate, (historyMap.get(closingDate) ?? 0) + Number(closing.checked_balance ?? 0));
+      if (!accountId || !closingDate) continue;
+      closingsByAccountDate.set(`${accountId}:${closingDate}`, Number(closing.checked_balance ?? 0));
+    }
+
+    const adjustmentDeltaByAccountDate = new Map<string, number>();
+    for (const row of adjustmentSales ?? []) {
+      const accountId = String(row.account_id ?? '');
+      const occurredDate = String(row.occurred_at ?? '').slice(0, 10);
+      if (!accountId || !occurredDate) continue;
+      const amount = Number(row.amount ?? 0);
+      const rule = rulesMap.get(toMethodKey(row.payment_method));
+      const key = `${accountId}:${occurredDate}`;
+      adjustmentDeltaByAccountDate.set(key, (adjustmentDeltaByAccountDate.get(key) ?? 0) + calcLiquidByRule(amount, rule));
+    }
+    for (const row of adjustmentExpenses ?? []) {
+      const accountId = String(row.account_id ?? '');
+      const occurredDate = String(row.occurred_at ?? '').slice(0, 10);
+      if (!accountId || !occurredDate) continue;
+      const amount = Number(row.amount ?? 0);
+      const rule = rulesMap.get(toMethodKey(row.payment_method));
+      const key = `${accountId}:${occurredDate}`;
+      adjustmentDeltaByAccountDate.set(key, (adjustmentDeltaByAccountDate.get(key) ?? 0) - calcLiquidByRule(amount, rule));
+    }
+
+    const historyByAccount = (accounts ?? []).map((account) => {
+      const accountId = String(account.id ?? '');
+      const accountName = String(account.name ?? 'Conta');
+      const balanceDate = String(account.balance_date ?? '');
+      const baseBalance = Number(account.balance_amount ?? 0);
+      if (!accountId || !balanceDate) {
+        return { accountId, accountName, points: [] as Array<{ date: string; balance: number }> };
+      }
+
+      let runningBalance = baseBalance;
+      if (balanceDate < range.from) {
+        const priorDates = eachDate(balanceDate, range.from).slice(0, -1);
+        for (const date of priorDates) {
+          const closingKey = `${accountId}:${date}`;
+          if (closingsByAccountDate.has(closingKey)) {
+            runningBalance = closingsByAccountDate.get(closingKey) ?? runningBalance;
+            continue;
+          }
+          runningBalance += adjustmentDeltaByAccountDate.get(closingKey) ?? 0;
+        }
+      }
+
+      const startDate = balanceDate > range.from ? balanceDate : range.from;
+      const points = daysInRange
+        .filter((date) => date >= startDate)
+        .map((date) => {
+          const closingKey = `${accountId}:${date}`;
+          runningBalance += adjustmentDeltaByAccountDate.get(closingKey) ?? 0;
+          if (closingsByAccountDate.has(closingKey)) {
+            runningBalance = closingsByAccountDate.get(closingKey) ?? runningBalance;
+          }
+          return { date, balance: runningBalance };
+        });
+
+      return { accountId, accountName, points };
+    });
+
+    const historyMap = new Map<string, number>();
+    for (const series of historyByAccount) {
+      for (const point of series.points) {
+        historyMap.set(point.date, (historyMap.get(point.date) ?? 0) + point.balance);
+      }
     }
 
     const accountsWithCurrentBalance = (accounts ?? []).map((account) => {
@@ -524,10 +596,16 @@ export const financeRoutes = async (app: FastifyInstance) => {
       history: Array.from(historyMap.entries())
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([date, totalBalance]) => ({ date, totalBalance })),
+      historyByAccount,
       accounts: accountsWithCurrentBalance,
       adjustments: [
-        ...((adjustmentSales ?? []).map((row) => mapAccountAdjustment(row, 'ENTRY'))),
-        ...((adjustmentExpenses ?? []).map((row) => mapAccountAdjustment(row, 'EXIT')))
+        ...((adjustmentSales ?? [])
+          .filter((row) => String(row.occurred_at ?? '').slice(0, 10) >= range.from)
+          .map((row) => mapAccountAdjustment(row, 'ENTRY'))),
+        ...((adjustmentExpenses ?? [])
+          .filter((row) => String(row.occurred_at ?? '').slice(0, 10) >= range.from)
+          .map((row) => mapAccountAdjustment(row, 'EXIT'))),
+        ...((reconciliationAdjustments ?? []).map((row) => mapBalanceOnlyAdjustment(row)))
       ].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
     };
   });

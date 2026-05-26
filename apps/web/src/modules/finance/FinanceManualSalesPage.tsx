@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
@@ -27,6 +27,7 @@ import { createEmptyManualSaleForm, createManualSaleLine, formatCurrency, isSale
 import type { ManualSaleProduct, PaymentMethod, SaleOrigin } from './types.ts';
 
 export const FinanceManualSalesPage = () => {
+  const pageSize = 10;
   const { user } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -35,7 +36,9 @@ export const FinanceManualSalesPage = () => {
   const editingRouteId = pathname.includes('/editar/') ? params.saleId ?? null : null;
   const { from, to, setFrom, setTo } = useFinanceRange();
   const [filterTag, setFilterTag] = useState('');
+  const [filterMethod, setFilterMethod] = useState<'ALL' | PaymentMethod>('ALL');
   const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
   const salesQuery = useManualSales(user?.token, from, to, filterTag || undefined, searchText || undefined);
   const tagsQuery = useManualSalesTags(user?.token);
   const productsQuery = useFinanceProducts(user?.token);
@@ -82,6 +85,30 @@ export const FinanceManualSalesPage = () => {
   const tagOptions = tagsQuery.data?.tags ?? [];
   const reusableTagOptions = tagOptions.filter((tag) => !isSaleOrigin(tag));
   const grossTotal = form.lines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const filteredSales = useMemo(() => (
+    (salesQuery.data ?? []).filter((item) => filterMethod === 'ALL' || item.paymentMethod === filterMethod)
+  ), [filterMethod, salesQuery.data]);
+  const filteredNetTotal = useMemo(
+    () => filteredSales.reduce((sum, item) => sum + Number(item.netAmount ?? 0), 0),
+    [filteredSales]
+  );
+  const filteredGrossTotal = useMemo(
+    () => filteredSales.reduce((sum, item) => sum + Number(item.amount ?? 0), 0),
+    [filteredSales]
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
+  const paginatedSales = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredSales.slice(start, start + pageSize);
+  }, [filteredSales, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterMethod, filterTag, searchText, from, to]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -328,14 +355,16 @@ export const FinanceManualSalesPage = () => {
             onAction={() => navigate('/app/financeiro/vendas-manuais/novo')}
           />
           <div className="finance-filter-row">
-            <label className="finance-filter-field">
-              <span>De</span>
-              <input type="date" className="finance-date-input" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <label className="finance-filter-field">
-              <span>Ate</span>
-              <input type="date" className="finance-date-input" value={to} onChange={(e) => setTo(e.target.value)} />
-            </label>
+            <div className="finance-filter-date-group">
+              <label className="finance-filter-field finance-filter-field-date">
+                <span>De</span>
+                <input type="date" className="finance-date-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </label>
+              <label className="finance-filter-field finance-filter-field-date">
+                <span>Ate</span>
+                <input type="date" className="finance-date-input" value={to} onChange={(e) => setTo(e.target.value)} />
+              </label>
+            </div>
             <label className="finance-filter-field">
               <span>Buscar</span>
               <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Descricao da venda" />
@@ -352,9 +381,34 @@ export const FinanceManualSalesPage = () => {
                 placeholder="Todas"
               />
             </label>
+            <label className="finance-filter-field">
+              <span>Pagamento</span>
+              <SelectField
+                value={filterMethod}
+                onChange={(value) => setFilterMethod(value as 'ALL' | PaymentMethod)}
+                options={[
+                  { value: 'ALL', label: 'Todos' },
+                  ...((Object.keys(methodLabels) as PaymentMethod[]).map((key) => ({ value: key, label: methodLabels[key] })))
+                ]}
+              />
+            </label>
+          </div>
+          <div className="finance-filter-summary">
+            <div>
+              <span>Total bruto filtrado</span>
+              <strong>{formatCurrency(filteredGrossTotal)}</strong>
+            </div>
+            <div>
+              <span>Total liquido filtrado</span>
+              <strong>{formatCurrency(filteredNetTotal)}</strong>
+            </div>
+            <div>
+              <span>Vendas encontradas</span>
+              <strong>{filteredSales.length}</strong>
+            </div>
           </div>
           <div className="table">
-            {(salesQuery.data ?? []).map((item) => (
+            {paginatedSales.map((item) => (
               <div key={item.id} className="list-row">
                 <div>
                   <strong>{item.description}</strong>
@@ -389,7 +443,26 @@ export const FinanceManualSalesPage = () => {
                 </button>
               </div>
             ))}
+            {filteredSales.length === 0 ? (
+              <div className="list-row">
+                <div>
+                  <strong>Nenhuma venda encontrada</strong>
+                  <span className="muted">Ajuste os filtros para ver outros resultados.</span>
+                </div>
+              </div>
+            ) : null}
           </div>
+          {filteredSales.length > pageSize ? (
+            <div className="finance-pagination">
+              <button type="button" className="ghost" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>
+                Anterior
+              </button>
+              <span>Pagina {page} de {totalPages}</span>
+              <button type="button" className="ghost" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page === totalPages}>
+                Proxima
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

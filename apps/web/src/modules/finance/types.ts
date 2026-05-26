@@ -28,14 +28,20 @@ export type FinanceAccountDailyBalance = {
   totalBalance: number;
 };
 
+export type FinanceAccountHistorySeries = {
+  accountId: string;
+  accountName: string;
+  points: Array<{ date: string; balance: number }>;
+};
+
 export type FinanceAccountAdjustment = {
   id: string;
   accountId: string;
-  kind: 'ENTRY' | 'EXIT';
+  kind: 'ENTRY' | 'EXIT' | 'BALANCE';
   origin?: SaleOrigin;
   occurredAt: string;
   description: string;
-  paymentMethod: PaymentMethod;
+  paymentMethod?: PaymentMethod;
   amount: number;
   category?: ExpenseCategory;
   notes?: string;
@@ -44,6 +50,7 @@ export type FinanceAccountAdjustment = {
 export type FinanceAccountsSummary = {
   range: { from: string; to: string };
   history: FinanceAccountDailyBalance[];
+  historyByAccount: FinanceAccountHistorySeries[];
   accounts: Array<{ accountId: string; currentBalance: number }>;
   adjustments: FinanceAccountAdjustment[];
 };
