@@ -24,6 +24,12 @@ type CostItem = {
   active: boolean;
 };
 
+type CostItemFormState = {
+  name: string;
+  monthlyAmount: number;
+  active: boolean;
+};
+
 type Settings = {
   companyName: string;
   companyCode?: string;
@@ -68,6 +74,13 @@ export const CompanySettingsPage = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [tab, setTab] = useState<'empresa' | 'custos' | 'canais'>('empresa');
   const [showAdvancedRateio, setShowAdvancedRateio] = useState(false);
+  const [laborCostDraft, setLaborCostDraft] = useState<CostItemFormState>({ name: '', monthlyAmount: 0, active: true });
+  const [fixedCostDraft, setFixedCostDraft] = useState<CostItemFormState>({ name: '', monthlyAmount: 0, active: true });
+  const [editingCost, setEditingCost] = useState<{
+    kind: 'laborCostItems' | 'fixedCostItems';
+    index: number;
+    draft: CostItemFormState;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [roleSavingUserId, setRoleSavingUserId] = useState<string | null>(null);
@@ -106,6 +119,7 @@ export const CompanySettingsPage = () => {
         laborCostPerHour: Number(settingsQuery.data.laborCostPerHour ?? 0),
         fixedCostPerHour: Number(settingsQuery.data.fixedCostPerHour ?? 0)
       });
+      setEditingCost(null);
     }
   }, [settingsQuery.data]);
 
@@ -136,18 +150,19 @@ export const CompanySettingsPage = () => {
     active: true
   });
 
-  const updateCostItem = (kind: 'laborCostItems' | 'fixedCostItems', index: number, field: keyof CostItem, value: string | number | boolean) => {
-    if (!settings) return;
-    const next = [...settings[kind]];
-    next[index] = { ...next[index], [field]: value };
-    setSettings({ ...settings, [kind]: next });
-  };
+  const createEmptyCostForm = (): CostItemFormState => ({
+    name: '',
+    monthlyAmount: 0,
+    active: true
+  });
 
-  const addCostItem = (kind: 'laborCostItems' | 'fixedCostItems', fallbackName: string) => {
+  const addCostItem = (kind: 'laborCostItems' | 'fixedCostItems', draft: CostItemFormState) => {
     if (!settings) return;
+    const name = draft.name.trim();
+    if (!name) return;
     setSettings({
       ...settings,
-      [kind]: [...settings[kind], buildCostItem(fallbackName)]
+      [kind]: [...settings[kind], { ...buildCostItem(name), name, monthlyAmount: draft.monthlyAmount, active: draft.active }]
     });
   };
 
@@ -157,6 +172,49 @@ export const CompanySettingsPage = () => {
       ...settings,
       [kind]: settings[kind].filter((_, itemIndex) => itemIndex !== index)
     });
+    if (editingCost?.kind === kind && editingCost.index === index) {
+      setEditingCost(null);
+    }
+  };
+
+  const toggleCostItemActive = (kind: 'laborCostItems' | 'fixedCostItems', index: number, active: boolean) => {
+    if (!settings) return;
+    const next = [...settings[kind]];
+    next[index] = { ...next[index], active };
+    setSettings({ ...settings, [kind]: next });
+    if (editingCost?.kind === kind && editingCost.index === index) {
+      setEditingCost({ ...editingCost, draft: { ...editingCost.draft, active } });
+    }
+  };
+
+  const startEditingCostItem = (kind: 'laborCostItems' | 'fixedCostItems', index: number) => {
+    if (!settings) return;
+    const item = settings[kind][index];
+    if (!item) return;
+    setEditingCost({
+      kind,
+      index,
+      draft: {
+        name: item.name,
+        monthlyAmount: item.monthlyAmount,
+        active: item.active
+      }
+    });
+  };
+
+  const saveEditingCostItem = () => {
+    if (!settings || !editingCost) return;
+    const name = editingCost.draft.name.trim();
+    if (!name) return;
+    const next = [...settings[editingCost.kind]];
+    next[editingCost.index] = {
+      ...next[editingCost.index],
+      name,
+      monthlyAmount: editingCost.draft.monthlyAmount,
+      active: editingCost.draft.active
+    };
+    setSettings({ ...settings, [editingCost.kind]: next });
+    setEditingCost(null);
   };
 
   const handleLogoUpload = async (files: FileList | null) => {
@@ -410,39 +468,106 @@ export const CompanySettingsPage = () => {
                   <h4>Equipe e mao de obra</h4>
                   <p>Cadastre salarios, pro-labore ou qualquer custo mensal de quem produz. O sistema soma tudo e converte para custo por hora.</p>
                 </div>
-                <button type="button" className="ghost" onClick={() => addCostItem('laborCostItems', 'Novo custo de equipe')}>
-                  + Adicionar custo de equipe
+              </div>
+              <div className="company-settings-cost-create">
+                <label>
+                  Nome
+                  <input
+                    value={laborCostDraft.name}
+                    onChange={(e) => setLaborCostDraft((current) => ({ ...current, name: e.target.value }))}
+                    placeholder="Ex.: Funcionario confeitaria"
+                  />
+                </label>
+                <label>
+                  Valor mensal
+                  <MoneyInput
+                    value={laborCostDraft.monthlyAmount}
+                    onChange={(value) => setLaborCostDraft((current) => ({ ...current, monthlyAmount: value }))}
+                  />
+                </label>
+                <label className="settings-switch compact company-settings-cost-toggle">
+                  <span>Ativo</span>
+                  <input
+                    type="checkbox"
+                    checked={laborCostDraft.active}
+                    onChange={(e) => setLaborCostDraft((current) => ({ ...current, active: e.target.checked }))}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    addCostItem('laborCostItems', laborCostDraft);
+                    setLaborCostDraft(createEmptyCostForm());
+                  }}
+                  disabled={!laborCostDraft.name.trim()}
+                >
+                  Adicionar
                 </button>
               </div>
               <div className="company-settings-cost-list">
                 {settings.laborCostItems.map((item, index) => (
                   <div key={item.id ?? `${item.name}-${index}`} className="company-settings-cost-row">
-                    <label>
-                      Nome
-                      <input
-                        value={item.name}
-                        onChange={(e) => updateCostItem('laborCostItems', index, 'name', e.target.value)}
-                        placeholder="Ex.: Funcionario confeitaria"
-                      />
-                    </label>
-                    <label>
-                      Valor mensal
-                      <MoneyInput
-                        value={item.monthlyAmount}
-                        onChange={(value) => updateCostItem('laborCostItems', index, 'monthlyAmount', value)}
-                      />
-                    </label>
-                    <label className="settings-switch compact company-settings-cost-toggle">
-                      <span>Ativo</span>
-                      <input
-                        type="checkbox"
-                        checked={item.active}
-                        onChange={(e) => updateCostItem('laborCostItems', index, 'active', e.target.checked)}
-                      />
-                    </label>
-                    <button type="button" className="ghost danger" onClick={() => removeCostItem('laborCostItems', index)}>
-                      Remover
-                    </button>
+                    {editingCost?.kind === 'laborCostItems' && editingCost.index === index ? (
+                      <>
+                        <label>
+                          Nome
+                          <input
+                            value={editingCost.draft.name}
+                            onChange={(e) => setEditingCost({ ...editingCost, draft: { ...editingCost.draft, name: e.target.value } })}
+                            placeholder="Ex.: Funcionario confeitaria"
+                          />
+                        </label>
+                        <label>
+                          Valor mensal
+                          <MoneyInput
+                            value={editingCost.draft.monthlyAmount}
+                            onChange={(value) => setEditingCost({ ...editingCost, draft: { ...editingCost.draft, monthlyAmount: value } })}
+                          />
+                        </label>
+                        <label className="settings-switch compact company-settings-cost-toggle">
+                          <span>Ativo</span>
+                          <input
+                            type="checkbox"
+                            checked={editingCost.draft.active}
+                            onChange={(e) => setEditingCost({ ...editingCost, draft: { ...editingCost.draft, active: e.target.checked } })}
+                          />
+                        </label>
+                        <div className="company-settings-cost-actions">
+                          <button type="button" onClick={saveEditingCostItem} disabled={!editingCost.draft.name.trim()}>
+                            Salvar
+                          </button>
+                          <button type="button" className="ghost" onClick={() => setEditingCost(null)}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="company-settings-cost-display">
+                          <strong>{item.name}</strong>
+                          <span>{formatCurrency(item.monthlyAmount)} por mes</span>
+                        </div>
+                        <div className="company-settings-cost-status">
+                          <span>{item.active ? 'Ativo' : 'Inativo'}</span>
+                        </div>
+                        <label className="settings-switch compact company-settings-cost-toggle">
+                          <span>Ativo</span>
+                          <input
+                            type="checkbox"
+                            checked={item.active}
+                            onChange={(e) => toggleCostItemActive('laborCostItems', index, e.target.checked)}
+                          />
+                        </label>
+                        <div className="company-settings-cost-actions">
+                          <button type="button" className="ghost" onClick={() => startEditingCostItem('laborCostItems', index)}>
+                            Editar
+                          </button>
+                          <button type="button" className="ghost danger" onClick={() => removeCostItem('laborCostItems', index)}>
+                            Excluir
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
                 {settings.laborCostItems.length === 0 ? <p className="muted">Nenhum custo de equipe cadastrado.</p> : null}
@@ -465,39 +590,106 @@ export const CompanySettingsPage = () => {
                   <h4>Estrutura e custos fixos</h4>
                   <p>Cadastre aluguel, condominio, energia, gas, internet e outros custos mensais de estrutura. O sistema soma tudo e divide pelas horas produtivas.</p>
                 </div>
-                <button type="button" className="ghost" onClick={() => addCostItem('fixedCostItems', 'Novo custo fixo')}>
-                  + Adicionar custo fixo
+              </div>
+              <div className="company-settings-cost-create">
+                <label>
+                  Nome
+                  <input
+                    value={fixedCostDraft.name}
+                    onChange={(e) => setFixedCostDraft((current) => ({ ...current, name: e.target.value }))}
+                    placeholder="Ex.: Aluguel"
+                  />
+                </label>
+                <label>
+                  Valor mensal
+                  <MoneyInput
+                    value={fixedCostDraft.monthlyAmount}
+                    onChange={(value) => setFixedCostDraft((current) => ({ ...current, monthlyAmount: value }))}
+                  />
+                </label>
+                <label className="settings-switch compact company-settings-cost-toggle">
+                  <span>Ativo</span>
+                  <input
+                    type="checkbox"
+                    checked={fixedCostDraft.active}
+                    onChange={(e) => setFixedCostDraft((current) => ({ ...current, active: e.target.checked }))}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    addCostItem('fixedCostItems', fixedCostDraft);
+                    setFixedCostDraft(createEmptyCostForm());
+                  }}
+                  disabled={!fixedCostDraft.name.trim()}
+                >
+                  Adicionar
                 </button>
               </div>
               <div className="company-settings-cost-list">
                 {settings.fixedCostItems.map((item, index) => (
                   <div key={item.id ?? `${item.name}-${index}`} className="company-settings-cost-row">
-                    <label>
-                      Nome
-                      <input
-                        value={item.name}
-                        onChange={(e) => updateCostItem('fixedCostItems', index, 'name', e.target.value)}
-                        placeholder="Ex.: Aluguel"
-                      />
-                    </label>
-                    <label>
-                      Valor mensal
-                      <MoneyInput
-                        value={item.monthlyAmount}
-                        onChange={(value) => updateCostItem('fixedCostItems', index, 'monthlyAmount', value)}
-                      />
-                    </label>
-                    <label className="settings-switch compact company-settings-cost-toggle">
-                      <span>Ativo</span>
-                      <input
-                        type="checkbox"
-                        checked={item.active}
-                        onChange={(e) => updateCostItem('fixedCostItems', index, 'active', e.target.checked)}
-                      />
-                    </label>
-                    <button type="button" className="ghost danger" onClick={() => removeCostItem('fixedCostItems', index)}>
-                      Remover
-                    </button>
+                    {editingCost?.kind === 'fixedCostItems' && editingCost.index === index ? (
+                      <>
+                        <label>
+                          Nome
+                          <input
+                            value={editingCost.draft.name}
+                            onChange={(e) => setEditingCost({ ...editingCost, draft: { ...editingCost.draft, name: e.target.value } })}
+                            placeholder="Ex.: Aluguel"
+                          />
+                        </label>
+                        <label>
+                          Valor mensal
+                          <MoneyInput
+                            value={editingCost.draft.monthlyAmount}
+                            onChange={(value) => setEditingCost({ ...editingCost, draft: { ...editingCost.draft, monthlyAmount: value } })}
+                          />
+                        </label>
+                        <label className="settings-switch compact company-settings-cost-toggle">
+                          <span>Ativo</span>
+                          <input
+                            type="checkbox"
+                            checked={editingCost.draft.active}
+                            onChange={(e) => setEditingCost({ ...editingCost, draft: { ...editingCost.draft, active: e.target.checked } })}
+                          />
+                        </label>
+                        <div className="company-settings-cost-actions">
+                          <button type="button" onClick={saveEditingCostItem} disabled={!editingCost.draft.name.trim()}>
+                            Salvar
+                          </button>
+                          <button type="button" className="ghost" onClick={() => setEditingCost(null)}>
+                            Cancelar
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="company-settings-cost-display">
+                          <strong>{item.name}</strong>
+                          <span>{formatCurrency(item.monthlyAmount)} por mes</span>
+                        </div>
+                        <div className="company-settings-cost-status">
+                          <span>{item.active ? 'Ativo' : 'Inativo'}</span>
+                        </div>
+                        <label className="settings-switch compact company-settings-cost-toggle">
+                          <span>Ativo</span>
+                          <input
+                            type="checkbox"
+                            checked={item.active}
+                            onChange={(e) => toggleCostItemActive('fixedCostItems', index, e.target.checked)}
+                          />
+                        </label>
+                        <div className="company-settings-cost-actions">
+                          <button type="button" className="ghost" onClick={() => startEditingCostItem('fixedCostItems', index)}>
+                            Editar
+                          </button>
+                          <button type="button" className="ghost danger" onClick={() => removeCostItem('fixedCostItems', index)}>
+                            Excluir
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
                 {settings.fixedCostItems.length === 0 ? <p className="muted">Nenhum custo fixo cadastrado.</p> : null}

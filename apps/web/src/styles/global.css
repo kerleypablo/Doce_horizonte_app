@@ -2557,6 +2557,17 @@ button:disabled {
   gap: 10px;
 }
 
+.company-settings-cost-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
 .company-settings-cost-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(180px, 1fr) auto auto;
@@ -2570,6 +2581,34 @@ button:disabled {
 
 .company-settings-cost-toggle {
   align-self: center;
+}
+
+.company-settings-cost-display {
+  display: grid;
+  gap: 4px;
+}
+
+.company-settings-cost-display strong {
+  font-size: 14px;
+}
+
+.company-settings-cost-display span,
+.company-settings-cost-status span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.company-settings-cost-status {
+  display: flex;
+  align-items: center;
+}
+
+.company-settings-cost-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .company-settings-cost-row .ghost.danger {
@@ -3724,6 +3763,7 @@ button:disabled {
     align-items: stretch;
   }
 
+  .company-settings-cost-create,
   .company-settings-cost-row {
     grid-template-columns: 1fr;
   }
