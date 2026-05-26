@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
@@ -34,6 +34,7 @@ export const FinanceExpensesPage = () => {
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [methodFilter, setMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
   const [deletingExpense, setDeletingExpense] = useState<{ id: string; description: string } | null>(null);
   const initializedRouteRef = useRef<string | null>(null);
@@ -121,8 +122,17 @@ export const FinanceExpensesPage = () => {
   const filtered = (expensesQuery.data ?? []).filter((item) => {
     const matchesSearch = `${item.description} ${expenseCategoryLabels[item.category] ?? ''}`.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = !categoryFilter || item.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesMethod = methodFilter === 'ALL' || item.paymentMethod === methodFilter;
+    return matchesSearch && matchesCategory && matchesMethod;
   });
+  const filteredGrossTotal = useMemo(
+    () => filtered.reduce((sum, item) => sum + Number(item.amount ?? 0), 0),
+    [filtered]
+  );
+  const filteredNetTotal = useMemo(
+    () => filtered.reduce((sum, item) => sum + Number(item.netAmount ?? 0), 0),
+    [filtered]
+  );
 
   const confirmDeleteExpense = async () => {
     if (!deletingExpense) return;
@@ -206,14 +216,16 @@ export const FinanceExpensesPage = () => {
               onAction={() => navigate('/app/financeiro/despesas/novo')}
             />
             <div className="finance-filter-grid">
-              <label className="finance-filter-field finance-filter-field-wide">
-                <span>De</span>
-                <input type="date" className="finance-date-input" value={from} onChange={(e) => setFrom(e.target.value)} />
-              </label>
-              <label className="finance-filter-field finance-filter-field-wide">
-                <span>Ate</span>
-                <input type="date" className="finance-date-input" value={to} onChange={(e) => setTo(e.target.value)} />
-              </label>
+              <div className="finance-filter-date-group finance-filter-field-wide">
+                <label className="finance-filter-field finance-filter-field-date">
+                  <span>De</span>
+                  <input type="date" className="finance-date-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+                </label>
+                <label className="finance-filter-field finance-filter-field-date">
+                  <span>Ate</span>
+                  <input type="date" className="finance-date-input" value={to} onChange={(e) => setTo(e.target.value)} />
+                </label>
+              </div>
               <label className="finance-filter-field finance-filter-field-wide">
                 <span>Categoria</span>
                 <SelectField
@@ -223,6 +235,31 @@ export const FinanceExpensesPage = () => {
                   placeholder="Todas"
                 />
               </label>
+              <label className="finance-filter-field finance-filter-field-wide">
+                <span>Metodo</span>
+                <SelectField
+                  value={methodFilter}
+                  onChange={(value) => setMethodFilter(value as 'ALL' | PaymentMethod)}
+                  options={[
+                    { value: 'ALL', label: 'Todos' },
+                    ...((Object.keys(methodLabels) as PaymentMethod[]).map((key) => ({ value: key, label: methodLabels[key] })))
+                  ]}
+                />
+              </label>
+            </div>
+            <div className="finance-filter-summary">
+              <div>
+                <span>Total bruto filtrado</span>
+                <strong>{formatCurrency(filteredGrossTotal)}</strong>
+              </div>
+              <div>
+                <span>Total liquido filtrado</span>
+                <strong>{formatCurrency(filteredNetTotal)}</strong>
+              </div>
+              <div>
+                <span>Despesas encontradas</span>
+                <strong>{filtered.length}</strong>
+              </div>
             </div>
           </div>
 
@@ -254,6 +291,14 @@ export const FinanceExpensesPage = () => {
                   </button>
                 </div>
               ))}
+              {filtered.length === 0 ? (
+                <div className="list-row">
+                  <div>
+                    <strong>Nenhuma despesa encontrada</strong>
+                    <span className="muted">Ajuste os filtros para ver outros resultados.</span>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </>
