@@ -2579,6 +2579,12 @@ button:disabled {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.company-settings-cost-row.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 10px 12px;
+}
+
 .company-settings-cost-toggle {
   align-self: center;
 }
@@ -2609,6 +2615,20 @@ button:disabled {
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.company-settings-cost-row.compact .company-settings-cost-actions {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.company-settings-cost-row.compact .icon-button.small {
+  width: 30px;
+  height: 30px;
+}
+
+.company-settings-cost-row.compact .icon-button.small.danger {
+  color: #b42318;
 }
 
 .company-settings-cost-row .ghost.danger {
