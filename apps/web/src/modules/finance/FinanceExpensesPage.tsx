@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import Highcharts from 'highcharts';
-import HighchartsReact from 'highcharts-react-official';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
@@ -21,29 +19,6 @@ import {
 import { useExpenses, useFinanceAccounts, useFinanceRange } from './hooks.ts';
 import { formatCurrency, todayDate } from './utils.ts';
 import type { ExpenseCategory, PaymentMethod } from './types.ts';
-
-const getThemeTokens = () => {
-  if (typeof window === 'undefined') {
-    return {
-      bg: '#ffffff',
-      text: '#1f2937',
-      muted: '#6b7280',
-      accent: '#3f7ea2',
-      accentStrong: '#23526f',
-      border: '#e5e7eb'
-    };
-  }
-
-  const styles = getComputedStyle(document.documentElement);
-  return {
-    bg: styles.getPropertyValue('--surface').trim() || '#ffffff',
-    text: styles.getPropertyValue('--text').trim() || '#1f2937',
-    muted: styles.getPropertyValue('--muted').trim() || '#6b7280',
-    accent: styles.getPropertyValue('--accent').trim() || '#3f7ea2',
-    accentStrong: styles.getPropertyValue('--accent-strong').trim() || '#23526f',
-    border: styles.getPropertyValue('--border').trim() || '#e5e7eb'
-  };
-};
 
 export const FinanceExpensesPage = () => {
   const { user } = useAuth();
@@ -158,101 +133,6 @@ export const FinanceExpensesPage = () => {
     () => filtered.reduce((sum, item) => sum + Number(item.netAmount ?? 0), 0),
     [filtered]
   );
-  const expensesChartData = useMemo(() => {
-    const byDate = new Map<string, { total: number } & Record<PaymentMethod, number>>();
-    for (const item of filtered) {
-      const date = String(item.occurredAt).slice(0, 10);
-      const current = byDate.get(date) ?? { total: 0, PIX: 0, DINHEIRO: 0, CARTAO: 0, VOUCHER: 0 };
-      current.total += Number(item.netAmount ?? 0);
-      current[item.paymentMethod] += Number(item.netAmount ?? 0);
-      byDate.set(date, current);
-    }
-    const dates = Array.from(byDate.keys()).sort((left, right) => left.localeCompare(right));
-    return {
-      dates,
-      totals: dates.map((date) => byDate.get(date)?.total ?? 0),
-      byMethod: (Object.keys(methodLabels) as PaymentMethod[]).map((method) => ({
-        method,
-        data: dates.map((date) => byDate.get(date)?.[method] ?? 0)
-      }))
-    };
-  }, [filtered]);
-  const theme = getThemeTokens();
-  const expensesDailyChartOptions = useMemo<Highcharts.Options>(() => ({
-    chart: {
-      type: 'column',
-      backgroundColor: 'transparent',
-      height: 280
-    },
-    title: { text: undefined },
-    credits: { enabled: false },
-    legend: { enabled: false },
-    xAxis: {
-      categories: expensesChartData.dates.map((date) => new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })),
-      lineColor: theme.border,
-      labels: { style: { color: theme.muted, fontSize: '11px' } }
-    },
-    yAxis: {
-      title: { text: undefined },
-      gridLineColor: theme.border,
-      labels: {
-        style: { color: theme.muted, fontSize: '11px' },
-        formatter() { return formatCurrency(Number(this.value)); }
-      }
-    },
-    tooltip: {
-      backgroundColor: theme.bg,
-      borderColor: theme.border,
-      style: { color: theme.text },
-      pointFormatter() { return `<span>${formatCurrency(Number(this.y ?? 0))}</span>`; }
-    },
-    series: [{
-      type: 'column',
-      name: 'Total do dia',
-      color: theme.accentStrong,
-      data: expensesChartData.totals
-    }]
-  }), [expensesChartData.dates, expensesChartData.totals, theme.accentStrong, theme.bg, theme.border, theme.muted, theme.text]);
-
-  const expensesByMethodChartOptions = useMemo<Highcharts.Options>(() => ({
-    chart: {
-      type: 'column',
-      backgroundColor: 'transparent',
-      height: 320
-    },
-    title: { text: undefined },
-    credits: { enabled: false },
-    xAxis: {
-      categories: expensesChartData.dates.map((date) => new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })),
-      lineColor: theme.border,
-      labels: { style: { color: theme.muted, fontSize: '11px' } }
-    },
-    yAxis: {
-      title: { text: undefined },
-      gridLineColor: theme.border,
-      labels: {
-        style: { color: theme.muted, fontSize: '11px' },
-        formatter() { return formatCurrency(Number(this.value)); }
-      }
-    },
-    tooltip: {
-      shared: true,
-      backgroundColor: theme.bg,
-      borderColor: theme.border,
-      style: { color: theme.text }
-    },
-    plotOptions: {
-      column: {
-        stacking: 'normal',
-        borderRadius: 4
-      }
-    },
-    series: expensesChartData.byMethod.map((entry) => ({
-      type: 'column',
-      name: methodLabels[entry.method],
-      data: entry.data
-    }))
-  }), [expensesChartData.byMethod, expensesChartData.dates, theme.bg, theme.border, theme.muted, theme.text]);
 
   const confirmDeleteExpense = async () => {
     if (!deletingExpense) return;
@@ -381,22 +261,6 @@ export const FinanceExpensesPage = () => {
                 <strong>{filtered.length}</strong>
               </div>
             </div>
-            {filtered.length > 0 ? (
-              <div className="finance-chart-grid">
-                <article className="finance-chart-card">
-                  <div className="finance-chart-head">
-                    <h4>Total de despesas por dia</h4>
-                  </div>
-                  <HighchartsReact highcharts={Highcharts} options={expensesDailyChartOptions} />
-                </article>
-                <article className="finance-chart-card">
-                  <div className="finance-chart-head">
-                    <h4>Despesas por tipo e por dia</h4>
-                  </div>
-                  <HighchartsReact highcharts={Highcharts} options={expensesByMethodChartOptions} />
-                </article>
-              </div>
-            ) : null}
           </div>
 
           <div className="panel">

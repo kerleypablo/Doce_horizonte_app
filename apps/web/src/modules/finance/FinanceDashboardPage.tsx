@@ -27,6 +27,8 @@ import { formatCompactCurrency, formatCurrency, monthStart, todayDate } from './
 import type { OriginCostRule, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
+type SalesTab = 'general' | 'byMethod';
+type ExpensesTab = 'general' | 'byMethod';
 type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'accounts' | 'costs' | 'rates';
 type RangePreset = 'today' | 'week' | 'month' | 'custom';
 
@@ -34,6 +36,16 @@ const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
   { id: 'overview', label: 'Visao geral' },
   { id: 'cashflow', label: 'Fluxo' },
   { id: 'sources', label: 'Origens' }
+];
+
+const salesTabs: Array<{ id: SalesTab; label: string }> = [
+  { id: 'general', label: 'Geral' },
+  { id: 'byMethod', label: 'Por tipo' }
+];
+
+const expensesTabs: Array<{ id: ExpensesTab; label: string }> = [
+  { id: 'general', label: 'Geral' },
+  { id: 'byMethod', label: 'Por tipo' }
 ];
 
 const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
@@ -288,6 +300,8 @@ export const FinanceDashboardPage = () => {
   const toPickerRef = useRef<HTMLInputElement | null>(null);
   const [activeDashboardTab, setActiveDashboardTab] = useState<DashboardTab>('overview');
   const [activeHomeTab, setActiveHomeTab] = useState<FinanceHomeTab>('dashboard');
+  const [activeSalesTab, setActiveSalesTab] = useState<SalesTab>('general');
+  const [activeExpensesTab, setActiveExpensesTab] = useState<ExpensesTab>('general');
 
   const dashboardQuery = useFinanceDashboard(user?.token, from, to);
   const originCostRulesQuery = useFinanceOriginCostRules(user?.token);
@@ -518,6 +532,170 @@ export const FinanceDashboardPage = () => {
     [data?.expensesByCategory, theme]
   );
 
+  const salesTimelineChartData = useMemo(() => {
+    const byDate = new Map<string, { total: number; PIX: number; DINHEIRO: number; CARTAO: number; VOUCHER: number }>();
+    for (const item of salesQuery.data ?? []) {
+      const date = String(item.occurredAt).slice(0, 10);
+      const current = byDate.get(date) ?? { total: 0, PIX: 0, DINHEIRO: 0, CARTAO: 0, VOUCHER: 0 };
+      current.total += Number(item.netAmount ?? 0);
+      current[item.paymentMethod] += Number(item.netAmount ?? 0);
+      byDate.set(date, current);
+    }
+    const dates = Array.from(byDate.keys()).sort((left, right) => left.localeCompare(right));
+    return {
+      dates,
+      totals: dates.map((date) => byDate.get(date)?.total ?? 0),
+      byMethod: (Object.keys(methodLabels) as Array<keyof typeof methodLabels>).map((method) => ({
+        method,
+        data: dates.map((date) => byDate.get(date)?.[method] ?? 0)
+      }))
+    };
+  }, [salesQuery.data]);
+
+  const expensesTimelineChartData = useMemo(() => {
+    const byDate = new Map<string, { total: number; PIX: number; DINHEIRO: number; CARTAO: number; VOUCHER: number }>();
+    for (const item of expensesQuery.data ?? []) {
+      const date = String(item.occurredAt).slice(0, 10);
+      const current = byDate.get(date) ?? { total: 0, PIX: 0, DINHEIRO: 0, CARTAO: 0, VOUCHER: 0 };
+      current.total += Number(item.netAmount ?? 0);
+      current[item.paymentMethod] += Number(item.netAmount ?? 0);
+      byDate.set(date, current);
+    }
+    const dates = Array.from(byDate.keys()).sort((left, right) => left.localeCompare(right));
+    return {
+      dates,
+      totals: dates.map((date) => byDate.get(date)?.total ?? 0),
+      byMethod: (Object.keys(methodLabels) as Array<keyof typeof methodLabels>).map((method) => ({
+        method,
+        data: dates.map((date) => byDate.get(date)?.[method] ?? 0)
+      }))
+    };
+  }, [expensesQuery.data]);
+
+  const salesDailyChartOptions = useMemo<Highcharts.Options>(
+    () =>
+      buildColumnChart({
+        categories: salesTimelineChartData.dates.map((date) =>
+          new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+        ),
+        values: salesTimelineChartData.totals,
+        theme,
+        name: 'Total do dia'
+      }),
+    [salesTimelineChartData.dates, salesTimelineChartData.totals, theme]
+  );
+
+  const salesByMethodDailyChartOptions = useMemo<Highcharts.Options>(
+    () => ({
+      chart: {
+        type: 'column',
+        backgroundColor: 'transparent',
+        spacing: [8, 8, 0, 8],
+        height: 290
+      },
+      title: { text: undefined },
+      credits: { enabled: false },
+      xAxis: {
+        categories: salesTimelineChartData.dates.map((date) =>
+          new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+        ),
+        lineColor: theme.border,
+        labels: { style: { color: theme.muted, fontSize: '11px' } }
+      },
+      yAxis: {
+        title: { text: undefined },
+        gridLineColor: theme.border,
+        labels: {
+          style: { color: theme.muted, fontSize: '11px' },
+          formatter() {
+            return formatCompactCurrency(Number(this.value));
+          }
+        }
+      },
+      tooltip: {
+        shared: true,
+        backgroundColor: theme.bg,
+        borderColor: theme.border,
+        style: { color: theme.text }
+      },
+      plotOptions: {
+        column: {
+          stacking: 'normal',
+          borderRadius: 6,
+          borderWidth: 0
+        }
+      },
+      series: salesTimelineChartData.byMethod.map((entry) => ({
+        type: 'column' as const,
+        name: methodLabels[entry.method],
+        data: entry.data
+      }))
+    }),
+    [salesTimelineChartData.byMethod, salesTimelineChartData.dates, theme]
+  );
+
+  const expensesDailyChartOptions = useMemo<Highcharts.Options>(
+    () =>
+      buildColumnChart({
+        categories: expensesTimelineChartData.dates.map((date) =>
+          new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+        ),
+        values: expensesTimelineChartData.totals,
+        theme,
+        name: 'Total do dia'
+      }),
+    [expensesTimelineChartData.dates, expensesTimelineChartData.totals, theme]
+  );
+
+  const expensesByMethodDailyChartOptions = useMemo<Highcharts.Options>(
+    () => ({
+      chart: {
+        type: 'column',
+        backgroundColor: 'transparent',
+        spacing: [8, 8, 0, 8],
+        height: 290
+      },
+      title: { text: undefined },
+      credits: { enabled: false },
+      xAxis: {
+        categories: expensesTimelineChartData.dates.map((date) =>
+          new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+        ),
+        lineColor: theme.border,
+        labels: { style: { color: theme.muted, fontSize: '11px' } }
+      },
+      yAxis: {
+        title: { text: undefined },
+        gridLineColor: theme.border,
+        labels: {
+          style: { color: theme.muted, fontSize: '11px' },
+          formatter() {
+            return formatCompactCurrency(Number(this.value));
+          }
+        }
+      },
+      tooltip: {
+        shared: true,
+        backgroundColor: theme.bg,
+        borderColor: theme.border,
+        style: { color: theme.text }
+      },
+      plotOptions: {
+        column: {
+          stacking: 'normal',
+          borderRadius: 6,
+          borderWidth: 0
+        }
+      },
+      series: expensesTimelineChartData.byMethod.map((entry) => ({
+        type: 'column' as const,
+        name: methodLabels[entry.method],
+        data: entry.data
+      }))
+    }),
+    [expensesTimelineChartData.byMethod, expensesTimelineChartData.dates, theme]
+  );
+
   const accountsChartOptions = useMemo(
     () =>
       buildColumnChart({
@@ -691,6 +869,24 @@ export const FinanceDashboardPage = () => {
             </div>
             <HighchartsReact highcharts={Highcharts} options={originChartOptions} />
           </article>
+
+          <article className="finance-dashboard-panel finance-dashboard-chart-panel">
+            <div className="finance-dashboard-tabs finance-dashboard-tabs-inner">
+              {salesTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={activeSalesTab === tab.id ? 'active' : ''}
+                  onClick={() => setActiveSalesTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeSalesTab === 'general' ? <HighchartsReact highcharts={Highcharts} options={salesDailyChartOptions} /> : null}
+            {activeSalesTab === 'byMethod' ? <HighchartsReact highcharts={Highcharts} options={salesByMethodDailyChartOptions} /> : null}
+          </article>
         </div>
 
         <aside className="finance-dashboard-side">
@@ -728,6 +924,24 @@ export const FinanceDashboardPage = () => {
               </div>
             </div>
             <HighchartsReact highcharts={Highcharts} options={expenseChartOptions} />
+          </article>
+
+          <article className="finance-dashboard-panel finance-dashboard-chart-panel">
+            <div className="finance-dashboard-tabs finance-dashboard-tabs-inner">
+              {expensesTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={activeExpensesTab === tab.id ? 'active' : ''}
+                  onClick={() => setActiveExpensesTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeExpensesTab === 'general' ? <HighchartsReact highcharts={Highcharts} options={expensesDailyChartOptions} /> : null}
+            {activeExpensesTab === 'byMethod' ? <HighchartsReact highcharts={Highcharts} options={expensesByMethodDailyChartOptions} /> : null}
           </article>
         </div>
 
