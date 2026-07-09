@@ -100,7 +100,7 @@ export const TasksBoardPage = () => {
     `tasks-board:${mode}:${toDateKey(range.start)}`,
     () =>
       apiFetch<TaskOrder[]>(
-        `/orders/summary-calendar?from=${encodeURIComponent(toDateKey(range.start))}&to=${encodeURIComponent(toDateKey(range.end))}`,
+        `/orders/summary-calendar?from=${encodeURIComponent(toDateKey(range.start))}&to=${encodeURIComponent(toDateKey(range.end))}&includeImages=true&includeNotes=true`,
         { token: user?.token }
       ),
     { enabled: Boolean(user?.token), staleTime: 60_000, refetchInterval: 90_000 }

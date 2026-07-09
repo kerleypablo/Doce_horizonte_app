@@ -59,6 +59,20 @@ type CompanySettings = {
   logoDataUrl?: string;
 };
 
+const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const endOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+const startOfWeek = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  next.setDate(next.getDate() - next.getDay());
+  return next;
+};
+const endOfWeek = (date: Date) => {
+  const next = startOfWeek(date);
+  next.setDate(next.getDate() + 6);
+  return next;
+};
+
 const getOrderDateKeys = (order: OrderItem) => {
   const deliveryKey = normalizeDateKey(order.deliveryDate);
   return deliveryKey ? [deliveryKey] : [];
@@ -78,9 +92,33 @@ export const DashboardPage = () => {
   const [selectedDate, setSelectedDate] = useState(toDateKey(today));
   const [calendarCompact, setCalendarCompact] = useState(true);
   const [showRevenue, setShowRevenue] = useState(true);
+  const calendarRange = useMemo(() => {
+    if (calendarCompact) {
+      const selected = new Date(`${selectedDate}T12:00:00`);
+      if (!Number.isNaN(selected.getTime())) {
+        return { from: toDateKey(startOfWeek(selected)), to: toDateKey(endOfWeek(selected)) };
+      }
+    }
+    return { from: toDateKey(startOfMonth(monthDate)), to: toDateKey(endOfMonth(monthDate)) };
+  }, [calendarCompact, monthDate, selectedDate]);
+  const revenueRange = useMemo(
+    () => ({ from: toDateKey(startOfMonth(today)), to: toDateKey(endOfMonth(today)) }),
+    [today]
+  );
   const ordersQuery = useCachedQuery(
-    queryKeys.ordersSummaryCalendar,
-    () => apiFetch<OrderItem[]>('/orders', { token: user?.token }),
+    `${queryKeys.ordersSummaryCalendar}:home:${calendarRange.from}:${calendarRange.to}`,
+    () => apiFetch<OrderItem[]>(
+      `/orders/summary-calendar?from=${encodeURIComponent(calendarRange.from)}&to=${encodeURIComponent(calendarRange.to)}`,
+      { token: user?.token }
+    ),
+    { staleTime: 60_000, enabled: Boolean(user?.token), refetchInterval: 90_000 }
+  );
+  const revenueQuery = useCachedQuery(
+    `${queryKeys.ordersSummaryCalendar}:revenue:${revenueRange.from}:${revenueRange.to}`,
+    () => apiFetch<OrderItem[]>(
+      `/orders/summary-calendar?from=${encodeURIComponent(revenueRange.from)}&to=${encodeURIComponent(revenueRange.to)}`,
+      { token: user?.token }
+    ),
     { staleTime: 60_000, enabled: Boolean(user?.token), refetchInterval: 90_000 }
   );
   const settingsQuery = useCachedQuery(
@@ -89,6 +127,7 @@ export const DashboardPage = () => {
     { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
   );
   const orders = ordersQuery.data ?? [];
+  const revenueOrders = revenueQuery.data ?? [];
   const settings = settingsQuery.data ?? null;
 
   useEffect(() => {
@@ -193,23 +232,18 @@ export const DashboardPage = () => {
         : discountValue;
       return productsTotal + additionsTotal - discountTotal + Number(order.shippingValue ?? 0);
     };
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    return orders
+    return revenueOrders
       .filter((order) => order.status === 'CONFIRMADO' || order.status === 'CONCLUIDO')
-      .filter((order) => {
-        const dateKey = getOrderReferenceDateKey(order);
-        if (!dateKey) return false;
-        const orderDate = new Date(`${dateKey}T12:00:00`);
-        if (Number.isNaN(orderDate.getTime())) return false;
-        return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-      })
       .reduce((sum, order) => sum + calcTotal(order), 0);
-  }, [orders, today]);
+  }, [revenueOrders]);
 
-  const revenueLabel = showRevenue
-    ? `R$ ${confirmedRevenue.toFixed(2).replace('.', ',')}`
-    : 'R$ --,--';
+  const revenueLoading = revenueQuery.loading && revenueOrders.length === 0;
+
+  const revenueLabel = revenueLoading
+    ? 'Carregando...'
+    : showRevenue
+      ? `R$ ${confirmedRevenue.toFixed(2).replace('.', ',')}`
+      : 'R$ --,--';
 
   return (
     <div className="page">

@@ -202,10 +202,22 @@ export const orderRoutes = async (app: FastifyInstance) => {
     view: z.enum(['full', 'list']).optional()
   });
 
-  const summaryQuerySchema = z.object({
-    from: z.string().optional(),
-    to: z.string().optional()
-  });
+const summaryQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  includeImages: z.union([z.boolean(), z.string()]).optional(),
+  includeNotes: z.union([z.boolean(), z.string()]).optional()
+});
+
+const toBooleanQueryValue = (value: boolean | string | undefined, defaultValue = false) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  return defaultValue;
+};
 
   const calcOrderTotal = (row: any) => {
     const products = Array.isArray(row.products) ? row.products : [];
@@ -314,10 +326,28 @@ export const orderRoutes = async (app: FastifyInstance) => {
   app.get('/orders/summary-calendar', pedidosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const query = summaryQuerySchema.parse(request.query ?? {});
+    const includeImages = toBooleanQueryValue(query.includeImages, false);
+    const includeNotes = toBooleanQueryValue(query.includeNotes, false);
+    const selectFields = [
+      'id',
+      'number',
+      'status',
+      'order_datetime',
+      'delivery_date',
+      'delivery_type',
+      'customer_snapshot',
+      'products',
+      'additions',
+      'discount_mode',
+      'discount_value',
+      'shipping_value'
+    ];
+    if (includeNotes) selectFields.push('notes_general');
+    if (includeImages) selectFields.push('images');
 
     let q = supabaseAdmin
       .from('orders')
-      .select('id, number, status, order_datetime, delivery_date, delivery_type, notes_general, customer_snapshot, products, images, additions, discount_mode, discount_value, shipping_value')
+      .select(selectFields.join(', '))
       .eq('company_id', auth.companyId)
       .order('created_at', { ascending: false });
 

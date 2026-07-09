@@ -2534,6 +2534,7 @@ button:disabled {
   font-size: 12px;
   line-height: 1.1;
   text-align: center;
+  white-space: nowrap;
 }
 
 .company-settings-tabs button:hover {
@@ -3907,6 +3908,31 @@ button:disabled {
   .company-user-actions {
     gap: 3px;
     min-width: 0;
+  }
+
+  .company-settings-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    width: 100%;
+    overflow-x: auto;
+    padding: 6px;
+  }
+
+  .company-settings-tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 62px;
+    padding: 8px 6px;
+  }
+
+  .company-settings-tabs button .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  .company-settings-tabs button span:last-child {
+    font-size: 10px;
+    letter-spacing: 0;
   }
 
   .company-settings-cost-head {
