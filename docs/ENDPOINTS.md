@@ -12,6 +12,10 @@
 ## Empresa
 - `GET /company/settings`
 - `PUT /company/settings`
+- `GET /company/pagbank-edi`
+- `PUT /company/pagbank-edi`
+- `POST /company/pagbank-edi/test`
+- `POST /company/pagbank-edi/import`
 - `GET /company/plans`
 - `PUT /company/subscription`
 - `PUT /company/users/:authUserId/module-access`

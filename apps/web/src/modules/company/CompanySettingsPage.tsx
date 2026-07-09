@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
+import { PagBankEdiSettingsSection } from './PagBankEdiSettingsSection.tsx';
 
 type SalesChannel = {
   id?: string;
@@ -63,16 +64,17 @@ type CompanyUser = {
   createdAt?: string;
 };
 
-const companyTabs: Array<{ key: 'empresa' | 'custos' | 'canais'; label: string; icon: string }> = [
+const companyTabs: Array<{ key: 'empresa' | 'custos' | 'canais' | 'integracoes'; label: string; icon: string }> = [
   { key: 'empresa', label: 'Empresa', icon: 'domain' },
   { key: 'custos', label: 'Custos', icon: 'calculate' },
-  { key: 'canais', label: 'Canais', icon: 'storefront' }
+  { key: 'canais', label: 'Canais', icon: 'storefront' },
+  { key: 'integracoes', label: 'Integracoes', icon: 'hub' }
 ];
 
 export const CompanySettingsPage = () => {
   const { user } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [tab, setTab] = useState<'empresa' | 'custos' | 'canais'>('empresa');
+  const [tab, setTab] = useState<'empresa' | 'custos' | 'canais' | 'integracoes'>('empresa');
   const [showAdvancedRateio, setShowAdvancedRateio] = useState(false);
   const [showLaborCostForm, setShowLaborCostForm] = useState(false);
   const [showFixedCostForm, setShowFixedCostForm] = useState(false);
@@ -838,11 +840,17 @@ export const CompanySettingsPage = () => {
           </div>
         ) : null}
 
-        <div className="actions">
-          <button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar configuracoes'}
-          </button>
-        </div>
+        {tab === 'integracoes' ? (
+          <PagBankEdiSettingsSection token={user?.token} />
+        ) : null}
+
+        {tab !== 'integracoes' ? (
+          <div className="actions">
+            <button type="button" onClick={handleSave} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar configuracoes'}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {submitError ? <div className="panel"><p className="error">{submitError}</p></div> : null}

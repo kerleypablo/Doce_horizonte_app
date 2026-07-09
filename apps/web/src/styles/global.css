@@ -2747,6 +2747,50 @@ button:disabled {
   color: color-mix(in srgb, var(--accent-strong) 88%, var(--text));
 }
 
+.company-settings-integrations-switches {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+}
+
+.company-settings-integrations-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.company-settings-import-status,
+.company-settings-import-result {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fffdfb;
+}
+
+.company-settings-import-status strong,
+.company-settings-import-result strong {
+  color: var(--text);
+}
+
+.success-message {
+  background: #e7f5eb;
+  color: #1c6a35;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.success-text {
+  color: #1c6a35;
+}
+
+.error-text {
+  color: #8b2c0f;
+}
+
 .order-product-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 68px auto;
@@ -3877,6 +3921,14 @@ button:disabled {
 
   .company-settings-cost-summary {
     grid-template-columns: 1fr;
+  }
+
+  .company-settings-integrations-actions {
+    justify-content: stretch;
+  }
+
+  .company-settings-integrations-actions button {
+    width: 100%;
   }
 
   .finance-kpi-grid {

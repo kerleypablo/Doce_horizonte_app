@@ -7,5 +7,6 @@ export const queryKeys = {
   products: 'products',
   companySettings: 'company-settings',
   companyUsers: 'company-users',
-  companyPlans: 'company-plans'
+  companyPlans: 'company-plans',
+  companyPagbankEdi: 'company-pagbank-edi'
 };

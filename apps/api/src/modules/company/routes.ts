@@ -2,6 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
 import { MODULE_DEFINITIONS, MODULE_KEYS, isModuleKey, type AppModuleKey } from '../common/modules.js';
+import {
+  fetchPagBankTransactionalCandidates,
+  pagBankSaleOrigins,
+  testPagBankEdiConnection,
+  type PagBankEdiConfig
+} from './pagbank-edi.js';
 
 const costItemSchema = z.object({
   id: z.string().optional(),
@@ -63,6 +69,18 @@ const subscriptionSchema = z.object({
   message: 'Informe planId ou planCode'
 });
 
+const pagBankEdiSettingsSchema = z.object({
+  ediUser: z.string().trim().min(1),
+  ediToken: z.string().trim().optional(),
+  defaultOrigin: z.enum(pagBankSaleOrigins).default('balcao'),
+  active: z.boolean().default(true),
+  autoImportEnabled: z.boolean().default(false)
+});
+
+const pagBankEdiImportSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+});
+
 const isModulesInfraMissing = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
   const code = 'code' in error ? String((error as { code?: string }).code ?? '') : '';
@@ -105,9 +123,79 @@ const sumActiveMonthlyCost = (items: NormalizedCostItem[]) =>
   items.reduce((sum, item) => sum + (item.active ? Number(item.monthlyAmount ?? 0) : 0), 0);
 const calcHourlyCost = (monthlyTotal: number, productiveHoursPerMonth: number) =>
   productiveHoursPerMonth > 0 ? monthlyTotal / productiveHoursPerMonth : 0;
+const normalizeTags = (tags: string[]) => Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 12);
+const pagBankInfraErrorMessage = 'Infra do PagBank EDI nao encontrada no banco. Rode o SQL novo em docs/SUPABASE_PAGBANK_EDI.sql.';
+const maskToken = (value: string) => {
+  const clean = value.trim();
+  if (!clean) return '';
+  if (clean.length <= 8) return `${clean.slice(0, 2)}...${clean.slice(-2)}`;
+  return `${clean.slice(0, 4)}...${clean.slice(-4)}`;
+};
+const defaultPagBankEdiSettings = {
+  configured: false,
+  ediUser: '',
+  hasToken: false,
+  maskedToken: '',
+  defaultOrigin: 'balcao' as const,
+  active: false,
+  autoImportEnabled: false,
+  lastTestedAt: null as string | null,
+  lastTestStatus: null as 'SUCCESS' | 'ERROR' | null,
+  lastTestDetail: '',
+  lastImportedAt: null as string | null,
+  lastImportStatus: null as 'SUCCESS' | 'ERROR' | null,
+  lastImportDetail: ''
+};
 
 export const companyRoutes = async (app: FastifyInstance) => {
   const empresaGuard = { preHandler: [app.authenticate, app.requireModule('empresa')] };
+  const loadPagBankEdiConfigRow = async (companyId: string) => {
+    const { data, error } = await supabaseAdmin
+      .from('company_pagbank_edi_configs')
+      .select('*')
+      .eq('company_id', companyId)
+      .maybeSingle();
+
+    if (error) {
+      if (isModulesInfraMissing(error)) return { data: null, missingInfra: true };
+      throw error;
+    }
+
+    return { data, missingInfra: false };
+  };
+
+  const mapPagBankEdiSettings = (row: any) => {
+    if (!row) return defaultPagBankEdiSettings;
+    return {
+      configured: true,
+      ediUser: String(row.edi_user ?? ''),
+      hasToken: Boolean(String(row.edi_token ?? '').trim()),
+      maskedToken: maskToken(String(row.edi_token ?? '')),
+      defaultOrigin: pagBankSaleOrigins.includes(String(row.default_origin ?? '') as typeof pagBankSaleOrigins[number])
+        ? String(row.default_origin) as typeof pagBankSaleOrigins[number]
+        : 'balcao',
+      active: Boolean(row.active),
+      autoImportEnabled: Boolean(row.auto_import_enabled),
+      lastTestedAt: row.last_tested_at ?? null,
+      lastTestStatus: row.last_test_status === 'SUCCESS' || row.last_test_status === 'ERROR'
+        ? row.last_test_status
+        : null,
+      lastTestDetail: String(row.last_test_detail ?? ''),
+      lastImportedAt: row.last_imported_at ?? null,
+      lastImportStatus: row.last_import_status === 'SUCCESS' || row.last_import_status === 'ERROR'
+        ? row.last_import_status
+        : null,
+      lastImportDetail: String(row.last_import_detail ?? '')
+    };
+  };
+
+  const buildPagBankEdiConfig = (row: any): PagBankEdiConfig => ({
+    ediUser: String(row.edi_user ?? ''),
+    ediToken: String(row.edi_token ?? ''),
+    defaultOrigin: pagBankSaleOrigins.includes(String(row.default_origin ?? '') as typeof pagBankSaleOrigins[number])
+      ? String(row.default_origin) as typeof pagBankSaleOrigins[number]
+      : 'balcao'
+  });
 
   app.get('/company/settings', empresaGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
@@ -272,6 +360,236 @@ export const companyRoutes = async (app: FastifyInstance) => {
       fixedCostPerHour,
       companyName: data.companyName ?? undefined
     });
+  });
+
+  app.get('/company/pagbank-edi', empresaGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
+
+    const result = await loadPagBankEdiConfigRow(auth.companyId);
+    if (result.missingInfra) return reply.status(400).send({ message: pagBankInfraErrorMessage });
+    return reply.send(mapPagBankEdiSettings(result.data));
+  });
+
+  app.put('/company/pagbank-edi', empresaGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string; userId: string } }).auth;
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
+
+    const body = pagBankEdiSettingsSchema.parse(request.body);
+    const current = await loadPagBankEdiConfigRow(auth.companyId);
+    if (current.missingInfra) return reply.status(400).send({ message: pagBankInfraErrorMessage });
+
+    const currentToken = String(current.data?.edi_token ?? '').trim();
+    const nextToken = body.ediToken?.trim() || currentToken;
+    if (!nextToken) return reply.status(400).send({ message: 'Informe o token EDI do PagBank.' });
+
+    const { data, error } = await supabaseAdmin
+      .from('company_pagbank_edi_configs')
+      .upsert({
+        company_id: auth.companyId,
+        edi_user: body.ediUser,
+        edi_token: nextToken,
+        default_origin: body.defaultOrigin,
+        active: body.active,
+        auto_import_enabled: body.autoImportEnabled,
+        updated_by_auth_user_id: auth.userId
+      }, { onConflict: 'company_id' })
+      .select('*')
+      .single();
+
+    if (error) return reply.status(400).send({ message: 'Erro ao salvar configuracao do PagBank.', detail: error.message });
+    return reply.send(mapPagBankEdiSettings(data));
+  });
+
+  app.post('/company/pagbank-edi/test', empresaGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
+
+    const result = await loadPagBankEdiConfigRow(auth.companyId);
+    if (result.missingInfra) return reply.status(400).send({ message: pagBankInfraErrorMessage });
+    if (!result.data) return reply.status(404).send({ message: 'Cadastre as credenciais do PagBank antes de testar.' });
+
+    try {
+      const testResult = await testPagBankEdiConnection(buildPagBankEdiConfig(result.data));
+      await supabaseAdmin
+        .from('company_pagbank_edi_configs')
+        .update({
+          last_tested_at: new Date().toISOString(),
+          last_test_status: testResult.ok ? 'SUCCESS' : 'ERROR',
+          last_test_detail: testResult.detail
+        })
+        .eq('company_id', auth.companyId);
+
+      return reply.status(testResult.ok ? 200 : 400).send(testResult);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Falha ao testar a conexao com o PagBank.';
+      await supabaseAdmin
+        .from('company_pagbank_edi_configs')
+        .update({
+          last_tested_at: new Date().toISOString(),
+          last_test_status: 'ERROR',
+          last_test_detail: detail
+        })
+        .eq('company_id', auth.companyId);
+      return reply.status(400).send({ ok: false, detail });
+    }
+  });
+
+  app.post('/company/pagbank-edi/import', empresaGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string; role: string } }).auth;
+    if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
+
+    const body = pagBankEdiImportSchema.parse(request.body);
+    const configResult = await loadPagBankEdiConfigRow(auth.companyId);
+    if (configResult.missingInfra) return reply.status(400).send({ message: pagBankInfraErrorMessage });
+    if (!configResult.data) return reply.status(404).send({ message: 'Cadastre as credenciais do PagBank antes de importar.' });
+    if (!configResult.data.active) return reply.status(400).send({ message: 'A integracao PagBank EDI esta desativada.' });
+
+    try {
+      const imported = await fetchPagBankTransactionalCandidates(buildPagBankEdiConfig(configResult.data), body.date);
+      if (imported.validado === false) {
+        await supabaseAdmin
+          .from('company_pagbank_edi_configs')
+          .update({
+            last_imported_at: new Date().toISOString(),
+            last_import_status: 'ERROR',
+            last_import_detail: `O PagBank ainda nao validou integralmente os dados de ${body.date}.`
+          })
+          .eq('company_id', auth.companyId);
+
+        return reply.send({
+          importedCount: 0,
+          duplicateCount: 0,
+          skippedCount: imported.rawCount,
+          warnings: ['O PagBank retornou VALIDADO=FALSE para a data solicitada.'],
+          date: body.date
+        });
+      }
+
+      if (imported.candidates.length === 0) {
+        await supabaseAdmin
+          .from('company_pagbank_edi_configs')
+          .update({
+            last_imported_at: new Date().toISOString(),
+            last_import_status: 'SUCCESS',
+            last_import_detail: `Nenhum lancamento elegivel foi encontrado no PagBank para ${body.date}.`
+          })
+          .eq('company_id', auth.companyId);
+
+        return reply.send({
+          importedCount: 0,
+          duplicateCount: 0,
+          skippedCount: imported.rawCount,
+          warnings: imported.warnings,
+          date: body.date
+        });
+      }
+
+      const externalIds = imported.candidates.map((item) => item.externalId);
+      const { data: existingImports, error: existingImportsError } = await supabaseAdmin
+        .from('financial_external_import_items')
+        .select('external_id')
+        .eq('company_id', auth.companyId)
+        .eq('provider', 'PAGBANK_EDI')
+        .in('external_id', externalIds);
+
+      if (existingImportsError) {
+        if (isModulesInfraMissing(existingImportsError)) return reply.status(400).send({ message: pagBankInfraErrorMessage });
+        return reply.status(400).send({ message: 'Erro ao verificar duplicidades da importacao.', detail: existingImportsError.message });
+      }
+
+      const importedIds = new Set((existingImports ?? []).map((item) => String(item.external_id)));
+      const newCandidates = imported.candidates.filter((item) => !importedIds.has(item.externalId));
+      const duplicateCount = imported.candidates.length - newCandidates.length;
+
+      if (newCandidates.length === 0) {
+        await supabaseAdmin
+          .from('company_pagbank_edi_configs')
+          .update({
+            last_imported_at: new Date().toISOString(),
+            last_import_status: 'SUCCESS',
+            last_import_detail: `Todos os lancamentos elegiveis de ${body.date} ja haviam sido importados anteriormente.`
+          })
+          .eq('company_id', auth.companyId);
+
+        return reply.send({
+          importedCount: 0,
+          duplicateCount,
+          skippedCount: imported.rawCount - imported.candidates.length,
+          warnings: imported.warnings,
+          date: body.date
+        });
+      }
+
+      const tags = normalizeTags(['pagbank', configResult.data.default_origin ?? 'balcao']);
+      const salesPayload = newCandidates.map((item) => ({
+        company_id: auth.companyId,
+        account_id: null,
+        occurred_at: item.occurredAt,
+        description: item.description,
+        payment_method: item.paymentMethod,
+        amount: item.amount,
+        products: [],
+        tags,
+        notes: `Importado do PagBank EDI. Referencia: ${item.externalId}`
+      }));
+
+      const { data: createdSales, error: createSalesError } = await supabaseAdmin
+        .from('financial_manual_sales')
+        .insert(salesPayload)
+        .select('id');
+
+      if (createSalesError) {
+        return reply.status(400).send({ message: 'Erro ao criar vendas importadas do PagBank.', detail: createSalesError.message });
+      }
+
+      const importRefs = newCandidates.map((item, index) => ({
+        company_id: auth.companyId,
+        provider: 'PAGBANK_EDI',
+        external_id: item.externalId,
+        reference_date: body.date,
+        manual_sale_id: createdSales?.[index]?.id ?? null,
+        payload: item.payload
+      }));
+
+      const { error: importRefError } = await supabaseAdmin
+        .from('financial_external_import_items')
+        .insert(importRefs);
+
+      if (importRefError) {
+        if (isModulesInfraMissing(importRefError)) return reply.status(400).send({ message: pagBankInfraErrorMessage });
+        return reply.status(400).send({ message: 'Erro ao registrar referencias da importacao PagBank.', detail: importRefError.message });
+      }
+
+      const detail = `${newCandidates.length} lancamento(s) importado(s) do PagBank para ${body.date}.`;
+      await supabaseAdmin
+        .from('company_pagbank_edi_configs')
+        .update({
+          last_imported_at: new Date().toISOString(),
+          last_import_status: 'SUCCESS',
+          last_import_detail: detail
+        })
+        .eq('company_id', auth.companyId);
+
+      return reply.send({
+        importedCount: newCandidates.length,
+        duplicateCount,
+        skippedCount: imported.rawCount - imported.candidates.length,
+        warnings: imported.warnings,
+        date: body.date
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Falha ao importar movimentacoes do PagBank.';
+      await supabaseAdmin
+        .from('company_pagbank_edi_configs')
+        .update({
+          last_imported_at: new Date().toISOString(),
+          last_import_status: 'ERROR',
+          last_import_detail: detail
+        })
+        .eq('company_id', auth.companyId);
+      return reply.status(400).send({ message: 'Falha ao importar movimentacoes do PagBank.', detail });
+    }
   });
 
   app.get('/company/plans', empresaGuard, async (request, reply) => {
