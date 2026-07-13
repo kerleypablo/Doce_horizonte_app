@@ -35,6 +35,7 @@ export type ProductItem = {
 
 type ProductFormState = {
   name: string;
+  recipeId: string;
   prepTimeMinutes: number;
   notes: string;
   unitsCount: number;
@@ -87,6 +88,7 @@ export const ProductsPage = () => {
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -115,6 +117,7 @@ export const ProductsPage = () => {
   });
   const [quickProductForm, setQuickProductForm] = useState({
     name: '',
+    recipeId: '',
     prepTimeMinutes: 0,
     notes: '',
     channelId: '',
@@ -131,6 +134,7 @@ export const ProductsPage = () => {
   const lastEditedRef = useRef<'profit' | 'unitPrice' | null>(null);
   const [form, setForm] = useState({
     name: '',
+    recipeId: '',
     prepTimeMinutes: 0,
     notes: '',
     unitsCount: 1,
@@ -145,6 +149,7 @@ export const ProductsPage = () => {
 
   const createEmptyForm = (): ProductFormState => ({
     name: '',
+    recipeId: '',
     prepTimeMinutes: 0,
     notes: '',
     unitsCount: 1,
@@ -218,6 +223,7 @@ export const ProductsPage = () => {
       );
       setEditingId(null);
       setUnitPriceInput(duplicateDraft ? duplicateUnitPriceInput : 0);
+      setSaveError(null);
       lastEditedRef.current = duplicateDraft ? 'unitPrice' : null;
       setShowForm(true);
       return;
@@ -228,6 +234,7 @@ export const ProductsPage = () => {
       setEditingId(current.id);
       setForm({
         name: current.name,
+        recipeId: current.recipeId ?? '',
         prepTimeMinutes: current.prepTimeMinutes ?? 0,
         notes: current.notes ?? '',
         unitsCount: current.unitsCount ?? 1,
@@ -240,6 +247,7 @@ export const ProductsPage = () => {
         packagingInputs: current.packagingInputs ?? []
       });
       setUnitPriceInput(current.unitPrice ?? 0);
+      setSaveError(null);
       lastEditedRef.current = null;
       setShowForm(true);
       return;
@@ -252,6 +260,7 @@ export const ProductsPage = () => {
     setForm(createEmptyForm());
     setEditingId(null);
     setUnitPriceInput(0);
+    setSaveError(null);
   };
 
   const handleNew = () => {
@@ -269,10 +278,11 @@ export const ProductsPage = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
+    setSaveError(null);
 
     const payload = {
       name: form.name,
-      recipeId: undefined,
+      recipeId: form.recipeId || undefined,
       prepTimeMinutes: Number(form.prepTimeMinutes),
       notes: form.notes,
       unitsCount: Number(form.unitsCount),
@@ -313,6 +323,8 @@ export const ProductsPage = () => {
       setShowForm(false);
       lastEditedRef.current = null;
       navigate('/app/produtos');
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Nao foi possivel salvar o produto.');
     } finally {
       setSaving(false);
     }
@@ -383,6 +395,7 @@ export const ProductsPage = () => {
     } else {
       setQuickProductForm({
         name: '',
+        recipeId: '',
         prepTimeMinutes: 0,
         notes: '',
         channelId: form.channelId || settings?.salesChannels[0]?.id || '',
@@ -457,7 +470,7 @@ export const ProductsPage = () => {
           token: user?.token,
           body: JSON.stringify({
             name: quickProductForm.name.trim(),
-            recipeId: undefined,
+            recipeId: quickProductForm.recipeId || undefined,
             prepTimeMinutes: Number(quickProductForm.prepTimeMinutes || 0),
             notes: quickProductForm.notes.trim() || undefined,
             unitsCount: Number(quickProductForm.unitsCount || 1),
@@ -533,7 +546,7 @@ export const ProductsPage = () => {
           if (existing) return existing;
           const recipe = recipesById.get(id);
           if (!recipe) return null;
-          return { recipeId: id, quantity: 0 };
+          return { recipeId: id, quantity: recipe.yield };
         })
         .filter((item): item is { recipeId: string; quantity: number } => Boolean(item));
       setForm((prev) => ({ ...prev, extraRecipes: next }));
@@ -613,6 +626,9 @@ export const ProductsPage = () => {
       if (visited.has(product.id)) return 0;
       visited.add(product.id);
 
+      const baseRecipe = product.recipeId ? recipesMap.get(product.recipeId) : undefined;
+      const baseRecipeCost = baseRecipe ? calcRecipeCost(baseRecipe) : 0;
+
       const recipesCost = product.extraRecipes.reduce((sum, item) => {
         const recipe = recipesMap.get(item.recipeId);
         return recipe ? sum + calcRecipePortionCost(recipe, item.quantity) : sum;
@@ -635,8 +651,11 @@ export const ProductsPage = () => {
       }, 0);
 
       visited.delete(product.id);
-      return recipesCost + productsCost + packagingCost;
+      return baseRecipeCost + recipesCost + productsCost + packagingCost;
     };
+
+    const baseRecipe = form.recipeId ? recipesMap.get(form.recipeId) : undefined;
+    const baseRecipeCost = baseRecipe ? calcRecipeCost(baseRecipe) : 0;
 
     const extraRecipesCost = form.extraRecipes.reduce((sum, item) => {
       const recipe = recipesMap.get(item.recipeId);
@@ -659,7 +678,7 @@ export const ProductsPage = () => {
       return sum + unitCost * normalized;
     }, 0);
 
-    const directCost = extraRecipesCost + extraProductsCost + packagingCost;
+    const directCost = baseRecipeCost + extraRecipesCost + extraProductsCost + packagingCost;
 
     const baseOverhead = settings?.overheadMethod === 'PERCENT_DIRECT'
       ? (directCost * (settings?.overheadPercent ?? 0)) / 100
@@ -675,9 +694,12 @@ export const ProductsPage = () => {
     const feeFixed = channel?.feeFixed ?? 0;
     const baseCost = totalCost + feeFixed;
     const desiredMarginPercent = form.targetProfitPercent + form.extraPercent;
-    const denominator = Math.max(1 - (variablePercentBase + desiredMarginPercent) / 100, 0.001);
-    const totalPrice = baseCost / denominator;
-    const unitPrice = totalPrice / (form.unitsCount || 1);
+    const denominator = 1 - (variablePercentBase + desiredMarginPercent) / 100;
+    const pricingError = denominator <= 0
+      ? 'A soma de impostos, taxas e margem precisa ser menor que 100% para calcular o valor de venda.'
+      : '';
+    const totalPrice = pricingError ? 0 : baseCost / denominator;
+    const unitPrice = pricingError ? 0 : totalPrice / (form.unitsCount || 1);
 
     return {
       labor,
@@ -687,7 +709,8 @@ export const ProductsPage = () => {
       baseCost,
       unitPrice,
       profitPercent: form.targetProfitPercent,
-      variablePercentBase
+      variablePercentBase,
+      pricingError
     };
   }, [form, inputs, recipes, products, settings]);
 
@@ -769,6 +792,7 @@ export const ProductsPage = () => {
                         state: {
                           duplicateDraft: {
                             name: `${product.name} copia`,
+                            recipeId: product.recipeId ?? '',
                             prepTimeMinutes: product.prepTimeMinutes ?? 0,
                             notes: product.notes ?? '',
                             unitsCount: product.unitsCount ?? 1,
@@ -822,6 +846,22 @@ export const ProductsPage = () => {
                   <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                 </label>
                 <label>
+                  Receita base
+                  <SelectField
+                    value={form.recipeId}
+                    onChange={(value) => setForm({ ...form, recipeId: value })}
+                    options={[
+                      { value: '', label: 'Sem receita base' },
+                      ...recipes.map((recipe) => ({
+                        value: recipe.id,
+                        label: `${recipe.name} (${recipe.yield} ${recipe.yieldUnit})`
+                      }))
+                    ]}
+                  />
+                </label>
+              </div>
+              <div className="grid-2">
+                <label>
                   Tempo de preparo (min)
                   <input
                     type="number"
@@ -835,6 +875,7 @@ export const ProductsPage = () => {
                 Observacoes
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
               </label>
+              {saveError ? <p className="error">{saveError}</p> : null}
               <div className="actions">
                 <button type="button" className="ghost" onClick={() => navigate('/app/produtos')}>
                   Cancelar
@@ -914,13 +955,13 @@ export const ProductsPage = () => {
               {form.extraRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row">
                   <div className="order-product-label">
-                    <span>{recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
-                    <small className="order-product-meta">
-                      {recipesById.get(item.recipeId)?.yield ?? 0} {recipesById.get(item.recipeId)?.yieldUnit ?? '-'}
-                    </small>
-                  </div>
+                  <span>{recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
+                  <small className="order-product-meta">
+                    {recipesById.get(item.recipeId)?.yield ?? 0} {recipesById.get(item.recipeId)?.yieldUnit ?? '-'}
+                  </small>
+                </div>
                   <label className="add-item-qty-field">
-                    <span>Quantidade</span>
+                    <span>Quantidade usada ({recipesById.get(item.recipeId)?.yieldUnit ?? '-'})</span>
                     <input
                       className="add-item-qty-input"
                       type="number"
@@ -953,6 +994,7 @@ export const ProductsPage = () => {
               <button type="button" className="ghost" onClick={() => openPicker('EXTRA_RECIPE')}>
                 + Adicionar receita
               </button>
+              <small className="muted">Receitas extras usam a unidade do rendimento da receita. Ex.: receita que rende 1470 g e usa o lote inteiro deve ficar com quantidade 1470.</small>
             </div>
           </div>
 
@@ -1066,6 +1108,7 @@ export const ProductsPage = () => {
                 <strong>R$ {costSummary.total.toFixed(2)}</strong>
               </div>
             </div>
+            {costSummary.pricingError ? <p className="error">{costSummary.pricingError}</p> : null}
           </div>
         </>
       )}
@@ -1408,10 +1451,24 @@ export const ProductsPage = () => {
                         }
                       />
                     </label>
-                    <label>
-                      Valor unitario
-                      <input
-                        type="number"
+                  <label>
+                    Receita base
+                    <SelectField
+                      value={quickProductForm.recipeId}
+                      onChange={(value) => setQuickProductForm((current) => ({ ...current, recipeId: value }))}
+                      options={[
+                        { value: '', label: 'Sem receita base' },
+                        ...recipes.map((recipe) => ({
+                          value: recipe.id,
+                          label: `${recipe.name} (${recipe.yield} ${recipe.yieldUnit})`
+                        }))
+                      ]}
+                    />
+                  </label>
+                  <label>
+                    Valor unitario
+                    <input
+                      type="number"
                         min={0}
                         step="0.01"
                         value={quickProductForm.manualUnitPrice === 0 ? '' : quickProductForm.manualUnitPrice}
@@ -1439,7 +1496,7 @@ export const ProductsPage = () => {
                             ...current,
                             extraRecipes: current.extraRecipes.some((item) => item.recipeId === value)
                               ? current.extraRecipes
-                              : [...current.extraRecipes, { recipeId: value, quantity: 0 }]
+                              : [...current.extraRecipes, { recipeId: value, quantity: recipesById.get(value)?.yield ?? 0 }]
                           }))
                         }
                         options={recipes.map((recipe) => ({ value: recipe.id, label: recipe.name }))}
@@ -1447,7 +1504,7 @@ export const ProductsPage = () => {
                     </div>
                     {quickProductForm.extraRecipes.map((item) => (
                       <div key={item.recipeId} className="quick-create-item-row">
-                        <span>{recipesById.get(item.recipeId)?.name ?? 'Receita'}</span>
+                        <span>{recipesById.get(item.recipeId)?.name ?? 'Receita'} ({recipesById.get(item.recipeId)?.yieldUnit ?? '-'})</span>
                         <input
                           type="number"
                           min={0}

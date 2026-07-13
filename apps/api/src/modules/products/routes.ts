@@ -149,6 +149,9 @@ export const productRoutes = async (app: FastifyInstance) => {
       feeFixed: channel?.fee_fixed ?? 0
     });
     const fallbackUnitPrice = Number(data.manualUnitPrice ?? 0);
+    if (preview.pricingError && fallbackUnitPrice <= 0) {
+      return reply.status(400).send({ message: preview.pricingError });
+    }
     const persistedUnitPrice = preview.unitPrice > 0 ? preview.unitPrice : fallbackUnitPrice;
     const persistedSalePrice = preview.totalPrice > 0 ? preview.totalPrice : persistedUnitPrice * data.unitsCount;
 
@@ -251,6 +254,9 @@ export const productRoutes = async (app: FastifyInstance) => {
       feeFixed: channel?.fee_fixed ?? 0
     });
     const fallbackUnitPrice = Number(data.manualUnitPrice ?? 0);
+    if (preview.pricingError && fallbackUnitPrice <= 0) {
+      return reply.status(400).send({ message: preview.pricingError });
+    }
     const persistedUnitPrice = preview.unitPrice > 0 ? preview.unitPrice : fallbackUnitPrice;
     const persistedSalePrice = preview.totalPrice > 0 ? preview.totalPrice : persistedUnitPrice * data.unitsCount;
 

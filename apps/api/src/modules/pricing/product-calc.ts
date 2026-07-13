@@ -14,6 +14,7 @@ export type ProductPricePreview = {
   totalPrice: number;
   profitValue: number;
   profitPercent: number;
+  pricingError?: string;
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -46,6 +47,9 @@ const calcProductDirectCost = (
   if (visited.has(product.id)) return 0;
   visited.add(product.id);
 
+  const baseRecipe = product.recipeId ? recipes.find((recipe) => recipe.id === product.recipeId) : undefined;
+  const baseRecipeCost = baseRecipe ? calcRecipeDirectCost(baseRecipe, inputs, recipes) : 0;
+
   const recipesCost = product.extraRecipes.reduce((sum, item) => {
     const recipe = recipes.find((r) => r.id === item.recipeId);
     return recipe ? sum + calcRecipePortionCost(recipe, item.quantity, inputs, recipes) : sum;
@@ -60,12 +64,13 @@ const calcProductDirectCost = (
   }, 0);
 
   const packagingCost = calcPackagingCost(product.packagingInputs, inputs);
-  const directCost = recipesCost + productsCost + packagingCost;
+  const directCost = baseRecipeCost + recipesCost + productsCost + packagingCost;
   visited.delete(product.id);
   return directCost;
 };
 
 export const calcProductPreview = ({
+  baseRecipe,
   unitsCount,
   prepTimeMinutes,
   targetProfitPercent,
@@ -98,6 +103,7 @@ export const calcProductPreview = ({
   feeFixed: number;
 }): ProductPricePreview => {
   const safeUnits = unitsCount > 0 ? unitsCount : 1;
+  const baseRecipeCost = baseRecipe ? calcRecipeDirectCost(baseRecipe, inputs, recipes) : 0;
   const recipesCost = extraRecipes.reduce((sum, item) => {
     const recipe = recipes.find((r) => r.id === item.recipeId);
     return recipe ? sum + calcRecipePortionCost(recipe, item.quantity, inputs, recipes) : sum;
@@ -113,7 +119,7 @@ export const calcProductPreview = ({
 
   const packagingCost = calcPackagingCost(packagingInputs, inputs);
 
-  const directCost = recipesCost + productsCost + packagingCost;
+  const directCost = baseRecipeCost + recipesCost + productsCost + packagingCost;
 
   const baseOverhead = settings.overheadMethod === 'PERCENT_DIRECT'
     ? (directCost * settings.overheadPercent) / 100
@@ -126,12 +132,19 @@ export const calcProductPreview = ({
 
   const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
   const desiredMarginPercent = targetProfitPercent + extraPercent;
-  const denominator = Math.max(1 - (variablePercentBase + desiredMarginPercent) / 100, 0.001);
+  const denominator = 1 - (variablePercentBase + desiredMarginPercent) / 100;
   const baseCost = directCost + overheadCost + feeFixed;
-  const totalPrice = baseCost / denominator;
-  const unitPrice = totalPrice / safeUnits;
-  const profitValue = totalPrice - baseCost - (totalPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
-  const profitPercent = totalPrice > 0 ? (profitValue / totalPrice) * 100 : 0;
+  const pricingError = denominator <= 0
+    ? 'A soma de impostos, taxas e margem precisa ser menor que 100% para calcular o valor de venda.'
+    : undefined;
+  const totalPrice = pricingError ? 0 : baseCost / denominator;
+  const unitPrice = pricingError ? 0 : totalPrice / safeUnits;
+  const profitValue = pricingError
+    ? 0
+    : totalPrice - baseCost - (totalPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
+  const profitPercent = pricingError
+    ? 0
+    : totalPrice > 0 ? (profitValue / totalPrice) * 100 : 0;
 
   return {
     directCost: round2(directCost),
@@ -144,6 +157,7 @@ export const calcProductPreview = ({
     unitPrice: round2(unitPrice),
     totalPrice: round2(totalPrice),
     profitValue: round2(profitValue),
-    profitPercent: round2(profitPercent)
+    profitPercent: round2(profitPercent),
+    pricingError
   };
 };
