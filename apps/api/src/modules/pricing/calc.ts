@@ -81,16 +81,17 @@ export const calcPricePreview = ({
   const fixedCost = settings.fixedCostPerHour * hours;
   const overheadCost = baseOverhead + laborCost + fixedCost;
 
-  const variablePercent = settings.taxesPercent + feePercent + paymentFeePercent + profitPercent;
+  const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
   const baseCost = directCost + overheadCost + feeFixed;
-
-  const suggestedPrice = baseCost / Math.max(1 - variablePercent / 100, 0.001);
+  const denominator = Math.max(1 - variablePercentBase / 100, 0.001);
+  const markupMultiplier = 1 + profitPercent / 100;
+  const suggestedPrice = (baseCost * markupMultiplier) / denominator;
   const profitValue = suggestedPrice - baseCost - (suggestedPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
 
   return {
     directCost: round2(directCost),
     overheadCost: round2(overheadCost),
-    variablePercent: round2(variablePercent),
+    variablePercent: round2(variablePercentBase),
     feeFixed: round2(feeFixed),
     suggestedPrice: round2(suggestedPrice),
     profitValue: round2(profitValue),
@@ -130,7 +131,7 @@ export const calcProfitFromPrice = ({
   const variableCost = salePrice * (variablePercent / 100);
   const baseCost = directCost + overheadCost + feeFixed + variableCost;
   const profitValue = salePrice - baseCost;
-  const profitPercent = salePrice > 0 ? (profitValue / salePrice) * 100 : 0;
+  const profitPercent = baseCost > 0 ? (profitValue / baseCost) * 100 : 0;
 
   return {
     directCost: round2(directCost),

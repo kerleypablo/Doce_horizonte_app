@@ -131,26 +131,27 @@ export const calcProductPreview = ({
   const overheadCost = baseOverhead + laborCost + fixedCost;
 
   const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
-  const desiredMarginPercent = targetProfitPercent + extraPercent;
-  const denominator = 1 - (variablePercentBase + desiredMarginPercent) / 100;
+  const desiredMarkupPercent = targetProfitPercent + extraPercent;
+  const denominator = 1 - variablePercentBase / 100;
   const baseCost = directCost + overheadCost + feeFixed;
   const pricingError = denominator <= 0
-    ? 'A soma de impostos, taxas e margem precisa ser menor que 100% para calcular o valor de venda.'
+    ? 'A soma de impostos e taxas precisa ser menor que 100% para calcular o valor de venda.'
     : undefined;
-  const totalPrice = pricingError ? 0 : baseCost / denominator;
+  const markupMultiplier = 1 + desiredMarkupPercent / 100;
+  const totalPrice = pricingError ? 0 : (baseCost * markupMultiplier) / denominator;
   const unitPrice = pricingError ? 0 : totalPrice / safeUnits;
   const profitValue = pricingError
     ? 0
     : totalPrice - baseCost - (totalPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
   const profitPercent = pricingError
     ? 0
-    : totalPrice > 0 ? (profitValue / totalPrice) * 100 : 0;
+    : baseCost > 0 ? (profitValue / baseCost) * 100 : 0;
 
   return {
     directCost: round2(directCost),
     overheadCost: round2(overheadCost),
     totalCost: round2(baseCost),
-    variablePercent: round2(variablePercentBase + targetProfitPercent + extraPercent),
+    variablePercent: round2(variablePercentBase),
     feeFixed: round2(feeFixed),
     unitsCount: round2(safeUnits),
     unitCost: round2(baseCost / safeUnits),

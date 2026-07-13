@@ -700,12 +700,13 @@ export const ProductsPage = () => {
     const variablePercentBase = (settings?.taxesPercent ?? 0) + (channel?.feePercent ?? 0) + (channel?.paymentFeePercent ?? 0);
     const feeFixed = channel?.feeFixed ?? 0;
     const baseCost = totalCost + feeFixed;
-    const desiredMarginPercent = form.targetProfitPercent + form.extraPercent;
-    const denominator = 1 - (variablePercentBase + desiredMarginPercent) / 100;
+    const desiredMarkupPercent = form.targetProfitPercent + form.extraPercent;
+    const denominator = 1 - variablePercentBase / 100;
     const pricingError = denominator <= 0
-      ? 'A soma de impostos, taxas e margem precisa ser menor que 100% para calcular o valor de venda.'
+      ? 'A soma de impostos e taxas precisa ser menor que 100% para calcular o valor de venda.'
       : '';
-    const totalPrice = pricingError ? 0 : baseCost / denominator;
+    const markupMultiplier = 1 + desiredMarkupPercent / 100;
+    const totalPrice = pricingError ? 0 : (baseCost * markupMultiplier) / denominator;
     const unitPrice = pricingError ? 0 : totalPrice / (form.unitsCount || 1);
 
     return {
@@ -733,8 +734,11 @@ export const ProductsPage = () => {
     const totalPrice = value * (form.unitsCount || 1);
     if (totalPrice <= 0) return;
 
-    const grossMarginPercent = (1 - costSummary.baseCost / totalPrice) * 100;
-    const profitPercent = grossMarginPercent - costSummary.variablePercentBase - form.extraPercent;
+    const netRevenueAfterTaxesAndFees = totalPrice * (1 - costSummary.variablePercentBase / 100);
+    const totalMarkupPercent = costSummary.baseCost > 0
+      ? ((netRevenueAfterTaxesAndFees - costSummary.baseCost) / costSummary.baseCost) * 100
+      : 0;
+    const profitPercent = totalMarkupPercent - form.extraPercent;
     setForm({ ...form, targetProfitPercent: Number(Math.max(profitPercent, 0).toFixed(2)) });
   };
 
