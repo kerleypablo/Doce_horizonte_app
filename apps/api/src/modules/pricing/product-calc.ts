@@ -47,9 +47,6 @@ const calcProductDirectCost = (
   if (visited.has(product.id)) return 0;
   visited.add(product.id);
 
-  const baseRecipe = product.recipeId ? recipes.find((recipe) => recipe.id === product.recipeId) : undefined;
-  const baseRecipeCost = baseRecipe ? calcRecipeDirectCost(baseRecipe, inputs, recipes) : 0;
-
   const recipesCost = product.extraRecipes.reduce((sum, item) => {
     const recipe = recipes.find((r) => r.id === item.recipeId);
     return recipe ? sum + calcRecipePortionCost(recipe, item.quantity, inputs, recipes) : sum;
@@ -64,13 +61,12 @@ const calcProductDirectCost = (
   }, 0);
 
   const packagingCost = calcPackagingCost(product.packagingInputs, inputs);
-  const directCost = baseRecipeCost + recipesCost + productsCost + packagingCost;
+  const directCost = recipesCost + productsCost + packagingCost;
   visited.delete(product.id);
   return directCost;
 };
 
 export const calcProductPreview = ({
-  baseRecipe,
   unitsCount,
   prepTimeMinutes,
   targetProfitPercent,
@@ -86,7 +82,6 @@ export const calcProductPreview = ({
   paymentFeePercent,
   feeFixed
 }: {
-  baseRecipe?: Recipe;
   unitsCount: number;
   prepTimeMinutes: number;
   targetProfitPercent: number;
@@ -103,7 +98,6 @@ export const calcProductPreview = ({
   feeFixed: number;
 }): ProductPricePreview => {
   const safeUnits = unitsCount > 0 ? unitsCount : 1;
-  const baseRecipeCost = baseRecipe ? calcRecipeDirectCost(baseRecipe, inputs, recipes) : 0;
   const recipesCost = extraRecipes.reduce((sum, item) => {
     const recipe = recipes.find((r) => r.id === item.recipeId);
     return recipe ? sum + calcRecipePortionCost(recipe, item.quantity, inputs, recipes) : sum;
@@ -119,7 +113,7 @@ export const calcProductPreview = ({
 
   const packagingCost = calcPackagingCost(packagingInputs, inputs);
 
-  const directCost = baseRecipeCost + recipesCost + productsCost + packagingCost;
+  const directCost = recipesCost + productsCost + packagingCost;
 
   const baseOverhead = settings.overheadMethod === 'PERCENT_DIRECT'
     ? (directCost * settings.overheadPercent) / 100

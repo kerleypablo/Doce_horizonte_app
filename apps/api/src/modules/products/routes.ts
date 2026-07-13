@@ -6,7 +6,6 @@ import { calcProductPreview } from '../pricing/product-calc.js';
 
 const productSchema = z.object({
   name: z.string().min(2),
-  recipeId: z.string().min(1).optional(),
   prepTimeMinutes: z.number().min(0).default(0),
   notes: z.string().optional(),
   unitsCount: z.number().positive(),
@@ -49,7 +48,20 @@ export const productRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? undefined
   });
 
-  const mapProduct = (row: any) => ({
+  const withLegacyBaseRecipe = (
+    extraRecipes: { recipeId: string; quantity: number }[],
+    recipeId: string | undefined,
+    recipes: ReturnType<typeof mapRecipe>[]
+  ) => {
+    if (!recipeId || extraRecipes.some((item) => item.recipeId === recipeId)) return extraRecipes;
+    const recipe = recipes.find((item) => item.id === recipeId);
+    if (!recipe) return extraRecipes;
+    return [{ recipeId, quantity: recipe.yield }, ...extraRecipes];
+  };
+
+  const mapProduct = (row: any, recipes: ReturnType<typeof mapRecipe>[] = []) => {
+    const mappedRecipes = (row.extra_recipes ?? []) as { recipeId: string; quantity: number }[];
+    return {
     id: row.id,
     companyId: row.company_id,
     name: row.name,
@@ -62,36 +74,29 @@ export const productRoutes = async (app: FastifyInstance) => {
     unitPrice: Number(row.unit_price ?? 0),
     salePrice: Number(row.sale_price ?? 0),
     channelId: row.channel_id ?? undefined,
-    extraRecipes: row.extra_recipes ?? [],
+    extraRecipes: withLegacyBaseRecipe(mappedRecipes, row.recipe_id ?? undefined, recipes),
     extraProducts: row.extra_products ?? [],
     packagingInputs: row.packaging_inputs ?? []
-  });
+    };
+  };
 
   app.get('/products', cadastrosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-    const { data } = await supabaseAdmin
+    const [{ data }, { data: recipes }] = await Promise.all([
+      supabaseAdmin
       .from('products')
       .select('*')
       .eq('company_id', auth.companyId)
-      .order('created_at', { ascending: false });
-    return (data ?? []).map(mapProduct);
+      .order('created_at', { ascending: false }),
+      supabaseAdmin.from('recipes').select('*').eq('company_id', auth.companyId)
+    ]);
+    const mappedRecipes = (recipes ?? []).map(mapRecipe);
+    return (data ?? []).map((row) => mapProduct(row, mappedRecipes));
   });
 
   app.post('/products', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = productSchema.parse(request.body);
-
-    let recipe: any = null;
-    if (data.recipeId) {
-      const result = await supabaseAdmin
-        .from('recipes')
-        .select('*')
-        .eq('id', data.recipeId)
-        .eq('company_id', auth.companyId)
-        .single();
-      recipe = result.data;
-      if (!recipe) return reply.status(404).send({ message: 'Receita nao encontrada' });
-    }
 
     const { data: companySettings } = await supabaseAdmin
       .from('company_settings')
@@ -123,7 +128,6 @@ export const productRoutes = async (app: FastifyInstance) => {
 
     const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
     const preview = calcProductPreview({
-      baseRecipe: recipe ? mapRecipe(recipe) : undefined,
       unitsCount: data.unitsCount,
       prepTimeMinutes: data.prepTimeMinutes,
       targetProfitPercent: data.targetProfitPercent,
@@ -143,7 +147,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       },
       inputs: (inputs ?? []).map(mapInput),
       recipes: (recipes ?? []).map(mapRecipe),
-      products: (products ?? []).map(mapProduct),
+      products: (products ?? []).map((row) => mapProduct(row, (recipes ?? []).map(mapRecipe))),
       feePercent: channel?.fee_percent ?? 0,
       paymentFeePercent: channel?.payment_fee_percent ?? 0,
       feeFixed: channel?.fee_fixed ?? 0
@@ -161,7 +165,7 @@ export const productRoutes = async (app: FastifyInstance) => {
         id: crypto.randomUUID(),
         company_id: auth.companyId,
         name: data.name,
-        recipe_id: data.recipeId ?? null,
+        recipe_id: null,
         prep_time_minutes: data.prepTimeMinutes,
         notes: data.notes,
         units_count: data.unitsCount,
@@ -178,25 +182,13 @@ export const productRoutes = async (app: FastifyInstance) => {
       .single();
 
     if (error) return reply.status(400).send({ message: 'Erro ao criar produto' });
-    return reply.status(201).send({ product: mapProduct(created), preview });
+    return reply.status(201).send({ product: mapProduct(created, (recipes ?? []).map(mapRecipe)), preview });
   });
 
   app.put('/products/:id', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = productSchema.parse(request.body);
     const id = request.params as { id: string };
-
-    let recipe: any = null;
-    if (data.recipeId) {
-      const result = await supabaseAdmin
-        .from('recipes')
-        .select('*')
-        .eq('id', data.recipeId)
-        .eq('company_id', auth.companyId)
-        .single();
-      recipe = result.data;
-      if (!recipe) return reply.status(404).send({ message: 'Receita nao encontrada' });
-    }
 
     const { data: companySettings } = await supabaseAdmin
       .from('company_settings')
@@ -228,7 +220,6 @@ export const productRoutes = async (app: FastifyInstance) => {
 
     const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
     const preview = calcProductPreview({
-      baseRecipe: recipe ? mapRecipe(recipe) : undefined,
       unitsCount: data.unitsCount,
       prepTimeMinutes: data.prepTimeMinutes,
       targetProfitPercent: data.targetProfitPercent,
@@ -248,7 +239,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       },
       inputs: (inputs ?? []).map(mapInput),
       recipes: (recipes ?? []).map(mapRecipe),
-      products: (products ?? []).map(mapProduct),
+      products: (products ?? []).map((row) => mapProduct(row, (recipes ?? []).map(mapRecipe))),
       feePercent: channel?.fee_percent ?? 0,
       paymentFeePercent: channel?.payment_fee_percent ?? 0,
       feeFixed: channel?.fee_fixed ?? 0
@@ -264,7 +255,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       .from('products')
       .update({
         name: data.name,
-        recipe_id: data.recipeId ?? null,
+        recipe_id: null,
         prep_time_minutes: data.prepTimeMinutes,
         notes: data.notes,
         units_count: data.unitsCount,
@@ -283,7 +274,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       .single();
 
     if (error) return reply.status(404).send({ message: 'Produto nao encontrado' });
-    return reply.send({ product: mapProduct(updated), preview });
+    return reply.send({ product: mapProduct(updated, (recipes ?? []).map(mapRecipe)), preview });
   });
 
   app.delete('/products/:id', cadastrosGuard, async (request, reply) => {

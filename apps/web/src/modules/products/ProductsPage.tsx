@@ -21,7 +21,6 @@ type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'PACKAGING';
 export type ProductItem = {
   id: string;
   name: string;
-  recipeId?: string;
   prepTimeMinutes: number;
   notes?: string;
   unitsCount: number;
@@ -37,7 +36,6 @@ export type ProductItem = {
 
 type ProductFormState = {
   name: string;
-  recipeId: string;
   prepTimeMinutes: number;
   notes: string;
   unitsCount: number;
@@ -124,7 +122,6 @@ export const ProductsPage = () => {
   });
   const [quickProductForm, setQuickProductForm] = useState({
     name: '',
-    recipeId: '',
     prepTimeMinutes: 0,
     notes: '',
     channelId: '',
@@ -141,7 +138,6 @@ export const ProductsPage = () => {
   const lastEditedRef = useRef<'profit' | 'unitPrice' | null>(null);
   const [form, setForm] = useState({
     name: '',
-    recipeId: '',
     prepTimeMinutes: 0,
     notes: '',
     unitsCount: 1,
@@ -156,7 +152,6 @@ export const ProductsPage = () => {
 
   const createEmptyForm = (): ProductFormState => ({
     name: '',
-    recipeId: '',
     prepTimeMinutes: 0,
     notes: '',
     unitsCount: 1,
@@ -241,7 +236,6 @@ export const ProductsPage = () => {
       setEditingId(current.id);
       setForm({
         name: current.name,
-        recipeId: current.recipeId ?? '',
         prepTimeMinutes: current.prepTimeMinutes ?? 0,
         notes: current.notes ?? '',
         unitsCount: current.unitsCount ?? 1,
@@ -289,7 +283,6 @@ export const ProductsPage = () => {
 
     const payload = {
       name: form.name,
-      recipeId: form.recipeId || undefined,
       prepTimeMinutes: Number(form.prepTimeMinutes),
       notes: form.notes,
       unitsCount: Number(form.unitsCount),
@@ -402,7 +395,6 @@ export const ProductsPage = () => {
     } else {
       setQuickProductForm({
         name: '',
-        recipeId: '',
         prepTimeMinutes: 0,
         notes: '',
         channelId: form.channelId || settings?.salesChannels[0]?.id || '',
@@ -477,7 +469,6 @@ export const ProductsPage = () => {
           token: user?.token,
           body: JSON.stringify({
             name: quickProductForm.name.trim(),
-            recipeId: quickProductForm.recipeId || undefined,
             prepTimeMinutes: Number(quickProductForm.prepTimeMinutes || 0),
             notes: quickProductForm.notes.trim() || undefined,
             unitsCount: Number(quickProductForm.unitsCount || 1),
@@ -633,9 +624,6 @@ export const ProductsPage = () => {
       if (visited.has(product.id)) return 0;
       visited.add(product.id);
 
-      const baseRecipe = product.recipeId ? recipesMap.get(product.recipeId) : undefined;
-      const baseRecipeCost = baseRecipe ? calcRecipeCost(baseRecipe) : 0;
-
       const recipesCost = product.extraRecipes.reduce((sum, item) => {
         const recipe = recipesMap.get(item.recipeId);
         return recipe ? sum + calcRecipePortionCost(recipe, item.quantity) : sum;
@@ -658,11 +646,8 @@ export const ProductsPage = () => {
       }, 0);
 
       visited.delete(product.id);
-      return baseRecipeCost + recipesCost + productsCost + packagingCost;
+      return recipesCost + productsCost + packagingCost;
     };
-
-    const baseRecipe = form.recipeId ? recipesMap.get(form.recipeId) : undefined;
-    const baseRecipeCost = baseRecipe ? calcRecipeCost(baseRecipe) : 0;
 
     const extraRecipesCost = form.extraRecipes.reduce((sum, item) => {
       const recipe = recipesMap.get(item.recipeId);
@@ -685,7 +670,7 @@ export const ProductsPage = () => {
       return sum + unitCost * normalized;
     }, 0);
 
-    const directCost = baseRecipeCost + extraRecipesCost + extraProductsCost + packagingCost;
+    const directCost = extraRecipesCost + extraProductsCost + packagingCost;
 
     const baseOverhead = settings?.overheadMethod === 'PERCENT_DIRECT'
       ? (directCost * (settings?.overheadPercent ?? 0)) / 100
@@ -794,7 +779,6 @@ export const ProductsPage = () => {
                         state: {
                           duplicateDraft: {
                             name: `${product.name} copia`,
-                            recipeId: product.recipeId ?? '',
                             prepTimeMinutes: product.prepTimeMinutes ?? 0,
                             notes: product.notes ?? '',
                             unitsCount: product.unitsCount ?? 1,
@@ -844,20 +828,6 @@ export const ProductsPage = () => {
                 <label>
                   Nome
                   <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                </label>
-                <label>
-                  Receita base
-                  <SelectField
-                    value={form.recipeId}
-                    onChange={(value) => setForm({ ...form, recipeId: value })}
-                    options={[
-                      { value: '', label: 'Sem receita base' },
-                      ...recipes.map((recipe) => ({
-                        value: recipe.id,
-                        label: `${recipe.name} (${recipe.yield} ${recipe.yieldUnit})`
-                      }))
-                    ]}
-                  />
                 </label>
               </div>
               <div className="grid-2">
@@ -1443,20 +1413,6 @@ export const ProductsPage = () => {
                         }
                       />
                     </label>
-                  <label>
-                    Receita base
-                    <SelectField
-                      value={quickProductForm.recipeId}
-                      onChange={(value) => setQuickProductForm((current) => ({ ...current, recipeId: value }))}
-                      options={[
-                        { value: '', label: 'Sem receita base' },
-                        ...recipes.map((recipe) => ({
-                          value: recipe.id,
-                          label: `${recipe.name} (${recipe.yield} ${recipe.yieldUnit})`
-                        }))
-                      ]}
-                    />
-                  </label>
                   <label>
                     Valor unitario
                     <input

@@ -121,7 +121,18 @@ export const orderRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? undefined
   });
 
-  const mapProduct = (row: any) => ({
+  const withLegacyBaseRecipe = (
+    extraRecipes: { recipeId: string; quantity: number }[],
+    recipeId: string | undefined,
+    recipes: ReturnType<typeof mapRecipe>[]
+  ) => {
+    if (!recipeId || extraRecipes.some((item) => item.recipeId === recipeId)) return extraRecipes;
+    const recipe = recipes.find((item) => item.id === recipeId);
+    if (!recipe) return extraRecipes;
+    return [{ recipeId, quantity: recipe.yield }, ...extraRecipes];
+  };
+
+  const mapProduct = (row: any, recipes: ReturnType<typeof mapRecipe>[] = []) => ({
     id: row.id,
     companyId: row.company_id,
     name: row.name,
@@ -134,7 +145,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     unitPrice: Number(row.unit_price ?? 0),
     salePrice: Number(row.sale_price ?? 0),
     channelId: row.channel_id ?? undefined,
-    extraRecipes: row.extra_recipes ?? [],
+    extraRecipes: withLegacyBaseRecipe(row.extra_recipes ?? [], row.recipe_id ?? undefined, recipes),
     extraProducts: row.extra_products ?? [],
     packagingInputs: row.packaging_inputs ?? []
   });
@@ -153,13 +164,13 @@ export const orderRoutes = async (app: FastifyInstance) => {
 
     const mappedInputs = (inputs ?? []).map(mapInput);
     const mappedRecipes = (recipes ?? []).map(mapRecipe);
-    const mappedProducts = (products ?? []).map(mapProduct);
+    const mappedProducts = (products ?? []).map((row) => mapProduct(row, mappedRecipes));
     const productsById = new Map((products ?? []).map((item) => [item.id, item]));
 
     return productsPayload.map((item) => {
       const productRow = productsById.get(item.productId);
       if (!productRow) return item;
-      const product = mapProduct(productRow);
+      const product = mapProduct(productRow, mappedRecipes);
       const channel = (channels ?? []).find((c) => c.id === product.channelId) ?? (channels ?? [])[0];
       const preview = calcProductPreview({
         unitsCount: product.unitsCount,
