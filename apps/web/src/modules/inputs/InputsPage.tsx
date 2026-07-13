@@ -4,12 +4,14 @@ import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
-import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
-import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
+import { EntityListPanel } from '../shared/EntityListPanel.tsx';
+import { ClickableListRow } from '../shared/ClickableListRow.tsx';
+import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
+import { FormActions } from '../shared/FormActions.tsx';
 
 export type InputItem = {
   id: string;
@@ -53,6 +55,16 @@ type CompanySettingsCost = {
 };
 
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
+const inputUnitOptions = [
+  { value: 'g', label: 'Gramas' },
+  { value: 'ml', label: 'ML' },
+  { value: 'un', label: 'Unidade' }
+] as const;
+const normalizeInputMeasureForForm = (unit: InputItem['unit'], packageSize: number) => {
+  if (unit === 'kg') return { unit: 'g' as const, packageSize: packageSize * 1000 };
+  if (unit === 'l') return { unit: 'ml' as const, packageSize: packageSize * 1000 };
+  return { unit, packageSize };
+};
 
 const normalizeQuantity = (quantity: number, unit: string, target: string) => {
   if (unit === 'un' || target === 'un') return quantity;
@@ -94,7 +106,7 @@ export const InputsPage = () => {
     name: '',
     brand: '',
     category: 'producao',
-    unit: 'kg',
+    unit: 'g',
     packageSize: 1,
     packagePrice: 0,
     notes: '',
@@ -105,7 +117,7 @@ export const InputsPage = () => {
     name: '',
     brand: '',
     category: 'producao',
-    unit: 'kg',
+    unit: 'g',
     packageSize: 1,
     packagePrice: 0,
     notes: '',
@@ -144,13 +156,14 @@ export const InputsPage = () => {
     if (editingRouteId) {
       const current = (inputsQuery.data ?? []).find((item) => item.id === editingRouteId);
       if (!current) return;
+      const normalized = normalizeInputMeasureForForm(current.unit, current.packageSize);
       setEditingId(current.id);
       setForm({
         name: current.name,
         brand: current.brand ?? '',
         category: current.category,
-        unit: current.unit,
-        packageSize: current.packageSize,
+        unit: normalized.unit,
+        packageSize: normalized.packageSize,
         packagePrice: current.packagePrice,
         notes: current.notes ?? '',
         tags: current.tags ?? []
@@ -428,15 +441,16 @@ export const InputsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <div className="panel">
-        <ListToolbar
-          title="Insumos cadastrados"
-          searchValue={search}
-          onSearch={setSearch}
-          actionLabel="+"
-          onAction={handleNew}
-        />
-        {listTagOptions.length > 0 ? (
+      <EntityListPanel
+        title="Insumos cadastrados"
+        searchValue={search}
+        onSearch={setSearch}
+        actionLabel="+"
+        onAction={handleNew}
+        loading={inputsQuery.loading}
+        isEmpty={inputs.length === 0}
+        withTableHead
+        filtersSlot={listTagOptions.length > 0 ? (
           <div className="list-tags-carousel" aria-label="Filtrar por tags">
             {listTagOptions.map((tag) => {
               const selected = activeTagFilters.some((value) => value.toLowerCase() === tag.toLowerCase());
@@ -459,38 +473,29 @@ export const InputsPage = () => {
             })}
           </div>
         ) : null}
-        {inputsQuery.loading && inputs.length === 0 ? (
-          <ListSkeleton withTableHead />
-        ) : (
-          <div className="table">
-            <div className="table-head">
-              <span>Nome</span>
-              <span>Categoria</span>
-              <span>Pacote</span>
-              <span>Preco</span>
-            </div>
-            {filtered.map((input) => (
-              <div
-                key={input.id}
-                className="list-row"
-                onClick={() => navigate(`/app/insumos/editar/${input.id}`)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    navigate(`/app/insumos/editar/${input.id}`);
-                  }
-                }}
-              >
-                <div>
+      >
+        <div className="table">
+          <div className="table-head">
+            <span>Nome</span>
+            <span>Categoria</span>
+            <span>Pacote</span>
+            <span>Preco</span>
+          </div>
+          {filtered.map((input) => (
+            <ClickableListRow
+              key={input.id}
+              onOpen={() => navigate(`/app/insumos/editar/${input.id}`)}
+              main={(
+                <>
                   <strong>{input.name}</strong>
                   <span className="muted">
                     {input.category} • {input.packageSize} {input.unit} • R$ {input.packagePrice.toFixed(2)}
                     {input.tags?.length ? ` • ${input.tags.join(', ')}` : ''}
                   </span>
-                </div>
-                <div className="inline-right">
+                </>
+              )}
+              actions={(
+                <>
                   <button
                     type="button"
                     className="icon-button"
@@ -499,16 +504,19 @@ export const InputsPage = () => {
                       event.stopPropagation();
                       navigate('/app/insumos/novo', {
                         state: {
-                          duplicateDraft: {
-                            name: `${input.name} copia`,
-                            brand: input.brand ?? '',
-                            category: input.category,
-                            unit: input.unit,
-                            packageSize: input.packageSize,
-                            packagePrice: input.packagePrice,
-                            notes: input.notes ?? '',
-                            tags: [...(input.tags ?? [])]
-                          } satisfies InputFormState
+                          duplicateDraft: (() => {
+                            const normalized = normalizeInputMeasureForForm(input.unit, input.packageSize);
+                            return {
+                              name: `${input.name} copia`,
+                              brand: input.brand ?? '',
+                              category: input.category,
+                              unit: normalized.unit,
+                              packageSize: normalized.packageSize,
+                              packagePrice: input.packagePrice,
+                              notes: input.notes ?? '',
+                              tags: [...(input.tags ?? [])]
+                            } satisfies InputFormState;
+                          })()
                         }
                       });
                     }}
@@ -526,22 +534,20 @@ export const InputsPage = () => {
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                </>
+              )}
+            />
+          ))}
+        </div>
+      </EntityListPanel>
       ) : null}
 
       {showForm && (
-        <div className="panel">
-            <div className="panel-title-row">
-              <button type="button" className="icon-button small" onClick={() => navigate('/app/insumos')} aria-label="Voltar">
-                <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
-              </button>
-            <h3>{editingId ? 'Editar insumo' : 'Novo insumo'}</h3>
-          </div>
+        <EntityEditorPanel
+          backTo="/app/insumos"
+          title={editingId ? 'Editar insumo' : 'Novo insumo'}
+          onBack={navigate}
+        >
           <form className="form" onSubmit={handleSubmit}>
             <div className="grid-2">
               <label>
@@ -593,13 +599,7 @@ export const InputsPage = () => {
                     className="unit-select"
                     value={form.unit}
                     onChange={(value) => setForm({ ...form, unit: value as InputItem['unit'] })}
-                    options={[
-                      { value: 'kg', label: 'Kg' },
-                      { value: 'g', label: 'Gramas' },
-                      { value: 'l', label: 'Litro' },
-                      { value: 'ml', label: 'ML' },
-                      { value: 'un', label: 'Unidade' }
-                    ]}
+                    options={[...inputUnitOptions]}
                   />
                 </div>
                 {fieldErrors.packageSize ? <span className="field-error">{fieldErrors.packageSize}</span> : null}
@@ -677,14 +677,12 @@ export const InputsPage = () => {
                 </div>
               </div>
             </label>
-            <div className="actions">
-              <button type="button" className="ghost" onClick={() => navigate('/app/insumos')}>
-                Cancelar
-              </button>
-              <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar insumo'}</button>
-            </div>
+            <FormActions
+              onCancel={() => navigate('/app/insumos')}
+              submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar insumo'}
+            />
           </form>
-        </div>
+        </EntityEditorPanel>
       )}
 
       <ConfirmDialog

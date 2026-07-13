@@ -4,13 +4,15 @@ import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
-import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
-import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
+import { EntityListPanel } from '../shared/EntityListPanel.tsx';
+import { ClickableListRow } from '../shared/ClickableListRow.tsx';
+import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
+import { FormActions } from '../shared/FormActions.tsx';
 
 export type RecipeItem = {
   id: string;
@@ -58,6 +60,7 @@ type Settings = {
 };
 
 const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
+const inputUnitOptions = ['g', 'ml', 'un'] as const;
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
 const normalizeQuantity = (quantity: number, unit: string, target: string) => {
@@ -101,7 +104,7 @@ export const RecipesPage = () => {
     brand: '',
     category: 'producao' as 'embalagem' | 'producao' | 'outros',
     packageSize: 1,
-    unit: 'kg' as 'kg' | 'g' | 'l' | 'ml' | 'un',
+    unit: 'g' as 'kg' | 'g' | 'l' | 'ml' | 'un',
     packagePrice: 0,
     notes: '',
     tags: [] as string[]
@@ -542,40 +545,31 @@ export const RecipesPage = () => {
   return (
     <div className="page recipes-page">
       {!isCreateView && !editingRouteId ? (
-      <div className="panel">
-        <ListToolbar
-          title="Receitas cadastradas"
-          searchValue={search}
-          onSearch={setSearch}
-          actionLabel="+"
-          onAction={handleNew}
-        />
-        {recipesQuery.loading && recipes.length === 0 ? (
-          <ListSkeleton />
-        ) : (
-          <div className="table">
-            {filtered.map((recipe) => (
-              <div
-                key={recipe.id}
-                className="list-row"
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/app/receitas/editar/${recipe.id}`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    navigate(`/app/receitas/editar/${recipe.id}`);
-                  }
-                }}
-              >
-                <div>
+      <EntityListPanel
+        title="Receitas cadastradas"
+        searchValue={search}
+        onSearch={setSearch}
+        actionLabel="+"
+        onAction={handleNew}
+        loading={recipesQuery.loading}
+        isEmpty={recipes.length === 0}
+      >
+        <div className="table">
+          {filtered.map((recipe) => (
+            <ClickableListRow
+              key={recipe.id}
+              onOpen={() => navigate(`/app/receitas/editar/${recipe.id}`)}
+              main={(
+                <>
                   <strong>{recipe.name}</strong>
                   <span className="muted">
                     {recipe.prepTimeMinutes ?? 0} min • Rendimento {recipe.yield} {recipe.yieldUnit}
                     {recipe.tags?.length ? ` • ${recipe.tags.join(', ')}` : ''}
                   </span>
-                </div>
-                <div className="inline-right">
+                </>
+              )}
+              actions={(
+                <>
                   <button
                     type="button"
                     className="icon-button"
@@ -611,23 +605,21 @@ export const RecipesPage = () => {
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                </>
+              )}
+            />
+          ))}
+        </div>
+      </EntityListPanel>
       ) : null}
 
       {showForm && (
         <>
-          <div className="panel">
-            <div className="panel-title-row">
-                <button type="button" className="icon-button small" onClick={() => navigate('/app/receitas')} aria-label="Voltar">
-                  <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
-                </button>
-              <h3>{editingId ? 'Editar receita' : 'Nova receita'}</h3>
-            </div>
+          <EntityEditorPanel
+            backTo="/app/receitas"
+            title={editingId ? 'Editar receita' : 'Nova receita'}
+            onBack={navigate}
+          >
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
                 <label>
@@ -673,14 +665,12 @@ export const RecipesPage = () => {
                 Tags
                 <TagInput value={form.tags} onChange={(tags) => setForm({ ...form, tags })} placeholder="Ex: doce, natal" />
               </label>
-              <div className="actions">
-                <button type="button" className="ghost" onClick={() => navigate('/app/receitas')}>
-                  Cancelar
-                </button>
-                <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar receita'}</button>
-              </div>
+              <FormActions
+                onCancel={() => navigate('/app/receitas')}
+                submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar receita'}
+              />
             </form>
-          </div>
+          </EntityEditorPanel>
 
           <div className="panel">
             <h3>Insumos</h3>
@@ -945,7 +935,7 @@ export const RecipesPage = () => {
                     className="unit-select"
                     value={quickInputForm.unit}
                     onChange={(value) => setQuickInputForm((current) => ({ ...current, unit: value as InputItem['unit'] }))}
-                    options={units.map((unit) => ({ value: unit, label: unit }))}
+                    options={inputUnitOptions.map((unit) => ({ value: unit, label: unit }))}
                   />
                 </div>
               </label>

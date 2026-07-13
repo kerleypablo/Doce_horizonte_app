@@ -13,6 +13,12 @@ const inputSchema = z.object({
   notes: z.string().optional()
 });
 
+const normalizeInputMeasure = (unit: 'kg' | 'g' | 'l' | 'ml' | 'un', packageSize: number) => {
+  if (unit === 'kg') return { unit: 'g' as const, packageSize: packageSize * 1000 };
+  if (unit === 'l') return { unit: 'ml' as const, packageSize: packageSize * 1000 };
+  return { unit, packageSize };
+};
+
 export const inputRoutes = async (app: FastifyInstance) => {
   const cadastrosGuard = { preHandler: [app.authenticate, app.requireModule('cadastros')] };
 
@@ -41,6 +47,7 @@ export const inputRoutes = async (app: FastifyInstance) => {
   app.post('/inputs', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = inputSchema.parse(request.body);
+    const normalized = normalizeInputMeasure(data.unit, data.packageSize);
 
     const { data: created, error } = await supabaseAdmin
       .from('inputs')
@@ -49,8 +56,8 @@ export const inputRoutes = async (app: FastifyInstance) => {
         name: data.name,
         brand: data.brand,
         category: data.category,
-        unit: data.unit,
-        package_size: data.packageSize,
+        unit: normalized.unit,
+        package_size: normalized.packageSize,
         package_price: data.packagePrice,
         tags: data.tags,
         notes: data.notes
@@ -66,6 +73,7 @@ export const inputRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = inputSchema.parse(request.body);
     const id = request.params as { id: string };
+    const normalized = normalizeInputMeasure(data.unit, data.packageSize);
 
     const { data: updated, error } = await supabaseAdmin
       .from('inputs')
@@ -73,8 +81,8 @@ export const inputRoutes = async (app: FastifyInstance) => {
         name: data.name,
         brand: data.brand,
         category: data.category,
-        unit: data.unit,
-        package_size: data.packageSize,
+        unit: normalized.unit,
+        package_size: normalized.packageSize,
         package_price: data.packagePrice,
         tags: data.tags,
         notes: data.notes

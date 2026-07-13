@@ -4,15 +4,17 @@ import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import type { RecipeItem } from '../recipes/RecipesPage.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
-import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
-import { ListSkeleton } from '../shared/ListSkeleton.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
+import { EntityListPanel } from '../shared/EntityListPanel.tsx';
+import { ClickableListRow } from '../shared/ClickableListRow.tsx';
+import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
+import { FormActions } from '../shared/FormActions.tsx';
 
 type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'PACKAGING';
 
@@ -67,6 +69,11 @@ type Settings = {
 
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
+const inputUnitOptions = [
+  { value: 'g', label: 'g' },
+  { value: 'ml', label: 'ml' },
+  { value: 'un', label: 'un' }
+] as const;
 
 export const ProductsPage = () => {
   const { user } = useAuth();
@@ -110,7 +117,7 @@ export const ProductsPage = () => {
     name: '',
     brand: '',
     packageSize: 1,
-    unit: 'un' as InputItem['unit'],
+    unit: 'g' as InputItem['unit'],
     packagePrice: 0,
     notes: '',
     tags: [] as string[]
@@ -387,7 +394,7 @@ export const ProductsPage = () => {
         name: '',
         brand: '',
         packageSize: 1,
-        unit: 'un',
+        unit: 'g',
         packagePrice: 0,
         notes: '',
         tags: []
@@ -751,37 +758,28 @@ export const ProductsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <div className="panel">
-        <ListToolbar
-          title="Produtos cadastrados"
-          searchValue={search}
-          onSearch={setSearch}
-          actionLabel="+"
-          onAction={handleNew}
-        />
-        {productsQuery.loading && products.length === 0 ? (
-          <ListSkeleton />
-        ) : (
-          <div className="table">
-            {filtered.map((product) => (
-              <div
-                key={product.id}
-                className="list-row"
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/app/produtos/editar/${product.id}`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    navigate(`/app/produtos/editar/${product.id}`);
-                  }
-                }}
-              >
-                <div>
+      <EntityListPanel
+        title="Produtos cadastrados"
+        searchValue={search}
+        onSearch={setSearch}
+        actionLabel="+"
+        onAction={handleNew}
+        loading={productsQuery.loading}
+        isEmpty={products.length === 0}
+      >
+        <div className="table">
+          {filtered.map((product) => (
+            <ClickableListRow
+              key={product.id}
+              onOpen={() => navigate(`/app/produtos/editar/${product.id}`)}
+              main={(
+                <>
                   <strong>{product.name}</strong>
                   <span className="muted">R$ {product.unitPrice?.toFixed(2)} un • R$ {product.salePrice.toFixed(2)}</span>
-                </div>
-                <div className="inline-right">
+                </>
+              )}
+              actions={(
+                <>
                   <button
                     type="button"
                     className="icon-button"
@@ -822,23 +820,21 @@ export const ProductsPage = () => {
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                </>
+              )}
+            />
+          ))}
+        </div>
+      </EntityListPanel>
       ) : null}
 
       {showForm && (
         <>
-          <div className="panel">
-            <div className="panel-title-row">
-                <button type="button" className="icon-button small" onClick={() => navigate('/app/produtos')} aria-label="Voltar">
-                  <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
-                </button>
-              <h3>{editingId ? 'Editar produto' : 'Novo produto'}</h3>
-            </div>
+          <EntityEditorPanel
+            backTo="/app/produtos"
+            title={editingId ? 'Editar produto' : 'Novo produto'}
+            onBack={navigate}
+          >
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
                 <label>
@@ -876,14 +872,12 @@ export const ProductsPage = () => {
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
               </label>
               {saveError ? <p className="error">{saveError}</p> : null}
-              <div className="actions">
-                <button type="button" className="ghost" onClick={() => navigate('/app/produtos')}>
-                  Cancelar
-                </button>
-                <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar produto'}</button>
-              </div>
+              <FormActions
+                onCancel={() => navigate('/app/produtos')}
+                submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar produto'}
+              />
             </form>
-          </div>
+          </EntityEditorPanel>
 
           <div className="panel">
             <h3>Calculo por unidade</h3>
@@ -1351,13 +1345,7 @@ export const ProductsPage = () => {
                           className="unit-select"
                           value={quickInputForm.unit}
                           onChange={(value) => setQuickInputForm((current) => ({ ...current, unit: value as InputItem['unit'] }))}
-                          options={[
-                            { value: 'kg', label: 'kg' },
-                            { value: 'g', label: 'g' },
-                            { value: 'l', label: 'l' },
-                            { value: 'ml', label: 'ml' },
-                            { value: 'un', label: 'un' }
-                          ]}
+                          options={[...inputUnitOptions]}
                         />
                       </div>
                     </label>
