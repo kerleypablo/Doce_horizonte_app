@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
 import { MODULE_DEFINITIONS, MODULE_KEYS, isModuleKey, type AppModuleKey } from '../common/modules.js';
+import { assertCompanyOwns } from '../common/company-ownership.js';
 import {
   fetchPagBankTransactionalCandidates,
   pagBankSaleOrigins,
@@ -264,6 +265,12 @@ export const companyRoutes = async (app: FastifyInstance) => {
     if (!hasAdminAccess(auth.role)) return reply.status(403).send({ message: 'Apenas admin' });
 
     const data = settingsSchema.parse(request.body);
+    await assertCompanyOwns({
+      companyId: auth.companyId,
+      table: 'sales_channels',
+      ids: data.salesChannels.map((channel) => channel.id),
+      resourceName: 'Um dos canais de venda'
+    });
     const laborCostItems = normalizeCostItems(data.laborCostItems);
     const fixedCostItems = normalizeCostItems(data.fixedCostItems);
     const productiveHoursPerMonth = Number(data.productiveHoursPerMonth ?? 0);
@@ -274,104 +281,26 @@ export const companyRoutes = async (app: FastifyInstance) => {
       ? calcHourlyCost(sumActiveMonthlyCost(fixedCostItems), productiveHoursPerMonth)
       : data.fixedCostPerHour;
 
-    if (data.companyName) {
-      const { error: companyError } = await supabaseAdmin
-        .from('companies')
-        .update({ name: data.companyName })
-        .eq('id', auth.companyId);
-
-      if (companyError) return reply.status(400).send({ message: 'Erro ao salvar nome da empresa' });
-    }
-
-    const { error: settingsError } = await supabaseAdmin
-      .from('company_settings')
-      .upsert({
-        company_id: auth.companyId,
-        company_phone: data.companyPhone ?? '',
-        company_email: data.companyEmail ?? '',
-        pix_key: data.pixKey ?? '',
-        logo_data_url: data.logoDataUrl ?? '',
-        app_theme: data.appTheme ?? 'caramelo',
-        dark_mode: data.darkMode ?? false,
-        default_notes_delivery: data.defaultNotesDelivery ?? '',
-        default_notes_general: data.defaultNotesGeneral ?? '',
-        default_notes_payment: data.defaultNotesPayment ?? '',
-        productive_hours_per_month: productiveHoursPerMonth,
-        overhead_method: data.overheadMethod,
-        overhead_percent: data.overheadPercent,
-        overhead_per_unit: data.overheadPerUnit,
-        labor_cost_items: laborCostItems,
-        fixed_cost_items: fixedCostItems,
-        labor_cost_per_hour: laborCostPerHour,
-        fixed_cost_per_hour: fixedCostPerHour,
-        taxes_percent: data.taxesPercent,
-        default_profit_percent: data.defaultProfitPercent
-      }, { onConflict: 'company_id' });
-
-    if (settingsError) {
-      const hasItemizedCosts = laborCostItems.length > 0 || fixedCostItems.length > 0;
-      if (hasItemizedCosts) {
-        request.log.error({
-          error: settingsError,
-          companyId: auth.companyId
-        }, 'Falha ao salvar custos detalhados da empresa');
-        return reply.status(400).send({
-          message: 'Nao foi possivel salvar a lista de custos.',
-          detail: settingsError.message,
-          hint: 'Execute novamente o arquivo docs/SUPABASE_COST_ITEMS.sql no banco usado pela API.'
-        });
-      }
-      const { error: legacyError } = await supabaseAdmin
-        .from('company_settings')
-        .upsert({
-          company_id: auth.companyId,
-          productive_hours_per_month: productiveHoursPerMonth,
-          overhead_method: data.overheadMethod,
-          overhead_percent: data.overheadPercent,
-          overhead_per_unit: data.overheadPerUnit,
-          labor_cost_per_hour: laborCostPerHour,
-          fixed_cost_per_hour: fixedCostPerHour,
-          taxes_percent: data.taxesPercent,
-          default_profit_percent: data.defaultProfitPercent
-        }, { onConflict: 'company_id' });
-
-      if (legacyError) return reply.status(400).send({ message: 'Erro ao salvar configuracoes' });
-    }
-
-    const existing = await supabaseAdmin
-      .from('sales_channels')
-      .select('id')
-      .eq('company_id', auth.companyId);
-
-    const existingIds = new Set((existing.data ?? []).map((c) => c.id));
-    const incomingIds = new Set(data.salesChannels.map((c) => c.id).filter(Boolean));
-
-    const toDelete = [...existingIds].filter((id) => !incomingIds.has(id));
-    if (toDelete.length > 0) {
-      await supabaseAdmin.from('sales_channels').delete().in('id', toDelete);
-    }
-
-    for (const channel of data.salesChannels) {
-      await supabaseAdmin.from('sales_channels').upsert({
-        id: channel.id,
-        company_id: auth.companyId,
-        name: channel.name,
-        fee_percent: channel.feePercent,
-        payment_fee_percent: channel.paymentFeePercent,
-        fee_fixed: channel.feeFixed,
-        active: channel.active
-      });
-    }
-
-    return reply.send({
+    const payload = {
       ...data,
       productiveHoursPerMonth,
       laborCostItems,
       fixedCostItems,
       laborCostPerHour,
-      fixedCostPerHour,
-      companyName: data.companyName ?? undefined
-    });
+      fixedCostPerHour
+    };
+    const { error: transactionError } = await supabaseAdmin
+      .rpc('save_company_settings', { p_company_id: auth.companyId, p_payload: payload });
+    if (transactionError) {
+      request.log.error({ error: transactionError, companyId: auth.companyId }, 'Falha ao salvar configuracoes da empresa');
+      return reply.status(400).send({
+        message: 'Nao foi possivel salvar as configuracoes da empresa.',
+        detail: transactionError.message,
+        hint: 'Aplique a migracao 202608290001_security_and_tenant_integrity.sql.'
+      });
+    }
+
+    return reply.send({ ...payload, companyName: data.companyName ?? undefined });
   });
 
   app.get('/company/pagbank-edi', empresaGuard, async (request, reply) => {

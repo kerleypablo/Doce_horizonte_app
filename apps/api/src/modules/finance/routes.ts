@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
+import { assertCompanyOwns } from '../common/company-ownership.js';
 
 const paymentMethodSchema = z.enum(['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER']);
 const ruleModeSchema = z.enum(['NONE', 'PERCENT', 'FIXED_ADD', 'FIXED_SUBTRACT']);
@@ -264,6 +265,8 @@ const normalizeTags = (tags?: string[]) =>
 
 export const financeRoutes = async (app: FastifyInstance) => {
   const financeGuard = { preHandler: [app.authenticate, app.requireModule('financeiro')] };
+  const assertAccountOwnership = (companyId: string, ids: Array<string | undefined>) =>
+    assertCompanyOwns({ companyId, table: 'financial_accounts', ids, resourceName: 'A conta financeira' });
 
 	  const mapAccount = (row: any) => ({
 	    id: row.id,
@@ -737,6 +740,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const params = request.params as { id: string };
     const body = accountAdjustmentSchema.parse(request.body);
+    await assertAccountOwnership(auth.companyId, [params.id, body.accountId]);
     const baseDescription = body.description?.trim() || 'Ajuste de saldo';
 
     if (body.kind === 'ENTRY') {
@@ -812,6 +816,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const params = accountAdjustmentParamsSchema.parse(request.params);
     const body = accountAdjustmentSchema.parse(request.body);
+    await assertAccountOwnership(auth.companyId, [body.accountId]);
 
     if (params.kind === 'ENTRY') {
       const { data, error } = await supabaseAdmin
@@ -906,6 +911,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	  app.get('/finance/daily-closing', financeGuard, async (request) => {
 	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 	    const query = closingQuerySchema.parse(request.query ?? {});
+      await assertAccountOwnership(auth.companyId, [query.accountId]);
       let closingQuery = supabaseAdmin
         .from('financial_daily_closings')
         .select('*')
@@ -924,6 +930,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	  app.put('/finance/daily-closing', financeGuard, async (request, reply) => {
 	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 	    const body = dailyClosingSchema.parse(request.body);
+      await assertAccountOwnership(auth.companyId, [body.accountId]);
 	    const { data, error } = await supabaseAdmin
 	      .from('financial_daily_closings')
 	      .upsert({
@@ -1037,6 +1044,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
   app.post('/finance/manual-sales', financeGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const body = manualSaleCreateSchema.parse(request.body);
+    await assertAccountOwnership(auth.companyId, [body.accountId]);
     const tags = normalizeTags(body.tags);
     const lines = body.lines?.length
       ? body.lines
@@ -1067,6 +1075,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const params = request.params as { id: string };
     const body = manualSaleSchema.parse(request.body);
+    await assertAccountOwnership(auth.companyId, [body.accountId]);
     const { data, error } = await supabaseAdmin
       .from('financial_manual_sales')
       .update({
@@ -1120,6 +1129,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
   app.post('/finance/expenses', financeGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const body = expenseSchema.parse(request.body);
+    await assertAccountOwnership(auth.companyId, [body.accountId]);
     const { data, error } = await supabaseAdmin
       .from('financial_expenses')
       .insert({
@@ -1145,6 +1155,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const params = request.params as { id: string };
     const body = expenseSchema.parse(request.body);
+    await assertAccountOwnership(auth.companyId, [body.accountId]);
     const { data, error } = await supabaseAdmin
       .from('financial_expenses')
       .update({

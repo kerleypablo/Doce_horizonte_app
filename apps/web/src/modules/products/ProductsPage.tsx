@@ -15,6 +15,7 @@ import { EntityListPanel } from '../shared/EntityListPanel.tsx';
 import { ClickableListRow } from '../shared/ClickableListRow.tsx';
 import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
 import { FormActions } from '../shared/FormActions.tsx';
+import { calcProductPreview } from '@doce-horizonte/domain';
 
 type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'PACKAGING';
 
@@ -694,40 +695,29 @@ export const ProductsPage = () => {
       return sum + unitCost * normalized;
     }, 0);
 
-    const directCost = extraRecipesCost + extraProductsCost + packagingCost;
-
-    const baseOverhead = settings?.overheadMethod === 'PERCENT_DIRECT'
-      ? (directCost * (settings?.overheadPercent ?? 0)) / 100
-      : (settings?.overheadPerUnit ?? 0) * form.unitsCount;
-
-    const hours = (form.prepTimeMinutes ?? 0) / 60;
-    const labor = (settings?.laborCostPerHour ?? 0) * hours;
-    const fixed = (settings?.fixedCostPerHour ?? 0) * hours;
-
-    const totalCost = directCost + baseOverhead + labor + fixed;
     const activeChannels = settings?.salesChannels.filter((candidate) => candidate.active) ?? [];
     const channel = activeChannels.find((candidate) => candidate.id === form.channelId) ?? activeChannels[0];
-    const variablePercentBase = (settings?.taxesPercent ?? 0) + (channel?.feePercent ?? 0) + (channel?.paymentFeePercent ?? 0);
-    const feeFixed = channel?.feeFixed ?? 0;
-    const baseCost = totalCost + feeFixed * Math.max(form.unitsCount, 1);
-    const desiredMarkupPercent = form.targetProfitPercent + form.extraPercent;
-    const denominator = 1 - variablePercentBase / 100;
-    const pricingError = denominator <= 0
-      ? 'A soma dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
-      : '';
-    const totalPrice = pricingError ? 0 : (baseCost * (1 + desiredMarkupPercent / 100)) / denominator;
-    const unitPrice = pricingError ? 0 : totalPrice / (form.unitsCount || 1);
+    const preview = calcProductPreview({
+      ...form,
+      settings: settings ?? { overheadMethod: 'PERCENT_DIRECT', overheadPercent: 0, overheadPerUnit: 0, laborCostPerHour: 0, fixedCostPerHour: 0, taxesPercent: 0, defaultProfitPercent: 0, salesChannels: [] },
+      inputs: inputs.map((input) => ({ ...input, companyId: '' })),
+      recipes: recipes.map((recipe) => ({ ...recipe, companyId: '' })),
+      products: products.map((product) => ({ ...product, companyId: '' })),
+      feePercent: channel?.feePercent ?? 0,
+      paymentFeePercent: channel?.paymentFeePercent ?? 0,
+      feeFixed: channel?.feeFixed ?? 0
+    });
 
     return {
-      labor,
-      fixed,
-      inputs: directCost,
-      total: totalCost,
-      baseCost,
-      unitPrice,
+      labor: (settings?.laborCostPerHour ?? 0) * Math.max(form.prepTimeMinutes, 0) / 60,
+      fixed: (settings?.fixedCostPerHour ?? 0) * Math.max(form.prepTimeMinutes, 0) / 60,
+      inputs: preview.directCost,
+      total: preview.totalCost - (channel?.feeFixed ?? 0) * Math.max(form.unitsCount, 1),
+      baseCost: preview.totalCost,
+      unitPrice: preview.unitPrice,
       profitPercent: form.targetProfitPercent,
-      variablePercentBase,
-      pricingError
+      variablePercentBase: preview.variablePercent,
+      pricingError: preview.pricingError ?? ''
     };
   }, [form, inputs, recipes, products, settings]);
 

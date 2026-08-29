@@ -37,6 +37,7 @@ export const authRoutes = async (app: FastifyInstance) => {
     }
     return reply.send({
       token: authData.session.access_token,
+      refreshToken: authData.session.refresh_token,
       role: appUser.role,
       modules: await getEnabledModulesForAccess({
         companyId: appUser.company_id,
@@ -67,7 +68,7 @@ export const authRoutes = async (app: FastifyInstance) => {
       return reply.status(400).send({ message: 'Erro ao autenticar' });
     }
 
-    return reply.status(201).send({ token: authData.session.access_token });
+    return reply.status(201).send({ token: authData.session.access_token, refreshToken: authData.session.refresh_token });
   });
 
   app.post('/auth/register', { preHandler: app.authenticate }, async (request, reply) => {
@@ -88,11 +89,15 @@ export const authRoutes = async (app: FastifyInstance) => {
       return reply.status(400).send({ message: 'Erro ao criar usuario' });
     }
 
-    await supabaseAdmin.from('app_users').insert({
+    const { error: appUserError } = await supabaseAdmin.from('app_users').insert({
       auth_user_id: userData.user.id,
       company_id: auth.companyId,
       role: data.role
     });
+    if (appUserError) {
+      await supabaseAdmin.auth.admin.deleteUser(userData.user.id);
+      return reply.status(400).send({ message: 'Erro ao vincular usuario a empresa', detail: appUserError.message });
+    }
 
     return reply.status(201).send({ ok: true });
   });

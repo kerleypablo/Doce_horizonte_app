@@ -4,6 +4,7 @@ import { supabase } from '../shared/supabase.ts';
 
 export type AuthUser = {
   token: string;
+  refreshToken?: string;
   role: 'master' | 'admin' | 'common';
   modules: string[];
   email?: string;
@@ -17,7 +18,8 @@ type AuthContextValue = {
     token: string,
     role: 'master' | 'admin' | 'common',
     modules: string[],
-    profile?: { email?: string; name?: string; avatarUrl?: string }
+    profile?: { email?: string; name?: string; avatarUrl?: string },
+    refreshToken?: string
   ) => void;
   logout: () => void;
 };
@@ -34,6 +36,7 @@ const loadUser = (): AuthUser | null => {
     if (!parsed.token || !parsed.role) return null;
     return {
       token: parsed.token,
+      refreshToken: parsed.refreshToken,
       role: parsed.role,
       modules: parsed.modules ?? [],
       email: parsed.email,
@@ -52,9 +55,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     token: string,
     role: 'master' | 'admin' | 'common',
     modules: string[],
-    profile?: { email?: string; name?: string; avatarUrl?: string }
+    profile?: { email?: string; name?: string; avatarUrl?: string },
+    refreshToken?: string
   ) => {
-    const next = { token, role, modules, ...profile };
+    const next = { token, refreshToken, role, modules, ...profile };
     setUser(next);
     localStorage.setItem(storageKey, JSON.stringify(next));
     clearQueryCache();
@@ -88,7 +92,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     loadProfile();
   }, [user]);
 
+  useEffect(() => {
+    if (!user?.refreshToken) return;
+    const refresh = async () => {
+      const { data } = await supabase.auth.refreshSession({ refresh_token: user.refreshToken });
+      if (!data.session) return;
+      const next = { ...user, token: data.session.access_token, refreshToken: data.session.refresh_token };
+      setUser(next);
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    };
+    const timer = window.setInterval(() => { void refresh(); }, 40 * 60_000);
+    return () => window.clearInterval(timer);
+  }, [user]);
+
   const logout = () => {
+    void supabase.auth.signOut();
     setUser(null);
     localStorage.removeItem(storageKey);
     clearQueryCache();

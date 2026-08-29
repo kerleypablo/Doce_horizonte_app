@@ -28,7 +28,7 @@ export const OAuthCallbackPage = () => {
               avatarUrl: (data.session.user.user_metadata?.avatar_url as string | undefined) ?? undefined
             }
           : undefined;
-        login(token, me.role, me.modules ?? [], profile);
+        login(token, me.role, me.modules ?? [], profile, data.session?.refresh_token);
         navigate('/app');
       } catch (err) {
         const message = err instanceof Error ? err.message : '';

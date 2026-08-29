@@ -10,6 +10,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@doce-horizonte/domain": "*",
     "@fastify/cors": "^10.0.0",
     "@fastify/jwt": "^9.0.0",
     "@supabase/supabase-js": "^2.45.4",

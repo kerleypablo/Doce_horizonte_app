@@ -34,6 +34,25 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
       return reply.send({ companyId: existing.company_id, alreadyLinked: true });
     }
 
+    const { data: workspaceCompanyId, error: workspaceError } = await supabaseAdmin
+      .rpc('create_company_workspace', { p_auth_user_id: authUserId, p_company_name: data.companyName });
+
+    if (!workspaceError && workspaceCompanyId) {
+      return reply.send({
+        companyId: workspaceCompanyId,
+        companyCode: getCompanyCodeFromId(workspaceCompanyId),
+        alreadyLinked: false
+      });
+    }
+
+    if (workspaceError && !isModulesInfraMissing(workspaceError)) {
+      return reply.status(400).send({
+        message: 'Nao foi possivel criar a empresa.',
+        detail: workspaceError.message,
+        hint: 'Aplique a migracao 202608290001_security_and_tenant_integrity.sql.'
+      });
+    }
+
     const { data: company, error: companyError } = await supabaseAdmin
       .from('companies')
       .insert({ name: data.companyName })

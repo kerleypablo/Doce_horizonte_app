@@ -18,14 +18,14 @@ export const LoginPage = () => {
     setError(null);
 
     try {
-      const data = await apiFetch<{ token: string; role: 'master' | 'admin' | 'common'; modules: string[] }>(
+      const data = await apiFetch<{ token: string; refreshToken?: string; role: 'master' | 'admin' | 'common'; modules: string[] }>(
         '/auth/login',
         {
           method: 'POST',
           body: JSON.stringify({ email, password })
         }
       );
-      login(data.token, data.role, data.modules ?? []);
+      login(data.token, data.role, data.modules ?? [], undefined, data.refreshToken);
       navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao entrar');

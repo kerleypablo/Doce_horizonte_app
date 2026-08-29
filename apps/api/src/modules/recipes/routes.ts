@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
+import { assertCompanyOwns } from '../common/company-ownership.js';
 
 const ingredientSchema = z.object({
   inputId: z.string().min(1),
@@ -41,6 +42,16 @@ export const recipeRoutes = async (app: FastifyInstance) => {
     notes: row.notes ?? undefined
   });
 
+  const assertRecipeCompositionOwnership = async (companyId: string, data: z.infer<typeof recipeSchema>, recipeId?: string) => {
+    if (recipeId && data.subRecipes.some((item) => item.recipeId === recipeId)) {
+      throw new Error('Uma receita nao pode conter ela mesma como sub-receita.');
+    }
+    await Promise.all([
+      assertCompanyOwns({ companyId, table: 'inputs', ids: data.ingredients.map((item) => item.inputId), resourceName: 'Um dos insumos' }),
+      assertCompanyOwns({ companyId, table: 'recipes', ids: data.subRecipes.map((item) => item.recipeId), resourceName: 'Uma das sub-receitas' })
+    ]);
+  };
+
   app.get('/recipes', cadastrosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const { data } = await supabaseAdmin
@@ -54,6 +65,7 @@ export const recipeRoutes = async (app: FastifyInstance) => {
   app.post('/recipes', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = recipeSchema.parse(request.body);
+    await assertRecipeCompositionOwnership(auth.companyId, data);
 
     const { data: created, error } = await supabaseAdmin
       .from('recipes')
@@ -93,6 +105,7 @@ export const recipeRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = recipeSchema.parse(request.body);
     const id = request.params as { id: string };
+    await assertRecipeCompositionOwnership(auth.companyId, data, id.id);
 
     const { data: updated, error } = await supabaseAdmin
       .from('recipes')

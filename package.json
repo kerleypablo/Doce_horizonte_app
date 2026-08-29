@@ -2,13 +2,15 @@
   "name": "confeitaria-precificacao",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
+    "build:domain": "npm --workspace @doce-horizonte/domain run build",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:api": "npm --workspace apps/api run dev",
-    "build:web": "npm --workspace apps/web run build",
-    "build:api": "npm --workspace apps/api run build"
+    "build:web": "npm run build:domain && npm --workspace apps/web run build",
+    "build:api": "npm run build:domain && npm --workspace apps/api run build"
   },
   "dependencies": {
     "all": "^0.0.0"

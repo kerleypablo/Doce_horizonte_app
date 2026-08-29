@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@doce-horizonte/domain": "*",
     "@supabase/supabase-js": "^2.95.3",
     "highcharts": "^12.6.0",
     "highcharts-react-official": "^3.2.3",

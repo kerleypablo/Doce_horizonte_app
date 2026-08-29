@@ -12,6 +12,7 @@ import { customerRoutes } from './modules/customers/routes.js';
 import { orderRoutes } from './modules/orders/routes.js';
 import { backofficeRoutes } from './modules/backoffice/routes.js';
 import { financeRoutes } from './modules/finance/routes.js';
+import { ZodError } from 'zod';
 
 export const buildApp = () => {
   const app = Fastify({
@@ -19,7 +20,27 @@ export const buildApp = () => {
     bodyLimit: 8 * 1024 * 1024
   });
 
-  app.register(cors, { origin: true });
+  const corsOrigin = process.env.CORS_ORIGIN;
+  const allowedOrigins = (corsOrigin ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.register(cors, {
+    origin: corsOrigin
+      ? (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin))
+      : true
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    request.log.error(error);
+    if (error instanceof ZodError) {
+      return reply.status(400).send({ message: 'Dados informados sao invalidos.', issues: error.issues });
+    }
+    const appError = error as { statusCode?: unknown; message?: unknown };
+    const statusCode = typeof appError.statusCode === 'number' ? appError.statusCode : 500;
+    const message = typeof appError.message === 'string' ? appError.message : 'Erro interno ao processar a solicitacao.';
+    return reply.status(statusCode).send({ message });
+  });
 
   registerAuth(app);
 

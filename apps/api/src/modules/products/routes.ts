@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
 import { calcProductPreview } from '../pricing/product-calc.js';
+import { assertProductCompositionOwnership } from '../common/company-ownership.js';
 
 const productSchema = z.object({
   name: z.string().min(2),
@@ -97,6 +98,7 @@ export const productRoutes = async (app: FastifyInstance) => {
   app.post('/products', cadastrosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = productSchema.parse(request.body);
+    await assertProductCompositionOwnership(auth.companyId, data);
 
     const { data: companySettings } = await supabaseAdmin
       .from('company_settings')
@@ -190,6 +192,7 @@ export const productRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = productSchema.parse(request.body);
     const id = request.params as { id: string };
+    await assertProductCompositionOwnership(auth.companyId, data);
 
     const { data: companySettings } = await supabaseAdmin
       .from('company_settings')

@@ -21,7 +21,7 @@ export const RegisterPage = () => {
     setError(null);
 
     try {
-      const signup = await apiFetch<{ token: string }>('/auth/signup', {
+      const signup = await apiFetch<{ token: string; refreshToken?: string }>('/auth/signup', {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
@@ -41,7 +41,7 @@ export const RegisterPage = () => {
       }
 
       const me = await apiFetch<{ role: 'master' | 'admin' | 'common'; modules: string[] }>('/auth/me', { token: signup.token });
-      login(signup.token, me.role, me.modules ?? []);
+      login(signup.token, me.role, me.modules ?? [], undefined, signup.refreshToken);
       navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar conta');

@@ -6,3 +6,4 @@ node_modules
 /apps/*/dist
 /apps/*/node_modules
 /apps/*/.env
+/packages/*/dist

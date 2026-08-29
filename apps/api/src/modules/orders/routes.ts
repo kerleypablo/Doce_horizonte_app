@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
 import { calcProductPreview } from '../pricing/product-calc.js';
+import { assertCompanyOwns } from '../common/company-ownership.js';
 
 const orderProductSchema = z.object({
   productId: z.string().min(1),
@@ -229,6 +230,13 @@ export const orderRoutes = async (app: FastifyInstance) => {
     });
   };
 
+  const assertOrderReferencesOwnership = async (companyId: string, data: z.infer<typeof orderSchema>) => {
+    await Promise.all([
+      assertCompanyOwns({ companyId, table: 'customers', ids: [data.customerId], resourceName: 'O cliente' }),
+      assertCompanyOwns({ companyId, table: 'products', ids: data.products.map((item) => item.productId), resourceName: 'Um dos produtos do pedido' })
+    ]);
+  };
+
   const listQuerySchema = z.object({
     view: z.enum(['full', 'list']).optional()
   });
@@ -408,6 +416,7 @@ const toBooleanQueryValue = (value: boolean | string | undefined, defaultValue =
   app.post('/orders', pedidosGuard, async (request, reply) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const data = orderSchema.parse(request.body);
+    await assertOrderReferencesOwnership(auth.companyId, data);
 
     const { data: latestToday } = await supabaseAdmin
       .from('orders')
@@ -468,6 +477,7 @@ const toBooleanQueryValue = (value: boolean | string | undefined, defaultValue =
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const id = request.params as { id: string };
     const data = orderSchema.parse(request.body);
+    await assertOrderReferencesOwnership(auth.companyId, data);
 	    const customerSnapshot = data.customerSnapshot
 	      ? { ...data.customerSnapshot, deliveryAddress: data.deliveryAddress ?? undefined }
 	      : (data.deliveryAddress ? { deliveryAddress: data.deliveryAddress } : null);
