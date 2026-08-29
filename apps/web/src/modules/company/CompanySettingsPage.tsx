@@ -85,6 +85,7 @@ export const CompanySettingsPage = () => {
     index: number;
     draft: CostItemFormState;
   } | null>(null);
+  const [costItemsSaving, setCostItemsSaving] = useState<'laborCostItems' | 'fixedCostItems' | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [roleSavingUserId, setRoleSavingUserId] = useState<string | null>(null);
@@ -164,25 +165,83 @@ export const CompanySettingsPage = () => {
     active: true
   });
 
-  const addCostItem = (kind: 'laborCostItems' | 'fixedCostItems', draft: CostItemFormState) => {
+  const normalizeSavedSettings = (saved: Settings, fallback: Settings): Settings => ({
+    ...fallback,
+    ...saved,
+    companyName: saved.companyName ?? fallback.companyName,
+    companyCode: fallback.companyCode,
+    productiveHoursPerMonth: Number(saved.productiveHoursPerMonth ?? fallback.productiveHoursPerMonth ?? 0),
+    laborCostItems: saved.laborCostItems ?? fallback.laborCostItems,
+    fixedCostItems: saved.fixedCostItems ?? fallback.fixedCostItems,
+    laborCostPerHour: Number(saved.laborCostPerHour ?? fallback.laborCostPerHour ?? 0),
+    fixedCostPerHour: Number(saved.fixedCostPerHour ?? fallback.fixedCostPerHour ?? 0),
+    taxesPercent: Number(saved.taxesPercent ?? fallback.taxesPercent ?? 0),
+    salesChannels: saved.salesChannels ?? fallback.salesChannels
+  });
+
+  const persistSettings = async (next: Settings) => {
+    const saved = await apiFetch<Settings>('/company/settings', {
+      method: 'PUT',
+      token: user?.token,
+      body: JSON.stringify(next)
+    });
+    const normalized = normalizeSavedSettings(saved, next);
+    invalidateQueryCache(queryKeys.companySettings);
+    setSettings(normalized);
+    return normalized;
+  };
+
+  const persistCostItemsChange = async (
+    kind: 'laborCostItems' | 'fixedCostItems',
+    next: Settings,
+    onSuccess?: () => void
+  ) => {
+    if (!settings || costItemsSaving) return false;
+    const previous = settings;
+    setSubmitError(null);
+    setCostItemsSaving(kind);
+    setSettings(next);
+    try {
+      await persistSettings(next);
+      onSuccess?.();
+      return true;
+    } catch (error) {
+      setSettings(previous);
+      setSubmitError(error instanceof Error ? error.message : 'Nao foi possivel salvar o custo.');
+      return false;
+    } finally {
+      setCostItemsSaving(null);
+    }
+  };
+
+  const addCostItem = async (kind: 'laborCostItems' | 'fixedCostItems', draft: CostItemFormState) => {
     if (!settings) return;
     const name = draft.name.trim();
     if (!name) return;
-    setSettings({
+    const next = {
       ...settings,
       [kind]: [...settings[kind], { ...buildCostItem(name), name, monthlyAmount: draft.monthlyAmount, active: draft.active }]
+    };
+    await persistCostItemsChange(kind, next, () => {
+      if (kind === 'laborCostItems') {
+        setLaborCostDraft(createEmptyCostForm());
+        setShowLaborCostForm(false);
+      } else {
+        setFixedCostDraft(createEmptyCostForm());
+        setShowFixedCostForm(false);
+      }
     });
   };
 
-  const removeCostItem = (kind: 'laborCostItems' | 'fixedCostItems', index: number) => {
+  const removeCostItem = async (kind: 'laborCostItems' | 'fixedCostItems', index: number) => {
     if (!settings) return;
-    setSettings({
+    const next = {
       ...settings,
       [kind]: settings[kind].filter((_, itemIndex) => itemIndex !== index)
+    };
+    await persistCostItemsChange(kind, next, () => {
+      if (editingCost?.kind === kind && editingCost.index === index) setEditingCost(null);
     });
-    if (editingCost?.kind === kind && editingCost.index === index) {
-      setEditingCost(null);
-    }
   };
 
   const startEditingCostItem = (kind: 'laborCostItems' | 'fixedCostItems', index: number) => {
@@ -200,7 +259,7 @@ export const CompanySettingsPage = () => {
     });
   };
 
-  const saveEditingCostItem = () => {
+  const saveEditingCostItem = async () => {
     if (!settings || !editingCost) return;
     const name = editingCost.draft.name.trim();
     if (!name) return;
@@ -211,8 +270,9 @@ export const CompanySettingsPage = () => {
       monthlyAmount: editingCost.draft.monthlyAmount,
       active: editingCost.draft.active
     };
-    setSettings({ ...settings, [editingCost.kind]: next });
-    setEditingCost(null);
+    await persistCostItemsChange(editingCost.kind, { ...settings, [editingCost.kind]: next }, () => {
+      setEditingCost(null);
+    });
   };
 
   const handleLogoUpload = async (files: FileList | null) => {
@@ -249,45 +309,10 @@ export const CompanySettingsPage = () => {
 
   const handleSave = async () => {
     if (!settings) return;
-    const activeMonthlyCosts = [...settings.laborCostItems, ...settings.fixedCostItems]
-      .reduce((sum, item) => sum + (item.active ? Number(item.monthlyAmount || 0) : 0), 0);
-    if (activeMonthlyCosts > 0 && Number(settings.productiveHoursPerMonth || 0) <= 0) {
-      setSubmitError('Informe as horas produtivas mensais para calcular os custos de equipe e estrutura.');
-      return;
-    }
     setSaving(true);
     setSubmitError(null);
     try {
-      const saved = await apiFetch<Settings>('/company/settings', {
-        method: 'PUT',
-        token: user?.token,
-        body: JSON.stringify(settings)
-      });
-      setSettings({
-        ...saved,
-        companyName: saved.companyName ?? settings.companyName,
-        companyCode: settings.companyCode,
-        companyPhone: saved.companyPhone ?? settings.companyPhone,
-        companyEmail: saved.companyEmail ?? settings.companyEmail,
-        pixKey: saved.pixKey ?? settings.pixKey,
-        logoDataUrl: saved.logoDataUrl ?? settings.logoDataUrl,
-        appTheme: saved.appTheme ?? settings.appTheme,
-        darkMode: saved.darkMode ?? settings.darkMode,
-        defaultNotesDelivery: saved.defaultNotesDelivery ?? settings.defaultNotesDelivery,
-        defaultNotesGeneral: saved.defaultNotesGeneral ?? settings.defaultNotesGeneral,
-        defaultNotesPayment: saved.defaultNotesPayment ?? settings.defaultNotesPayment,
-        productiveHoursPerMonth: Number(saved.productiveHoursPerMonth ?? settings.productiveHoursPerMonth ?? 0),
-        laborCostItems: (saved.laborCostItems?.length ?? 0) > 0 || settings.laborCostItems.length === 0
-          ? (saved.laborCostItems ?? settings.laborCostItems)
-          : settings.laborCostItems,
-        fixedCostItems: (saved.fixedCostItems?.length ?? 0) > 0 || settings.fixedCostItems.length === 0
-          ? (saved.fixedCostItems ?? settings.fixedCostItems)
-          : settings.fixedCostItems,
-        laborCostPerHour: Number(saved.laborCostPerHour ?? settings.laborCostPerHour ?? 0),
-        fixedCostPerHour: Number(saved.fixedCostPerHour ?? settings.fixedCostPerHour ?? 0),
-        taxesPercent: Number(saved.taxesPercent ?? settings.taxesPercent ?? 0),
-        salesChannels: saved.salesChannels ?? settings.salesChannels
-      });
+      await persistSettings(settings);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar configuracoes';
       setSubmitError(message);
@@ -487,6 +512,9 @@ export const CompanySettingsPage = () => {
                   min={0}
                 />
               </label>
+              {productiveHours <= 0 && (itemizedMonthlyLaborTotal + itemizedMonthlyFixedTotal) > 0 ? (
+                <p className="error">Informe as horas produtivas para calcular o custo por hora. Os valores mensais continuam salvos.</p>
+              ) : null}
             </div>
 
             <div className="company-settings-cost-card">
@@ -526,14 +554,10 @@ export const CompanySettingsPage = () => {
                 </label>
                 <button
                   type="button"
-                  onClick={() => {
-                    addCostItem('laborCostItems', laborCostDraft);
-                    setLaborCostDraft(createEmptyCostForm());
-                    setShowLaborCostForm(false);
-                  }}
-                  disabled={!laborCostDraft.name.trim()}
+                  onClick={() => void addCostItem('laborCostItems', laborCostDraft)}
+                  disabled={!laborCostDraft.name.trim() || costItemsSaving !== null}
                 >
-                  Salvar
+                  {costItemsSaving === 'laborCostItems' ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
               ) : null}
@@ -558,8 +582,8 @@ export const CompanySettingsPage = () => {
                           />
                         </label>
                         <div className="company-settings-cost-actions">
-                          <button type="button" onClick={saveEditingCostItem} disabled={!editingCost.draft.name.trim()}>
-                            Salvar
+                          <button type="button" onClick={() => void saveEditingCostItem()} disabled={!editingCost.draft.name.trim() || costItemsSaving !== null}>
+                            {costItemsSaving === 'laborCostItems' ? 'Salvando...' : 'Salvar'}
                           </button>
                           <button type="button" className="ghost" onClick={() => setEditingCost(null)}>
                             Cancelar
@@ -579,7 +603,7 @@ export const CompanySettingsPage = () => {
                           <button type="button" className="icon-button small" aria-label="Editar" onClick={() => startEditingCostItem('laborCostItems', index)}>
                             <span className="material-symbols-outlined" aria-hidden="true">edit</span>
                           </button>
-                          <button type="button" className="icon-button small danger" aria-label="Excluir" onClick={() => removeCostItem('laborCostItems', index)}>
+                          <button type="button" className="icon-button small danger" aria-label="Excluir" disabled={costItemsSaving !== null} onClick={() => void removeCostItem('laborCostItems', index)}>
                             <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                           </button>
                         </div>
@@ -596,7 +620,7 @@ export const CompanySettingsPage = () => {
                 </div>
                 <div className="company-settings-cost-summary-item highlight">
                   <span>Custo por hora calculado</span>
-                  <strong>{formatCurrency(displayedLaborPerHour)}</strong>
+                  <strong>{productiveHours > 0 ? formatCurrency(displayedLaborPerHour) : 'Informe as horas'}</strong>
                 </div>
               </div>
             </div>
@@ -638,14 +662,10 @@ export const CompanySettingsPage = () => {
                 </label>
                 <button
                   type="button"
-                  onClick={() => {
-                    addCostItem('fixedCostItems', fixedCostDraft);
-                    setFixedCostDraft(createEmptyCostForm());
-                    setShowFixedCostForm(false);
-                  }}
-                  disabled={!fixedCostDraft.name.trim()}
+                  onClick={() => void addCostItem('fixedCostItems', fixedCostDraft)}
+                  disabled={!fixedCostDraft.name.trim() || costItemsSaving !== null}
                 >
-                  Salvar
+                  {costItemsSaving === 'fixedCostItems' ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
               ) : null}
@@ -670,8 +690,8 @@ export const CompanySettingsPage = () => {
                           />
                         </label>
                         <div className="company-settings-cost-actions">
-                          <button type="button" onClick={saveEditingCostItem} disabled={!editingCost.draft.name.trim()}>
-                            Salvar
+                          <button type="button" onClick={() => void saveEditingCostItem()} disabled={!editingCost.draft.name.trim() || costItemsSaving !== null}>
+                            {costItemsSaving === 'fixedCostItems' ? 'Salvando...' : 'Salvar'}
                           </button>
                           <button type="button" className="ghost" onClick={() => setEditingCost(null)}>
                             Cancelar
@@ -691,7 +711,7 @@ export const CompanySettingsPage = () => {
                           <button type="button" className="icon-button small" aria-label="Editar" onClick={() => startEditingCostItem('fixedCostItems', index)}>
                             <span className="material-symbols-outlined" aria-hidden="true">edit</span>
                           </button>
-                          <button type="button" className="icon-button small danger" aria-label="Excluir" onClick={() => removeCostItem('fixedCostItems', index)}>
+                          <button type="button" className="icon-button small danger" aria-label="Excluir" disabled={costItemsSaving !== null} onClick={() => void removeCostItem('fixedCostItems', index)}>
                             <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                           </button>
                         </div>
@@ -708,7 +728,7 @@ export const CompanySettingsPage = () => {
                 </div>
                 <div className="company-settings-cost-summary-item highlight">
                   <span>Custo por hora calculado</span>
-                  <strong>{formatCurrency(displayedFixedPerHour)}</strong>
+                  <strong>{productiveHours > 0 ? formatCurrency(displayedFixedPerHour) : 'Informe as horas'}</strong>
                 </div>
               </div>
             </div>
