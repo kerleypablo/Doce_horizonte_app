@@ -24,22 +24,23 @@ export type ProfitFromPrice = {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-export const calcSalePriceFromMargin = (
+export const calcSalePriceFromMarkup = (
   baseCost: number,
   variablePercent: number,
-  marginPercent: number
+  markupPercent: number
 ) => {
-  const denominator = 1 - (variablePercent + marginPercent) / 100;
-  return denominator > 0 ? baseCost / denominator : 0;
+  const denominator = 1 - variablePercent / 100;
+  return denominator > 0 ? (baseCost * (1 + markupPercent / 100)) / denominator : 0;
 };
 
-export const calcMarginFromSalePrice = (
+export const calcMarkupFromSalePrice = (
   salePrice: number,
   baseCost: number,
   variablePercent: number
 ) => {
-  if (salePrice <= 0) return 0;
-  return ((salePrice - baseCost - salePrice * (variablePercent / 100)) / salePrice) * 100;
+  if (salePrice <= 0 || baseCost <= 0) return 0;
+  const netRevenue = salePrice * (1 - variablePercent / 100);
+  return ((netRevenue - baseCost) / baseCost) * 100;
 };
 
 export const calcRecipeDirectCost = (
@@ -133,10 +134,10 @@ export const calcPricePreview = ({
 
   const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
   const baseCost = directCost + overheadCost + feeFixed;
-  const pricingError = variablePercentBase + profitPercent >= 100
-    ? 'A soma da margem, dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
+  const pricingError = variablePercentBase >= 100
+    ? 'A soma dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
     : undefined;
-  const suggestedPrice = pricingError ? 0 : calcSalePriceFromMargin(baseCost, variablePercentBase, profitPercent);
+  const suggestedPrice = pricingError ? 0 : calcSalePriceFromMarkup(baseCost, variablePercentBase, profitPercent);
   const profitValue = suggestedPrice - baseCost - (suggestedPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
 
   return {
@@ -146,7 +147,7 @@ export const calcPricePreview = ({
     feeFixed: round2(feeFixed),
     suggestedPrice: round2(suggestedPrice),
     profitValue: round2(profitValue),
-    profitPercent: round2(profitPercent),
+    profitPercent: round2(baseCost > 0 ? (profitValue / baseCost) * 100 : 0),
     pricingError
   };
 };
@@ -184,7 +185,7 @@ export const calcProfitFromPrice = ({
   const variableCost = salePrice * (variablePercent / 100);
   const baseCost = fixedBaseCost + variableCost;
   const profitValue = salePrice - baseCost;
-  const profitPercent = calcMarginFromSalePrice(salePrice, fixedBaseCost, variablePercent);
+  const profitPercent = calcMarkupFromSalePrice(salePrice, fixedBaseCost, variablePercent);
 
   return {
     directCost: round2(directCost),

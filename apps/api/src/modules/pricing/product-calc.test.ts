@@ -78,19 +78,37 @@ test('tempo da receita compoe o custo do produto proporcionalmente ao rendimento
   assert.equal(result.directCost, 6);
 });
 
-test('margem desejada e calculada sobre o preco de venda', () => {
+test('lucro e aplicado como markup sobre custo e aceita percentual maior que 100', () => {
   const input: Input = {
     id: 'input', companyId: 'company', name: 'Insumo', category: 'producao',
     unit: 'un', packageSize: 1, packagePrice: 100, tags: []
   };
   const result = preview({
     unitsCount: 1,
-    targetProfitPercent: 30,
+    targetProfitPercent: 150,
     settings: { ...settings, taxesPercent: 10 },
     inputs: [input], packagingInputs: [{ inputId: 'input', quantity: 1, unit: 'un' }]
   });
-  assert.equal(result.totalPrice, 166.67);
-  assert.equal(result.profitPercent, 30);
+  assert.equal(result.totalPrice, 277.78);
+  assert.equal(result.profitPercent, 150);
+});
+
+test('aumentar unidades produzidas reduz o valor unitario do mesmo lote', () => {
+  const input: Input = {
+    id: 'input', companyId: 'company', name: 'Insumo', category: 'producao',
+    unit: 'un', packageSize: 1, packagePrice: 100, tags: []
+  };
+  const oneUnit = preview({
+    unitsCount: 1,
+    inputs: [input], packagingInputs: [{ inputId: 'input', quantity: 1, unit: 'un' }]
+  });
+  const tenUnits = preview({
+    unitsCount: 10,
+    inputs: [input], packagingInputs: [{ inputId: 'input', quantity: 1, unit: 'un' }]
+  });
+  assert.equal(oneUnit.unitPrice, 100);
+  assert.equal(tenUnits.unitPrice, 10);
+  assert.equal(tenUnits.totalPrice, oneUnit.totalPrice);
 });
 
 test('taxa fixa por item nao e diluida pelo tamanho do lote', () => {

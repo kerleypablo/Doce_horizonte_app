@@ -21,8 +21,8 @@ Cada canal possui:
    - `PERCENT_DIRECT`: percentual do custo direto.
    - `PER_UNIT`: valor fixo por unidade.
 3. Custos variaveis (%) = impostos + taxa do canal + taxa de pagamento.
-4. Margem desejada sobre venda (%) = lucro alvo sobre o preco final, nao markup sobre custo.
-5. Preco sugerido = (custo direto + rateio + taxa fixa) / (1 - custos variaveis % - margem desejada %).
+4. Lucro desejado (%) = markup sobre o custo base. Pode ser maior que 100%.
+5. Preco sugerido = (custo direto + rateio + taxa fixa) x (1 + lucro %) / (1 - custos variaveis %).
 
 ## Resultado exibido
 - custo direto

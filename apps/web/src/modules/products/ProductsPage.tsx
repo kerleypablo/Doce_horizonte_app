@@ -136,7 +136,6 @@ export const ProductsPage = () => {
   });
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
-  const lastEditedRef = useRef<'profit' | 'unitPrice' | null>(null);
   const [form, setForm] = useState({
     name: '',
     prepTimeMinutes: 0,
@@ -235,7 +234,6 @@ export const ProductsPage = () => {
       setEditingId(null);
       setUnitPriceInput(duplicateDraft ? duplicateUnitPriceInput : 0);
       setSaveError(null);
-      lastEditedRef.current = duplicateDraft ? 'unitPrice' : null;
       setShowForm(true);
       return;
     }
@@ -258,7 +256,6 @@ export const ProductsPage = () => {
       });
       setUnitPriceInput(current.unitPrice ?? 0);
       setSaveError(null);
-      lastEditedRef.current = null;
       setShowForm(true);
       return;
     }
@@ -330,7 +327,6 @@ export const ProductsPage = () => {
 
       resetForm();
       setShowForm(false);
-      lastEditedRef.current = null;
       navigate('/app/produtos');
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Nao foi possivel salvar o produto.');
@@ -714,12 +710,12 @@ export const ProductsPage = () => {
     const variablePercentBase = (settings?.taxesPercent ?? 0) + (channel?.feePercent ?? 0) + (channel?.paymentFeePercent ?? 0);
     const feeFixed = channel?.feeFixed ?? 0;
     const baseCost = totalCost + feeFixed * Math.max(form.unitsCount, 1);
-    const desiredMarginPercent = form.targetProfitPercent + form.extraPercent;
-    const denominator = 1 - (variablePercentBase + desiredMarginPercent) / 100;
+    const desiredMarkupPercent = form.targetProfitPercent + form.extraPercent;
+    const denominator = 1 - variablePercentBase / 100;
     const pricingError = denominator <= 0
-      ? 'A soma da margem, dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
+      ? 'A soma dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
       : '';
-    const totalPrice = pricingError ? 0 : baseCost / denominator;
+    const totalPrice = pricingError ? 0 : (baseCost * (1 + desiredMarkupPercent / 100)) / denominator;
     const unitPrice = pricingError ? 0 : totalPrice / (form.unitsCount || 1);
 
     return {
@@ -736,22 +732,20 @@ export const ProductsPage = () => {
   }, [form, inputs, recipes, products, settings]);
 
   useEffect(() => {
-    if (lastEditedRef.current === 'unitPrice') return;
     setUnitPriceInput(Number(costSummary.unitPrice.toFixed(2)));
   }, [costSummary.unitPrice]);
 
   const handleUnitPriceChange = (value: number) => {
-    lastEditedRef.current = 'unitPrice';
     setUnitPriceInput(value);
 
     const totalPrice = value * (form.unitsCount || 1);
     if (totalPrice <= 0) return;
 
     const netRevenueAfterTaxesAndFees = totalPrice * (1 - costSummary.variablePercentBase / 100);
-    const totalMarginPercent = totalPrice > 0
-      ? ((netRevenueAfterTaxesAndFees - costSummary.baseCost) / totalPrice) * 100
+    const totalMarkupPercent = costSummary.baseCost > 0
+      ? ((netRevenueAfterTaxesAndFees - costSummary.baseCost) / costSummary.baseCost) * 100
       : 0;
-    const profitPercent = totalMarginPercent - form.extraPercent;
+    const profitPercent = totalMarkupPercent - form.extraPercent;
     setForm({ ...form, targetProfitPercent: Number(Math.max(profitPercent, 0).toFixed(2)) });
   };
 
@@ -903,7 +897,6 @@ export const ProductsPage = () => {
                   type="number"
                   value={form.unitsCount === 0 ? '' : form.unitsCount}
                   onChange={(e) => {
-                    lastEditedRef.current = 'profit';
                     setForm({ ...form, unitsCount: Number(e.target.value || 0) });
                   }}
                   min={1}
@@ -919,12 +912,11 @@ export const ProductsPage = () => {
             </div>
             <div className="grid-2 compact-grid">
               <label>
-                % de lucro
+                Lucro sobre o custo (%)
                 <input
                   type="number"
                   value={form.targetProfitPercent === 0 ? '' : form.targetProfitPercent}
                   onChange={(e) => {
-                    lastEditedRef.current = 'profit';
                     setForm({ ...form, targetProfitPercent: Number(e.target.value || 0) });
                   }}
                   min={0}
@@ -936,7 +928,6 @@ export const ProductsPage = () => {
                   type="number"
                   value={form.extraPercent === 0 ? '' : form.extraPercent}
                   onChange={(e) => {
-                    lastEditedRef.current = 'profit';
                     setForm({ ...form, extraPercent: Number(e.target.value || 0) });
                   }}
                   min={0}

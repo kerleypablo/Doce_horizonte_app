@@ -1,6 +1,6 @@
 import type { CompanySettings, Input, Product, Recipe } from '../../db/types.js';
 import { normalizeQuantity } from '../common/units.js';
-import { calcRecipeProductionCost, calcSalePriceFromMargin } from './calc.js';
+import { calcRecipeProductionCost, calcSalePriceFromMarkup } from './calc.js';
 
 export type ProductPricePreview = {
   directCost: number;
@@ -146,24 +146,23 @@ export const calcProductPreview = ({
   const overheadCost = baseOverhead + laborCost + fixedCost;
 
   const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
-  const desiredMarginPercent = targetProfitPercent + extraPercent;
-  const totalMarginPercent = desiredMarginPercent;
-  const denominator = 1 - (variablePercentBase + totalMarginPercent) / 100;
+  const desiredMarkupPercent = targetProfitPercent + extraPercent;
+  const denominator = 1 - variablePercentBase / 100;
   // O produto e precificado por unidade; uma taxa fixa do canal por item
   // precisa ser provisionada para cada unidade produzida.
   const totalFixedFees = feeFixed * safeUnits;
   const baseCost = directCost + overheadCost + totalFixedFees;
   const pricingError = denominator <= 0
-      ? 'A soma da margem, dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
+    ? 'A soma dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
     : undefined;
-  const totalPrice = pricingError ? 0 : calcSalePriceFromMargin(baseCost, variablePercentBase, desiredMarginPercent);
+  const totalPrice = pricingError ? 0 : calcSalePriceFromMarkup(baseCost, variablePercentBase, desiredMarkupPercent);
   const unitPrice = pricingError ? 0 : totalPrice / safeUnits;
   const profitValue = pricingError
     ? 0
     : totalPrice - baseCost - (totalPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
   const profitPercent = pricingError
     ? 0
-    : totalPrice > 0 ? (profitValue / totalPrice) * 100 : 0;
+    : baseCost > 0 ? (profitValue / baseCost) * 100 : 0;
 
   return {
     directCost: round2(directCost),
