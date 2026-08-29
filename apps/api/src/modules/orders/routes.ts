@@ -63,6 +63,23 @@ const orderSchema = z.object({
   payments: z.array(orderPaymentSchema).default([]),
   images: z.array(orderImageSchema).default([]),
   alerts: z.array(z.object({ label: z.string().min(1), enabled: z.boolean().default(false) })).default([])
+}).superRefine((data, context) => {
+  const productsTotal = data.products.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const additionsTotal = data.additions.reduce(
+    (sum, item) => sum + (item.mode === 'FIXED' ? item.value : productsTotal * item.value / 100),
+    0
+  );
+  const subtotalBeforeDiscount = productsTotal + additionsTotal;
+  const discount = data.discountMode === 'PERCENT'
+    ? subtotalBeforeDiscount * data.discountValue / 100
+    : data.discountValue;
+  if (discount > subtotalBeforeDiscount) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['discountValue'],
+      message: 'O desconto nao pode ser maior que o subtotal do pedido.'
+    });
+  }
 });
 
 const startOfDayUtc = () => {
@@ -171,7 +188,8 @@ export const orderRoutes = async (app: FastifyInstance) => {
       const productRow = productsById.get(item.productId);
       if (!productRow) return item;
       const product = mapProduct(productRow, mappedRecipes);
-      const channel = (channels ?? []).find((c) => c.id === product.channelId) ?? (channels ?? [])[0];
+      const activeChannels = (channels ?? []).filter((candidate) => candidate.active !== false);
+      const channel = activeChannels.find((candidate) => candidate.id === product.channelId) ?? activeChannels[0];
       const preview = calcProductPreview({
         unitsCount: product.unitsCount,
         prepTimeMinutes: product.prepTimeMinutes,
@@ -199,11 +217,13 @@ export const orderRoutes = async (app: FastifyInstance) => {
       });
       const estimatedUnitCost = preview.unitCost;
       const estimatedTotalCost = estimatedUnitCost * item.quantity;
-      const estimatedProfitValue = (item.unitPrice * item.quantity) - estimatedTotalCost;
+      const estimatedVariableCost = (item.unitPrice * item.quantity) * (preview.variablePercent / 100);
+      const estimatedProfitValue = (item.unitPrice * item.quantity) - estimatedTotalCost - estimatedVariableCost;
       return {
         ...item,
         estimatedUnitCost,
         estimatedTotalCost,
+        estimatedVariableCost,
         estimatedProfitValue
       };
     });

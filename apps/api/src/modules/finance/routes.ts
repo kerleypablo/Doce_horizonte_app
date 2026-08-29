@@ -249,7 +249,9 @@ const calcOrderTotal = (row: any) => {
 const calcOrderEstimatedProductCost = (row: any) => {
   const products = Array.isArray(row.products) ? row.products : [];
   return products.reduce(
-    (sum: number, item: any) => sum + Number(item?.estimatedTotalCost ?? 0),
+    (sum: number, item: any) => sum
+      + Number(item?.estimatedTotalCost ?? 0)
+      + Number(item?.estimatedVariableCost ?? 0),
     0
   );
 };

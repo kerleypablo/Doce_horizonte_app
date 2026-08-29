@@ -267,6 +267,12 @@ export const companyRoutes = async (app: FastifyInstance) => {
     const laborCostItems = normalizeCostItems(data.laborCostItems);
     const fixedCostItems = normalizeCostItems(data.fixedCostItems);
     const productiveHoursPerMonth = Number(data.productiveHoursPerMonth ?? 0);
+    const activeMonthlyCosts = sumActiveMonthlyCost(laborCostItems) + sumActiveMonthlyCost(fixedCostItems);
+    if (activeMonthlyCosts > 0 && productiveHoursPerMonth <= 0) {
+      return reply.status(400).send({
+        message: 'Informe as horas produtivas mensais para calcular os custos de equipe e estrutura.'
+      });
+    }
     const laborCostPerHour = laborCostItems.length > 0
       ? calcHourlyCost(sumActiveMonthlyCost(laborCostItems), productiveHoursPerMonth)
       : data.laborCostPerHour;

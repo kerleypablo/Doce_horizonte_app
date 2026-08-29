@@ -249,6 +249,12 @@ export const CompanySettingsPage = () => {
 
   const handleSave = async () => {
     if (!settings) return;
+    const activeMonthlyCosts = [...settings.laborCostItems, ...settings.fixedCostItems]
+      .reduce((sum, item) => sum + (item.active ? Number(item.monthlyAmount || 0) : 0), 0);
+    if (activeMonthlyCosts > 0 && Number(settings.productiveHoursPerMonth || 0) <= 0) {
+      setSubmitError('Informe as horas produtivas mensais para calcular os custos de equipe e estrutura.');
+      return;
+    }
     setSaving(true);
     setSubmitError(null);
     try {

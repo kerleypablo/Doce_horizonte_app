@@ -9,6 +9,7 @@ export type PricePreview = {
   suggestedPrice: number;
   profitValue: number;
   profitPercent: number;
+  pricingError?: string;
 };
 
 export type ProfitFromPrice = {
@@ -22,6 +23,24 @@ export type ProfitFromPrice = {
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
+
+export const calcSalePriceFromMargin = (
+  baseCost: number,
+  variablePercent: number,
+  marginPercent: number
+) => {
+  const denominator = 1 - (variablePercent + marginPercent) / 100;
+  return denominator > 0 ? baseCost / denominator : 0;
+};
+
+export const calcMarginFromSalePrice = (
+  salePrice: number,
+  baseCost: number,
+  variablePercent: number
+) => {
+  if (salePrice <= 0) return 0;
+  return ((salePrice - baseCost - salePrice * (variablePercent / 100)) / salePrice) * 100;
+};
 
 export const calcRecipeDirectCost = (
   recipe: Recipe,
@@ -51,6 +70,37 @@ export const calcRecipeDirectCost = (
 
   visited.delete(recipe.id);
   return inputsCost + subRecipesCost;
+};
+
+export const calcRecipeProductionCost = (
+  recipe: Recipe,
+  inputs: Input[],
+  recipes: Recipe[],
+  settings: CompanySettings,
+  visited: Set<string> = new Set()
+): number => {
+  if (visited.has(recipe.id)) return 0;
+  visited.add(recipe.id);
+
+  const inputsCost = recipe.ingredients.reduce((sum, ingredient) => {
+    const input = inputs.find((item) => item.id === ingredient.inputId);
+    if (!input || input.packageSize <= 0) return sum;
+    const normalizedQty = normalizeQuantity(ingredient.quantity, ingredient.unit, input.unit);
+    return sum + (input.packagePrice / input.packageSize) * normalizedQty;
+  }, 0);
+
+  const subRecipesCost = recipe.subRecipes.reduce((sum, item) => {
+    const sub = recipes.find((candidate) => candidate.id === item.recipeId);
+    if (!sub || sub.yield <= 0) return sum;
+    return sum + (calcRecipeProductionCost(sub, inputs, recipes, settings, visited) / sub.yield) * item.quantity;
+  }, 0);
+
+  visited.delete(recipe.id);
+  const hours = Math.max(recipe.prepTimeMinutes ?? 0, 0) / 60;
+  return inputsCost
+    + subRecipesCost
+    + settings.laborCostPerHour * hours
+    + settings.fixedCostPerHour * hours;
 };
 
 export const calcPricePreview = ({
@@ -83,9 +133,10 @@ export const calcPricePreview = ({
 
   const variablePercentBase = settings.taxesPercent + feePercent + paymentFeePercent;
   const baseCost = directCost + overheadCost + feeFixed;
-  const denominator = Math.max(1 - variablePercentBase / 100, 0.001);
-  const markupMultiplier = 1 + profitPercent / 100;
-  const suggestedPrice = (baseCost * markupMultiplier) / denominator;
+  const pricingError = variablePercentBase + profitPercent >= 100
+    ? 'A soma da margem, dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
+    : undefined;
+  const suggestedPrice = pricingError ? 0 : calcSalePriceFromMargin(baseCost, variablePercentBase, profitPercent);
   const profitValue = suggestedPrice - baseCost - (suggestedPrice * (settings.taxesPercent + feePercent + paymentFeePercent) / 100);
 
   return {
@@ -95,7 +146,8 @@ export const calcPricePreview = ({
     feeFixed: round2(feeFixed),
     suggestedPrice: round2(suggestedPrice),
     profitValue: round2(profitValue),
-    profitPercent: round2(profitPercent)
+    profitPercent: round2(profitPercent),
+    pricingError
   };
 };
 
@@ -128,10 +180,11 @@ export const calcProfitFromPrice = ({
   const overheadCost = baseOverhead + laborCost + fixedCost;
 
   const variablePercent = settings.taxesPercent + feePercent + paymentFeePercent;
+  const fixedBaseCost = directCost + overheadCost + feeFixed;
   const variableCost = salePrice * (variablePercent / 100);
-  const baseCost = directCost + overheadCost + feeFixed + variableCost;
+  const baseCost = fixedBaseCost + variableCost;
   const profitValue = salePrice - baseCost;
-  const profitPercent = baseCost > 0 ? (profitValue / baseCost) * 100 : 0;
+  const profitPercent = calcMarginFromSalePrice(salePrice, fixedBaseCost, variablePercent);
 
   return {
     directCost: round2(directCost),

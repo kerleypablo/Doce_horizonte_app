@@ -55,6 +55,7 @@ type Settings = {
   laborCostPerHour: number;
   fixedCostPerHour: number;
   taxesPercent: number;
+  defaultProfitPercent: number;
   salesChannels: {
     id: string;
     name: string;
@@ -126,7 +127,7 @@ export const ProductsPage = () => {
     notes: '',
     channelId: '',
     unitsCount: 1,
-    targetProfitPercent: 0,
+    targetProfitPercent: settings?.defaultProfitPercent ?? 0,
     extraPercent: 0,
     manualUnitPrice: 0,
     extraRecipes: [] as { recipeId: string; quantity: number }[],
@@ -158,7 +159,7 @@ export const ProductsPage = () => {
     targetProfitPercent: 0,
     extraPercent: 0,
     unitPrice: 0,
-    channelId: settings?.salesChannels[0]?.id ?? '',
+    channelId: settings?.salesChannels.find((channel) => channel.active)?.id ?? '',
     extraRecipes: [],
     extraProducts: [],
     packagingInputs: []
@@ -194,8 +195,16 @@ export const ProductsPage = () => {
   }, [productsQuery.data]);
 
   useEffect(() => {
-    if (!settingsQuery.data) return;
-    setSettings(settingsQuery.data);
+    const loadedSettings = settingsQuery.data;
+    if (!loadedSettings) return;
+    setSettings(loadedSettings);
+    if (isCreateView && !duplicateDraft) {
+      setForm((current) => ({
+        ...current,
+        targetProfitPercent: current.targetProfitPercent || loadedSettings.defaultProfitPercent || 0,
+        channelId: current.channelId || loadedSettings.salesChannels.find((channel) => channel.active)?.id || ''
+      }));
+    }
   }, [settingsQuery.data]);
 
   useEffect(() => {
@@ -397,9 +406,9 @@ export const ProductsPage = () => {
         name: '',
         prepTimeMinutes: 0,
         notes: '',
-        channelId: form.channelId || settings?.salesChannels[0]?.id || '',
+        channelId: form.channelId || settings?.salesChannels.find((channel) => channel.active)?.id || '',
         unitsCount: 1,
-        targetProfitPercent: 0,
+        targetProfitPercent: settings?.defaultProfitPercent ?? 0,
         extraPercent: 0,
         manualUnitPrice: 0,
         extraRecipes: [],
@@ -592,7 +601,7 @@ export const ProductsPage = () => {
       return quantity;
     };
 
-    const calcRecipeCost = (recipe: RecipeItem, visited = new Set<string>()) => {
+    const calcRecipeCost = (recipe: RecipeItem, visited = new Set<string>()): number => {
       if (visited.has(recipe.id)) return 0;
       visited.add(recipe.id);
 
@@ -604,7 +613,7 @@ export const ProductsPage = () => {
         return sum + unitCost * normalized;
       }, 0);
 
-      const subCost = recipe.subRecipes.reduce((sum, item) => {
+      const subCost = recipe.subRecipes.reduce((sum: number, item): number => {
         const sub = recipesMap.get(item.recipeId);
         if (!sub || sub.yield <= 0) return sum;
         const total = calcRecipeCost(sub, visited);
@@ -612,7 +621,11 @@ export const ProductsPage = () => {
       }, 0);
 
       visited.delete(recipe.id);
-      return ingredientsCost + subCost;
+      const hours = Math.max(recipe.prepTimeMinutes ?? 0, 0) / 60;
+      return ingredientsCost
+        + subCost
+        + (settings?.laborCostPerHour ?? 0) * hours
+        + (settings?.fixedCostPerHour ?? 0) * hours;
     };
 
     const calcRecipePortionCost = (recipe: RecipeItem, quantity: number) => {
@@ -633,8 +646,11 @@ export const ProductsPage = () => {
         const child = productsMap.get(item.productId);
         if (!child) return sum;
         const direct = calcProductDirectCost(child, visited);
-        const fallback = child.unitPrice > 0 ? child.unitPrice : child.salePrice;
-        return sum + (direct > 0 ? direct : fallback) * item.quantity;
+        const fallback = child.unitPrice > 0
+          ? child.unitPrice
+          : child.salePrice / Math.max(child.unitsCount, 1);
+        const compositionUnitCost = direct > 0 ? direct / Math.max(child.unitsCount, 1) : fallback;
+        return sum + compositionUnitCost * item.quantity;
       }, 0);
 
       const packagingCost = product.packagingInputs.reduce((sum, item) => {
@@ -646,7 +662,16 @@ export const ProductsPage = () => {
       }, 0);
 
       visited.delete(product.id);
-      return recipesCost + productsCost + packagingCost;
+      const directCost = recipesCost + productsCost + packagingCost;
+      const safeUnits = Math.max(product.unitsCount, 1);
+      const overhead = settings?.overheadMethod === 'PERCENT_DIRECT'
+        ? directCost * ((settings?.overheadPercent ?? 0) / 100)
+        : (settings?.overheadPerUnit ?? 0) * safeUnits;
+      const hours = Math.max(product.prepTimeMinutes ?? 0, 0) / 60;
+      return directCost
+        + overhead
+        + (settings?.laborCostPerHour ?? 0) * hours
+        + (settings?.fixedCostPerHour ?? 0) * hours;
     };
 
     const extraRecipesCost = form.extraRecipes.reduce((sum, item) => {
@@ -658,8 +683,11 @@ export const ProductsPage = () => {
       const product = productsMap.get(item.productId);
       if (!product) return sum;
       const direct = calcProductDirectCost(product);
-      const fallback = product.unitPrice > 0 ? product.unitPrice : product.salePrice;
-      return sum + (direct > 0 ? direct : fallback) * item.quantity;
+      const fallback = product.unitPrice > 0
+        ? product.unitPrice
+        : product.salePrice / Math.max(product.unitsCount, 1);
+      const compositionUnitCost = direct > 0 ? direct / Math.max(product.unitsCount, 1) : fallback;
+      return sum + compositionUnitCost * item.quantity;
     }, 0);
 
     const packagingCost = form.packagingInputs.reduce((sum, item) => {
@@ -681,17 +709,17 @@ export const ProductsPage = () => {
     const fixed = (settings?.fixedCostPerHour ?? 0) * hours;
 
     const totalCost = directCost + baseOverhead + labor + fixed;
-    const channel = settings?.salesChannels.find((c) => c.id === form.channelId);
+    const activeChannels = settings?.salesChannels.filter((candidate) => candidate.active) ?? [];
+    const channel = activeChannels.find((candidate) => candidate.id === form.channelId) ?? activeChannels[0];
     const variablePercentBase = (settings?.taxesPercent ?? 0) + (channel?.feePercent ?? 0) + (channel?.paymentFeePercent ?? 0);
     const feeFixed = channel?.feeFixed ?? 0;
-    const baseCost = totalCost + feeFixed;
-    const desiredMarkupPercent = form.targetProfitPercent + form.extraPercent;
-    const denominator = 1 - variablePercentBase / 100;
+    const baseCost = totalCost + feeFixed * Math.max(form.unitsCount, 1);
+    const desiredMarginPercent = form.targetProfitPercent + form.extraPercent;
+    const denominator = 1 - (variablePercentBase + desiredMarginPercent) / 100;
     const pricingError = denominator <= 0
-      ? 'A soma de impostos e taxas precisa ser menor que 100% para calcular o valor de venda.'
+      ? 'A soma da margem, dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.'
       : '';
-    const markupMultiplier = 1 + desiredMarkupPercent / 100;
-    const totalPrice = pricingError ? 0 : (baseCost * markupMultiplier) / denominator;
+    const totalPrice = pricingError ? 0 : baseCost / denominator;
     const unitPrice = pricingError ? 0 : totalPrice / (form.unitsCount || 1);
 
     return {
@@ -720,10 +748,10 @@ export const ProductsPage = () => {
     if (totalPrice <= 0) return;
 
     const netRevenueAfterTaxesAndFees = totalPrice * (1 - costSummary.variablePercentBase / 100);
-    const totalMarkupPercent = costSummary.baseCost > 0
-      ? ((netRevenueAfterTaxesAndFees - costSummary.baseCost) / costSummary.baseCost) * 100
+    const totalMarginPercent = totalPrice > 0
+      ? ((netRevenueAfterTaxesAndFees - costSummary.baseCost) / totalPrice) * 100
       : 0;
-    const profitPercent = totalMarkupPercent - form.extraPercent;
+    const profitPercent = totalMarginPercent - form.extraPercent;
     setForm({ ...form, targetProfitPercent: Number(Math.max(profitPercent, 0).toFixed(2)) });
   };
 
@@ -861,7 +889,7 @@ export const ProductsPage = () => {
                 <SelectField
                   value={form.channelId}
                   onChange={(value) => setForm({ ...form, channelId: value })}
-                  options={(settings?.salesChannels ?? []).map((channel) => ({
+                  options={(settings?.salesChannels ?? []).filter((channel) => channel.active).map((channel) => ({
                     value: channel.id,
                     label: channel.name
                   }))}
@@ -882,7 +910,7 @@ export const ProductsPage = () => {
                 />
               </label>
               <label>
-                Valor por unidade (calculado)
+                Valor por unidade (calculado ou ajustado)
                 <MoneyInput
                   value={unitPriceInput}
                   onChange={handleUnitPriceChange}
@@ -1053,6 +1081,7 @@ export const ProductsPage = () => {
               <button type="button" className="ghost" onClick={() => openPicker('PACKAGING')}>
                 + Adicionar embalagem
               </button>
+              <small className="muted">A quantidade e o numero de embalagens usadas. O tamanho do pacote serve somente para calcular o custo de cada embalagem.</small>
             </div>
           </div>
 
@@ -1068,7 +1097,7 @@ export const ProductsPage = () => {
                 <strong>R$ {costSummary.fixed.toFixed(2)}</strong>
               </div>
               <div>
-                <span>Valor total de insumos</span>
+                <span>Composicao, receitas e embalagens</span>
                 <strong>R$ {costSummary.inputs.toFixed(2)}</strong>
               </div>
               <div className="summary-total">

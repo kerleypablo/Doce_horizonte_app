@@ -71,7 +71,8 @@ export const pricingRoutes = async (app: FastifyInstance) => {
       .select('*')
       .eq('company_id', auth.companyId);
 
-    const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
+    const activeChannels = (channels ?? []).filter((candidate) => candidate.active !== false);
+    const channel = activeChannels.find((candidate) => candidate.id === data.channelId) ?? activeChannels[0];
 
     const { data: inputs } = await supabaseAdmin
       .from('inputs')
@@ -132,7 +133,8 @@ export const pricingRoutes = async (app: FastifyInstance) => {
       .select('*')
       .eq('company_id', auth.companyId);
 
-    const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
+    const activeChannels = (channels ?? []).filter((candidate) => candidate.active !== false);
+    const channel = activeChannels.find((candidate) => candidate.id === data.channelId) ?? activeChannels[0];
 
     const { data: inputs } = await supabaseAdmin
       .from('inputs')

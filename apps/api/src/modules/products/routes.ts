@@ -126,7 +126,8 @@ export const productRoutes = async (app: FastifyInstance) => {
       .select('*')
       .eq('company_id', auth.companyId);
 
-    const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
+    const activeChannels = (channels ?? []).filter((candidate) => candidate.active !== false);
+    const channel = activeChannels.find((candidate) => candidate.id === data.channelId) ?? activeChannels[0];
     const preview = calcProductPreview({
       unitsCount: data.unitsCount,
       prepTimeMinutes: data.prepTimeMinutes,
@@ -153,11 +154,11 @@ export const productRoutes = async (app: FastifyInstance) => {
       feeFixed: channel?.fee_fixed ?? 0
     });
     const fallbackUnitPrice = Number(data.manualUnitPrice ?? 0);
-    if (preview.pricingError && fallbackUnitPrice <= 0) {
+    if (preview.pricingError) {
       return reply.status(400).send({ message: preview.pricingError });
     }
-    const persistedUnitPrice = preview.unitPrice > 0 ? preview.unitPrice : fallbackUnitPrice;
-    const persistedSalePrice = preview.totalPrice > 0 ? preview.totalPrice : persistedUnitPrice * data.unitsCount;
+    const persistedUnitPrice = fallbackUnitPrice > 0 ? fallbackUnitPrice : preview.unitPrice;
+    const persistedSalePrice = persistedUnitPrice * data.unitsCount;
 
     const { data: created, error } = await supabaseAdmin
       .from('products')
@@ -218,7 +219,8 @@ export const productRoutes = async (app: FastifyInstance) => {
       .select('*')
       .eq('company_id', auth.companyId);
 
-    const channel = (channels ?? []).find((c) => c.id === data.channelId) ?? (channels ?? [])[0];
+    const activeChannels = (channels ?? []).filter((candidate) => candidate.active !== false);
+    const channel = activeChannels.find((candidate) => candidate.id === data.channelId) ?? activeChannels[0];
     const preview = calcProductPreview({
       unitsCount: data.unitsCount,
       prepTimeMinutes: data.prepTimeMinutes,
@@ -245,11 +247,11 @@ export const productRoutes = async (app: FastifyInstance) => {
       feeFixed: channel?.fee_fixed ?? 0
     });
     const fallbackUnitPrice = Number(data.manualUnitPrice ?? 0);
-    if (preview.pricingError && fallbackUnitPrice <= 0) {
+    if (preview.pricingError) {
       return reply.status(400).send({ message: preview.pricingError });
     }
-    const persistedUnitPrice = preview.unitPrice > 0 ? preview.unitPrice : fallbackUnitPrice;
-    const persistedSalePrice = preview.totalPrice > 0 ? preview.totalPrice : persistedUnitPrice * data.unitsCount;
+    const persistedUnitPrice = fallbackUnitPrice > 0 ? fallbackUnitPrice : preview.unitPrice;
+    const persistedSalePrice = persistedUnitPrice * data.unitsCount;
 
     const { data: updated, error } = await supabaseAdmin
       .from('products')
