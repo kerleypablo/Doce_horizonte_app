@@ -311,9 +311,14 @@ export const companyRoutes = async (app: FastifyInstance) => {
     if (settingsError) {
       const hasItemizedCosts = laborCostItems.length > 0 || fixedCostItems.length > 0;
       if (hasItemizedCosts) {
+        request.log.error({
+          error: settingsError,
+          companyId: auth.companyId
+        }, 'Falha ao salvar custos detalhados da empresa');
         return reply.status(400).send({
-          message: 'O banco ainda nao esta preparado para salvar a lista de custos. Aplique a migracao SUPABASE_COST_ITEMS.sql.',
-          detail: settingsError.message
+          message: 'Nao foi possivel salvar a lista de custos.',
+          detail: settingsError.message,
+          hint: 'Execute novamente o arquivo docs/SUPABASE_COST_ITEMS.sql no banco usado pela API.'
         });
       }
       const { error: legacyError } = await supabaseAdmin

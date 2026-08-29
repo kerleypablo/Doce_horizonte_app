@@ -17,7 +17,17 @@ export const apiFetch = async <T>(
   });
 
   if (!response.ok) {
-    const message = await response.text();
+    const responseBody = await response.text();
+    let message = responseBody;
+    try {
+      const parsed = JSON.parse(responseBody) as { message?: unknown; detail?: unknown; hint?: unknown };
+      const summary = typeof parsed.message === 'string' ? parsed.message : '';
+      const detail = typeof parsed.detail === 'string' ? parsed.detail : '';
+      const hint = typeof parsed.hint === 'string' ? parsed.hint : '';
+      message = [summary, detail, hint].filter(Boolean).join(' ');
+    } catch {
+      // Respostas que nao sao JSON continuam sendo exibidas como foram recebidas.
+    }
     if (response.status === 401) {
       localStorage.removeItem(AUTH_STORAGE_KEY);
       if (window.location.pathname !== '/login') {
