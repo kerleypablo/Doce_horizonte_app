@@ -18,7 +18,7 @@ import { OrderPaymentModal } from './OrderPaymentModal.tsx';
 import { OrderCustomerSection } from './OrderCustomerSection.tsx';
 import { OrderCustomerPicker } from './OrderCustomerPicker.tsx';
 import { OrderCustomerModal } from './OrderCustomerModal.tsx';
-import { formatPhoneBR, onlyDigits } from './order-formatters.ts';
+import { onlyDigits } from './order-formatters.ts';
 import { readOrderImages } from './order-images.ts';
 import { OrderNotesSection } from './OrderNotesSection.tsx';
 import { OrderImagesSection } from './OrderImagesSection.tsx';
@@ -32,6 +32,7 @@ import type { OrderFormState } from './order-form.ts';
 import { orderService } from './order-service.ts';
 import { useOrderData } from './useOrderData.ts';
 import { useOrderEditors } from './useOrderEditors.ts';
+import { useOrderPickers } from './useOrderPickers.ts';
 import type {
   CompanySettings,
   CustomerForm,
@@ -90,12 +91,6 @@ export const OrdersPage = () => {
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [tab, setTab] = useState<'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'>('pessoa');
   const [form, setForm] = useState(createOrderForm(orderDefaults));
-  const [showProductPicker, setShowProductPicker] = useState(false);
-  const [productPickerSearch, setProductPickerSearch] = useState('');
-  const [productPickerSelectedIds, setProductPickerSelectedIds] = useState<string[]>([]);
-  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
-  const [customerPickerSearch, setCustomerPickerSearch] = useState('');
-  const [customerPickerSelectedId, setCustomerPickerSelectedId] = useState('');
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [pdfPreviewHtml, setPdfPreviewHtml] = useState<string | null>(null);
   const createRouteInitRef = useRef<string>('');
@@ -115,6 +110,7 @@ export const OrdersPage = () => {
     notes: ''
   });
   const { product: productEditor, payment: paymentEditor, value: valueEditor } = useOrderEditors(form, setForm);
+  const { productPicker, customerPicker } = useOrderPickers({ form, setForm, products, customers });
   const deliveryDateFromQuery = useMemo(() => {
     const value = new URLSearchParams(location.search).get('deliveryDate');
     return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
@@ -315,102 +311,6 @@ export const OrdersPage = () => {
     }
   };
 
-  const openProductPicker = () => {
-    setProductPickerSelectedIds(
-      form.products
-        .map((item) => item.productId)
-        .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
-    );
-    setProductPickerSearch('');
-    setShowProductPicker(true);
-  };
-
-  const openCustomerPicker = () => {
-    setCustomerPickerSelectedId(form.customerId || '');
-    setCustomerPickerSearch('');
-    setShowCustomerPicker(true);
-  };
-  const selectCustomerFromPicker = (customerId: string) => {
-    setCustomerPickerSelectedId(customerId);
-    setForm((prev) => ({ ...prev, customerId: customerId }));
-    setShowCustomerPicker(false);
-  };
-
-  const toggleProductPickerItem = (productId: string, checked: boolean) => {
-    setProductPickerSelectedIds((current) => {
-      if (checked) return current.includes(productId) ? current : [...current, productId];
-      return current.filter((id) => id !== productId);
-    });
-  };
-
-  const applyProductPicker = () => {
-    const existingByProductId = new Map(
-      form.products
-        .filter((item) => item.productId)
-        .map((item) => [item.productId, item] as const)
-    );
-
-    const nextProducts = productPickerSelectedIds
-      .map((productId) => {
-        const selectedProduct = products.find((item) => item.id === productId);
-        if (!selectedProduct) return null;
-        const existing = existingByProductId.get(productId);
-        if (existing) {
-          return {
-            ...existing,
-            name: existing.name || selectedProduct.name,
-            unitPrice: existing.unitPrice || selectedProduct.unitPrice || selectedProduct.salePrice || 0
-          };
-        }
-        return {
-          productId,
-          name: selectedProduct.name,
-          unitPrice: selectedProduct.unitPrice || selectedProduct.salePrice || 0,
-          quantity: 1,
-          notes: ''
-        };
-      })
-      .filter((item): item is { productId: string; name: string; unitPrice: number; quantity: number; notes?: string } => Boolean(item));
-
-    setForm((prev) => ({ ...prev, products: nextProducts }));
-    setShowProductPicker(false);
-  };
-
-  const pickerFilteredProducts = useMemo(() => {
-    const needle = productPickerSearch.trim().toLowerCase();
-    if (!needle) return products;
-    return products.filter((item) => item.name.toLowerCase().includes(needle));
-  }, [products, productPickerSearch]);
-
-  const pickerSelectedProducts = useMemo(
-    () =>
-      productPickerSelectedIds
-        .map((id) => products.find((item) => item.id === id))
-        .filter((item): item is ProductItem => Boolean(item)),
-    [products, productPickerSelectedIds]
-  );
-
-  const pickerUnselectedProducts = useMemo(
-    () => pickerFilteredProducts.filter((item) => !productPickerSelectedIds.includes(item.id)),
-    [pickerFilteredProducts, productPickerSelectedIds]
-  );
-
-  const pickerFilteredCustomers = useMemo(() => {
-    const needle = customerPickerSearch.trim().toLowerCase();
-    if (!needle) return customers;
-    return customers.filter((item) => {
-      const phone = formatPhoneBR(item.phone).toLowerCase();
-      return item.name.toLowerCase().includes(needle) || phone.includes(needle);
-    });
-  }, [customers, customerPickerSearch]);
-
-  const pickerOrderedCustomers = useMemo(() => {
-    if (!customerPickerSelectedId) return pickerFilteredCustomers;
-    const selected = pickerFilteredCustomers.find((item) => item.id === customerPickerSelectedId);
-    if (!selected) return pickerFilteredCustomers;
-    return [selected, ...pickerFilteredCustomers.filter((item) => item.id !== customerPickerSelectedId)];
-  }, [pickerFilteredCustomers, customerPickerSelectedId]);
-
   const {
     editProductIndex, editProductName, editProductUnitPrice, setEditProductName,
     setEditProductUnitPrice, setEditProductIndex, openProductEditModal, applyProductEditModal
@@ -436,7 +336,7 @@ export const OrdersPage = () => {
     const created = await orderService.createCustomer(customerForm, user?.token);
     setCustomers((prev) => [created, ...prev]);
     setForm((prev) => ({ ...prev, customerId: created.id }));
-    setCustomerPickerSelectedId(created.id);
+    customerPicker.setSelectedId(created.id);
     invalidateQueryCache(queryKeys.customers);
     customersQuery.refetch().catch(() => undefined);
     setShowCustomerModal(false);
@@ -577,7 +477,7 @@ export const OrdersPage = () => {
               <OrderCustomerSection
                 order={form}
                 customer={selectedCustomer}
-                onOpenCustomer={openCustomerPicker}
+                onOpenCustomer={customerPicker.show}
                 onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))}
               />
             )}
@@ -586,7 +486,7 @@ export const OrdersPage = () => {
               <>
                 <OrderProductsSection
                   products={form.products}
-                  onAdd={openProductPicker}
+                  onAdd={productPicker.show}
                   onEdit={openProductEditModal}
                   onRemove={(index) => setForm((current) => ({
                     ...current,
@@ -685,18 +585,18 @@ export const OrdersPage = () => {
       {valueModalOpen ? (
         <OrderValueModal type={valueModalType} label={valueModalLabel} mode={valueModalMode} amount={valueModalAmount} onLabelChange={setValueModalLabel} onModeChange={setValueModalMode} onAmountChange={setValueModalAmount} onCancel={() => setValueModalOpen(false)} onSave={saveValueModal} />
       ) : null}
-      {showCustomerPicker ? (
+      {customerPicker.open ? (
         <OrderCustomerPicker
-          customers={pickerOrderedCustomers}
-          selectedId={customerPickerSelectedId}
-          search={customerPickerSearch}
-          onSearch={setCustomerPickerSearch}
-          onSelect={selectCustomerFromPicker}
+          customers={customerPicker.customers}
+          selectedId={customerPicker.selectedId}
+          search={customerPicker.search}
+          onSearch={customerPicker.setSearch}
+          onSelect={customerPicker.select}
           onNew={() => {
-            setShowCustomerPicker(false);
+            customerPicker.close();
             setShowCustomerModal(true);
           }}
-          onClose={() => setShowCustomerPicker(false)}
+          onClose={customerPicker.close}
         />
       ) : null}
 
@@ -714,8 +614,8 @@ export const OrdersPage = () => {
         />
       ) : null}
 
-      {showProductPicker ? (
-        <OrderProductPicker selectedProducts={pickerSelectedProducts} unselectedProducts={pickerUnselectedProducts} selectedIds={productPickerSelectedIds} search={productPickerSearch} onSearch={setProductPickerSearch} onToggle={toggleProductPickerItem} onCancel={() => setShowProductPicker(false)} onSave={applyProductPicker} />
+      {productPicker.open ? (
+        <OrderProductPicker selectedProducts={productPicker.selectedProducts} unselectedProducts={productPicker.unselectedProducts} selectedIds={productPicker.selectedIds} search={productPicker.search} onSearch={productPicker.setSearch} onToggle={productPicker.toggle} onCancel={productPicker.close} onSave={productPicker.apply} />
       ) : null}
       {pdfPreviewHtml ? (
         <div className="tasks-modal-backdrop" role="dialog" aria-modal="true">
