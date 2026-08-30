@@ -6819,3 +6819,83 @@ button.finance-dashboard-action-link {
     flex-shrink: 0;
   }
 }
+
+/* Compact phones and landscape phones: keep actions visible inside the viewport. */
+@media (max-width: 800px) {
+  .orders-board {
+    width: auto;
+    max-width: none;
+  }
+
+  .orders-board-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .orders-new-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .orders-board-card {
+    min-width: 0;
+  }
+
+  .orders-board-card-main,
+  .orders-board-card-heading,
+  .orders-board-card-heading strong,
+  .orders-board-card-side {
+    min-width: 0;
+  }
+
+  .catalog-board-header,
+  .customers-board-header {
+    min-width: 0;
+  }
+
+  .catalog-board-header > div,
+  .customers-board-header > div,
+  .catalog-board-header small,
+  .customers-board-header small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .catalog-board-card {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .catalog-board-card-actions {
+    grid-column: auto;
+    align-self: start;
+  }
+
+  .customers-board-card {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .customers-board-card-actions {
+    grid-column: auto;
+    align-self: start;
+  }
+
+  .customers-board-card-actions .icon-button,
+  .catalog-board-card-actions .icon-button {
+    width: 38px;
+    height: 38px;
+  }
+
+  .dashboard-page {
+    width: auto;
+    max-width: none;
+    margin-right: -14px;
+    margin-left: -14px;
+  }
+
+  .dashboard-hero {
+    border-radius: 0 0 22px 22px;
+  }
+}
