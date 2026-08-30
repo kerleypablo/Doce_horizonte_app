@@ -214,10 +214,11 @@ export const BackofficePage = () => {
   }
 
   return (
-    <div className="page">
-      <div className="panel">
-        <h3>Backoffice</h3>
-        <p className="muted">Visao global de empresas, usuarios e acessos.</p>
+    <div className="page backoffice-page">
+      <header className="backoffice-board-header"><div><span>Administração geral</span><h1>Backoffice</h1><small>Gerencie empresas, planos e permissões de acesso.</small></div><div className="backoffice-board-status"><span className="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span><span>{companies.length} empresas</span></div></header>
+      <div className="panel backoffice-overview-panel">
+        <h3>Visão geral</h3>
+        <p className="muted">Selecione uma empresa para gerenciar plano, usuários e acessos.</p>
         <label>
           Empresa
           <SelectField
