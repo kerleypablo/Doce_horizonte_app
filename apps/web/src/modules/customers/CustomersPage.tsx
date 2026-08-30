@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
-import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
@@ -179,22 +178,20 @@ export const CustomersPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <div className="panel">
-        <ListToolbar
-          title="Clientes cadastrados"
-          searchValue={search}
-          onSearch={setSearch}
-          actionLabel="+"
-          onAction={handleNew}
-        />
+      <section className="customers-board">
+        <header className="customers-board-header">
+          <div><span>Relacionamento</span><h1>Clientes</h1><small>Organize seus contatos e facilite o atendimento.</small></div>
+          <button type="button" className="customers-new-button" onClick={handleNew}><span className="material-symbols-outlined" aria-hidden="true">person_add</span>Novo cliente</button>
+        </header>
+        <div className="customers-board-search"><span className="material-symbols-outlined" aria-hidden="true">search</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente" aria-label="Buscar cliente" />{search ? <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><span className="material-symbols-outlined" aria-hidden="true">close</span></button> : null}</div>
         {customersQuery.loading && customers.length === 0 ? (
           <ListSkeleton />
         ) : (
-          <div className="table">
+          <div className="customers-card-list">
             {filtered.map((customer) => (
               <div
                 key={customer.id}
-                className="list-row"
+                className="customers-board-card"
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate(`/app/clientes/editar/${customer.id}`)}
@@ -205,15 +202,16 @@ export const CustomersPage = () => {
                   }
                 }}
               >
-                <div>
+                <div className="customers-avatar">{customer.name.slice(0, 1).toUpperCase()}</div>
+                <div className="customers-board-card-main">
                   <strong>{customer.name}</strong>
-                  <span className="muted">
+                  <span>
                     {customer.personType} • {formatPhoneBR(customer.phone)}
                     {customer.city ? ` • ${customer.city}` : ''}
                     {customer.neighborhood ? ` • ${customer.neighborhood}` : ''}
                   </span>
                 </div>
-                <div className="inline-right">
+                <div className="customers-board-card-actions">
                   {toWhatsAppUrl(customer.phone) && (
                     <a
                       href={toWhatsAppUrl(customer.phone)}
@@ -244,17 +242,13 @@ export const CustomersPage = () => {
             ))}
           </div>
         )}
-      </div>
+      </section>
       ) : null}
 
       {showForm && (
-        <div className="panel">
-          <div className="panel-title-row">
-            <button type="button" className="icon-button small" onClick={() => navigate('/app/clientes')} aria-label="Voltar">
-              <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
-            </button>
-            <h3>{editingId ? 'Editar cliente' : 'Novo cliente'}</h3>
-          </div>
+        <section className="customer-editor">
+          <header className="customer-editor-hero"><button type="button" className="customer-editor-back" onClick={() => navigate('/app/clientes')} aria-label="Voltar para clientes"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button><div><span>Relacionamento</span><h1>{editingId ? 'Editar cliente' : 'Novo cliente'}</h1><small>Mantenha os dados de contato sempre à mão.</small></div></header>
+          <div className="customer-editor-form">
           <form className="form" onSubmit={handleSubmit}>
             <div className="grid-2">
               <label>
@@ -322,7 +316,8 @@ export const CustomersPage = () => {
               <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar cliente'}</button>
             </div>
           </form>
-        </div>
+          </div>
+        </section>
       )}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
