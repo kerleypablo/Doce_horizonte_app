@@ -810,6 +810,13 @@
 }
 
 @media (max-width: 960px) {
+  main,
+  .content,
+  .page {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   .order-editor {
     margin: -16px -14px 0;
   }
@@ -6797,5 +6804,10 @@ button.finance-dashboard-action-link {
   .order-editor .order-product-row,
   .order-editor .values-config-row {
     overflow-wrap: anywhere;
+  }
+
+  .order-editor .order-product-actions,
+  .order-editor .values-config-actions {
+    flex-shrink: 0;
   }
 }
