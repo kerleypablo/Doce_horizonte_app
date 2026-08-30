@@ -6,6 +6,7 @@ import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { appThemeOptions, normalizeAppTheme } from '../shared/app-theme.ts';
 import type { AppTheme } from '../shared/app-theme.ts';
+import { applyThemePreference, getSavedThemePreference } from '../shared/theme-preferences.ts';
 
 type SalesChannel = {
   id?: string;
@@ -51,20 +52,18 @@ export const SettingsPage = () => {
 
   useEffect(() => {
     if (settingsQuery.data) {
-      const themeOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-theme-override') : null;
-      const darkOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-dark-override') : null;
+      const savedPreference = getSavedThemePreference();
       setSettings({
         ...settingsQuery.data,
-        appTheme: normalizeAppTheme(themeOverride ?? settingsQuery.data.appTheme),
-        darkMode: darkOverride === null ? settingsQuery.data.darkMode : darkOverride === 'true'
+        appTheme: normalizeAppTheme(savedPreference?.appTheme ?? settingsQuery.data.appTheme),
+        darkMode: savedPreference?.darkMode ?? settingsQuery.data.darkMode
       });
     }
   }, [settingsQuery.data]);
 
   useEffect(() => {
     if (!settings) return;
-    document.documentElement.setAttribute('data-theme', settings.appTheme);
-    document.documentElement.setAttribute('data-dark', settings.darkMode ? 'true' : 'false');
+    applyThemePreference(settings);
   }, [settings?.appTheme, settings?.darkMode]);
 
   const handleSave = async () => {
@@ -79,12 +78,7 @@ export const SettingsPage = () => {
       });
       invalidateQueryCache(queryKeys.companySettings);
       await settingsQuery.refetch();
-      document.documentElement.setAttribute('data-theme', settings.appTheme);
-      document.documentElement.setAttribute('data-dark', settings.darkMode ? 'true' : 'false');
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('app-theme-override', settings.appTheme);
-        window.localStorage.setItem('app-dark-override', settings.darkMode ? 'true' : 'false');
-      }
+      applyThemePreference(settings, true);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar configuracoes';
       setSubmitError(message);
@@ -106,8 +100,9 @@ export const SettingsPage = () => {
   if (!settings) return <div className="panel">Carregando...</div>;
 
   return (
-    <div className="page">
-      <div className="panel">
+    <div className="page settings-page">
+      <header className="settings-board-header"><div><span>Preferências</span><h1>Configurações</h1><small>Personalize o visual e os textos usados nos pedidos.</small></div><div className="settings-board-status"><span className="material-symbols-outlined" aria-hidden="true">palette</span><span>Visual do aplicativo</span></div></header>
+      <div className="panel settings-appearance-panel">
         <h3>Aparencia do app</h3>
         <div className="settings-theme-grid">
           {appThemeOptions.map((theme) => (

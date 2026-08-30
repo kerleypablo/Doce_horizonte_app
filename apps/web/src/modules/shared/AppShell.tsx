@@ -5,8 +5,8 @@ import { apiFetch } from './api.ts';
 import { prefetchWithCache, useCachedQuery } from './queryCache.ts';
 import { queryKeys } from './queryKeys.ts';
 import { QuickActionsSheet } from './QuickActionsSheet.tsx';
-import { normalizeAppTheme } from './app-theme.ts';
 import type { AppTheme } from './app-theme.ts';
+import { applyThemePreference, getSavedThemePreference, themeChangeEvent } from './theme-preferences.ts';
 
 const navItems = [
   {
@@ -101,14 +101,23 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   );
 
   useEffect(() => {
-    const root = document.documentElement;
-    const themeOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-theme-override') : null;
-    const darkOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-dark-override') : null;
-    const selectedTheme = normalizeAppTheme(themeOverride || settingsQuery.data?.appTheme);
-    const darkFromApi = settingsQuery.data?.darkMode ? 'true' : 'false';
-    root.setAttribute('data-theme', selectedTheme);
-    root.setAttribute('data-dark', darkOverride ?? darkFromApi);
+    const saved = getSavedThemePreference();
+    applyThemePreference(saved ?? {
+      appTheme: settingsQuery.data?.appTheme,
+      darkMode: settingsQuery.data?.darkMode
+    });
   }, [settingsQuery.data]);
+
+  useEffect(() => {
+    const applyChangedPreference = (event: Event) => {
+      const preference = (event as CustomEvent<{ appTheme: AppTheme; darkMode: boolean }>).detail;
+      if (!preference) return;
+      document.documentElement.setAttribute('data-theme', preference.appTheme);
+      document.documentElement.setAttribute('data-dark', preference.darkMode ? 'true' : 'false');
+    };
+    window.addEventListener(themeChangeEvent, applyChangedPreference);
+    return () => window.removeEventListener(themeChangeEvent, applyChangedPreference);
+  }, []);
 
   useEffect(() => {
     if (!user?.token) return;
