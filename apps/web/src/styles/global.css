@@ -2669,7 +2669,11 @@ textarea {
   overflow-x: auto;
   padding: 2px 0 10px;
   margin-bottom: 10px;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+
+.list-tags-carousel::-webkit-scrollbar {
+  display: none;
 }
 
 .list-tag-filter {
@@ -6794,13 +6798,24 @@ button.finance-dashboard-action-link {
 
 @media (max-width: 960px) {
   .order-editor {
-    width: 100%;
-    max-width: 100%;
-    margin: 0;
-    overflow-x: clip;
+    width: calc(100% + 28px);
+    min-width: 0;
+    max-width: calc(100% + 28px);
+    margin: -16px -14px 0;
+    overflow-x: visible;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  main:has(.order-editor),
+  main:has(.order-editor) .content,
+  .page:has(.order-editor) {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: visible;
   }
 
   .order-editor-content,
+  .order-editor-hero,
+  .order-editor-hero-copy,
   .order-editor-form,
   .order-editor .form-box,
   .order-editor .tabs {
@@ -6824,8 +6839,40 @@ button.finance-dashboard-action-link {
 @media (max-width: 800px) {
   .orders-board {
     width: calc(100% + 28px);
-    max-width: none;
+    min-width: 0;
+    max-width: calc(100% + 28px);
     margin: -16px -14px 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  main:has(.orders-board),
+  main:has(.orders-board) .content,
+  .page:has(.orders-board) {
+    overflow-x: visible;
+  }
+
+  .orders-board > *,
+  .orders-board-header,
+  .orders-board-header > div,
+  .orders-board-search,
+  .orders-board-filters,
+  .orders-filter-chips,
+  .orders-date-groups {
+    min-width: 0;
+  }
+
+  .orders-board-header {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .orders-board-search,
+  .orders-board-filters,
+  .orders-date-groups,
+  .orders-empty-state,
+  .orders-refreshing {
+    width: calc(100% - 28px);
+    max-width: calc(100% - 28px);
   }
 
   .orders-board-header {
@@ -6853,8 +6900,14 @@ button.finance-dashboard-action-link {
   }
 
   .customers-new-button {
+    width: 100%;
     min-height: 60px;
+    justify-content: center;
     font-size: 1rem;
+  }
+
+  .customers-board-header {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .recipes-board-card {
@@ -6877,13 +6930,52 @@ button.finance-dashboard-action-link {
     align-self: start;
   }
 
+  .catalog-board-card {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .catalog-board-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .catalog-board-card-actions {
+    grid-column: auto;
+    align-self: start;
+  }
+
+  .customers-board-card {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .customers-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .customers-board-card-actions {
+    grid-column: auto;
+    align-self: start;
+  }
+
   .dashboard-page {
-    width: calc(100% + 28px);
+    width: 100vw;
     max-width: none;
     margin: -16px -14px 0;
+  }
+
+  /* A Home ocupa as bordas; as outras telas continuam com o corte anti-rolagem horizontal. */
+  main:has(.dashboard-page),
+  main:has(.dashboard-page) .content {
+    overflow-x: visible;
   }
 
   .dashboard-hero {
     border-radius: 0 0 22px 22px;
   }
+
 }
