@@ -15,7 +15,7 @@ import { EntityListPanel } from '../shared/EntityListPanel.tsx';
 import { ClickableListRow } from '../shared/ClickableListRow.tsx';
 import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
 import { FormActions } from '../shared/FormActions.tsx';
-import { calcProductPreview } from '@doce-horizonte/domain';
+import { useProductPricing } from './useProductPricing.ts';
 
 type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'PACKAGING';
 
@@ -582,144 +582,7 @@ export const ProductsPage = () => {
     setPickerOpen(false);
   };
 
-  const costSummary = useMemo(() => {
-    const inputsMap = new Map(inputs.map((input) => [input.id, input]));
-    const recipesMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
-    const productsMap = new Map(products.map((product) => [product.id, product]));
-
-    const normalizeQuantity = (quantity: number, unit: string, target: string) => {
-      if (unit === 'un' || target === 'un') return quantity;
-      const weight = { kg: 1000, g: 1 } as Record<string, number>;
-      const volume = { l: 1000, ml: 1 } as Record<string, number>;
-      const isWeight = unit in weight && target in weight;
-      const isVolume = unit in volume && target in volume;
-      if (isWeight) return (quantity * weight[unit]) / weight[target];
-      if (isVolume) return (quantity * volume[unit]) / volume[target];
-      return quantity;
-    };
-
-    const calcRecipeCost = (recipe: RecipeItem, visited = new Set<string>()): number => {
-      if (visited.has(recipe.id)) return 0;
-      visited.add(recipe.id);
-
-      const ingredientsCost = recipe.ingredients.reduce((sum, item) => {
-        const input = inputsMap.get(item.inputId);
-        if (!input) return sum;
-        const unitCost = input.packagePrice / input.packageSize;
-        const normalized = normalizeQuantity(item.quantity, item.unit, input.unit);
-        return sum + unitCost * normalized;
-      }, 0);
-
-      const subCost = recipe.subRecipes.reduce((sum: number, item): number => {
-        const sub = recipesMap.get(item.recipeId);
-        if (!sub || sub.yield <= 0) return sum;
-        const total = calcRecipeCost(sub, visited);
-        return sum + (total / sub.yield) * item.quantity;
-      }, 0);
-
-      visited.delete(recipe.id);
-      const hours = Math.max(recipe.prepTimeMinutes ?? 0, 0) / 60;
-      return ingredientsCost
-        + subCost
-        + (settings?.laborCostPerHour ?? 0) * hours
-        + (settings?.fixedCostPerHour ?? 0) * hours;
-    };
-
-    const calcRecipePortionCost = (recipe: RecipeItem, quantity: number) => {
-      if (recipe.yield <= 0) return 0;
-      return (calcRecipeCost(recipe) / recipe.yield) * quantity;
-    };
-
-    const calcProductDirectCost = (product: ProductItem, visited = new Set<string>()): number => {
-      if (visited.has(product.id)) return 0;
-      visited.add(product.id);
-
-      const recipesCost = product.extraRecipes.reduce((sum, item) => {
-        const recipe = recipesMap.get(item.recipeId);
-        return recipe ? sum + calcRecipePortionCost(recipe, item.quantity) : sum;
-      }, 0);
-
-      const productsCost = product.extraProducts.reduce((sum, item) => {
-        const child = productsMap.get(item.productId);
-        if (!child) return sum;
-        const direct = calcProductDirectCost(child, visited);
-        const fallback = child.unitPrice > 0
-          ? child.unitPrice
-          : child.salePrice / Math.max(child.unitsCount, 1);
-        const compositionUnitCost = direct > 0 ? direct / Math.max(child.unitsCount, 1) : fallback;
-        return sum + compositionUnitCost * item.quantity;
-      }, 0);
-
-      const packagingCost = product.packagingInputs.reduce((sum, item) => {
-        const input = inputsMap.get(item.inputId);
-        if (!input) return sum;
-        const unitCost = input.packagePrice / input.packageSize;
-        const normalized = normalizeQuantity(item.quantity, item.unit, input.unit);
-        return sum + unitCost * normalized;
-      }, 0);
-
-      visited.delete(product.id);
-      const directCost = recipesCost + productsCost + packagingCost;
-      const safeUnits = Math.max(product.unitsCount, 1);
-      const overhead = settings?.overheadMethod === 'PERCENT_DIRECT'
-        ? directCost * ((settings?.overheadPercent ?? 0) / 100)
-        : (settings?.overheadPerUnit ?? 0) * safeUnits;
-      const hours = Math.max(product.prepTimeMinutes ?? 0, 0) / 60;
-      return directCost
-        + overhead
-        + (settings?.laborCostPerHour ?? 0) * hours
-        + (settings?.fixedCostPerHour ?? 0) * hours;
-    };
-
-    const extraRecipesCost = form.extraRecipes.reduce((sum, item) => {
-      const recipe = recipesMap.get(item.recipeId);
-      return recipe ? sum + calcRecipePortionCost(recipe, item.quantity) : sum;
-    }, 0);
-
-    const extraProductsCost = form.extraProducts.reduce((sum, item) => {
-      const product = productsMap.get(item.productId);
-      if (!product) return sum;
-      const direct = calcProductDirectCost(product);
-      const fallback = product.unitPrice > 0
-        ? product.unitPrice
-        : product.salePrice / Math.max(product.unitsCount, 1);
-      const compositionUnitCost = direct > 0 ? direct / Math.max(product.unitsCount, 1) : fallback;
-      return sum + compositionUnitCost * item.quantity;
-    }, 0);
-
-    const packagingCost = form.packagingInputs.reduce((sum, item) => {
-      const input = inputsMap.get(item.inputId);
-      if (!input) return sum;
-      const unitCost = input.packagePrice / input.packageSize;
-      const normalized = normalizeQuantity(item.quantity, item.unit, input.unit);
-      return sum + unitCost * normalized;
-    }, 0);
-
-    const activeChannels = settings?.salesChannels.filter((candidate) => candidate.active) ?? [];
-    const channel = activeChannels.find((candidate) => candidate.id === form.channelId) ?? activeChannels[0];
-    const preview = calcProductPreview({
-      ...form,
-      settings: settings ?? { overheadMethod: 'PERCENT_DIRECT', overheadPercent: 0, overheadPerUnit: 0, laborCostPerHour: 0, fixedCostPerHour: 0, taxesPercent: 0, defaultProfitPercent: 0, salesChannels: [] },
-      inputs: inputs.map((input) => ({ ...input, companyId: '' })),
-      recipes: recipes.map((recipe) => ({ ...recipe, companyId: '' })),
-      products: products.map((product) => ({ ...product, companyId: '' })),
-      feePercent: channel?.feePercent ?? 0,
-      paymentFeePercent: channel?.paymentFeePercent ?? 0,
-      feeFixed: channel?.feeFixed ?? 0
-    });
-
-    return {
-      labor: (settings?.laborCostPerHour ?? 0) * Math.max(form.prepTimeMinutes, 0) / 60,
-      fixed: (settings?.fixedCostPerHour ?? 0) * Math.max(form.prepTimeMinutes, 0) / 60,
-      inputs: preview.directCost,
-      total: preview.totalCost - (channel?.feeFixed ?? 0) * Math.max(form.unitsCount, 1),
-      baseCost: preview.totalCost,
-      unitPrice: preview.unitPrice,
-      profitPercent: form.targetProfitPercent,
-      variablePercentBase: preview.variablePercent,
-      pricingError: preview.pricingError ?? ''
-    };
-  }, [form, inputs, recipes, products, settings]);
+  const costSummary = useProductPricing({ form, inputs, recipes, products, settings });
 
   useEffect(() => {
     setUnitPriceInput(Number(costSummary.unitPrice.toFixed(2)));

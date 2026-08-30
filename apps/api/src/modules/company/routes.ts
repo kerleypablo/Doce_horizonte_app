@@ -11,7 +11,7 @@ import {
 } from './pagbank-edi.js';
 
 const costItemSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().uuid().optional(),
   name: z.string().min(1),
   monthlyAmount: z.number().min(0),
   active: z.boolean()
