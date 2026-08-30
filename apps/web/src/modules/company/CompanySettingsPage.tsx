@@ -390,7 +390,11 @@ export const CompanySettingsPage = () => {
 
   return (
     <div className="page company-settings-page">
-      <div className="panel">
+      <header className="company-board-header">
+        <div><span>Administração</span><h1>Empresa</h1><small>Configure seus dados, custos, canais de venda e integrações.</small></div>
+        <div className="company-board-status"><span className="material-symbols-outlined" aria-hidden="true">verified</span><span>Configurações da empresa</span></div>
+      </header>
+      <div className="panel company-settings-content">
         <div className="company-settings-tabs" role="tablist" aria-label="Abas da empresa">
           {companyTabs.map((item) => (
             <button
