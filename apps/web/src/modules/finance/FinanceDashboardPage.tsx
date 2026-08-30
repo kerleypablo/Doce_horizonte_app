@@ -1117,6 +1117,23 @@ export const FinanceDashboardPage = () => {
   return (
     <div className="page finance-page finance-dashboard-v2">
       <section className="finance-dashboard-shell">
+        <header className="finance-board-header">
+          <div>
+            <span>Controle do caixa</span>
+            <h1>Financeiro</h1>
+            <small>Acompanhe entradas, despesas e o saldo do seu negócio.</small>
+          </div>
+          <div className="finance-board-actions">
+            <Link to="/app/financeiro/vendas-manuais/novo" className="finance-board-secondary-action">
+              <span className="material-symbols-outlined" aria-hidden="true">add</span>
+              Nova venda
+            </Link>
+            <Link to="/app/financeiro/despesas/novo" className="finance-board-primary-action">
+              <span className="material-symbols-outlined" aria-hidden="true">add</span>
+              Nova despesa
+            </Link>
+          </div>
+        </header>
         <div className="finance-dashboard-tabs finance-dashboard-tabs-primary">
           {financeHomeTabs.map((tab) => (
             <button
