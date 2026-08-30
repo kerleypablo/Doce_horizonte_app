@@ -6752,3 +6752,46 @@ button.finance-dashboard-action-link {
 /* Company settings */
 .company-settings-page { width: min(1100px, 100%); margin: 0 auto; }.company-board-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 22px; padding: 26px; border-radius: var(--radius-lg); color: #fff; background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 155%); box-shadow: 0 16px 32px color-mix(in srgb, var(--primary) 26%, transparent); }.company-board-header > div:first-child > span { color: color-mix(in srgb, #fff 76%, transparent); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }.company-board-header h1 { margin: 3px 0 6px; color: #fff; font-size: clamp(1.7rem, 3vw, 2.2rem); }.company-board-header small { color: color-mix(in srgb, #fff 82%, transparent); }.company-board-status { display: inline-flex; align-items: center; gap: 8px; padding: 11px 14px; border: 1px solid color-mix(in srgb, #fff 32%, transparent); border-radius: 12px; color: #fff; background: color-mix(in srgb, #000 10%, transparent); font-size: .85rem; font-weight: 700; }.company-settings-content { border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); }.company-settings-content .company-settings-tabs { margin: -2px -2px 20px; padding: 7px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface-alt); }.company-settings-content .company-settings-tabs button { border-radius: 10px; }.company-settings-content .company-settings-cost-card { border-radius: 16px; box-shadow: var(--shadow-soft); }.company-settings-content .company-settings-cost-create, .company-settings-content .company-settings-cost-list { border-radius: 12px; }
 @media (max-width: 700px) { .company-board-header { display: grid; align-items: flex-start; padding: 20px; }.company-board-status { width: 100%; justify-content: center; }.company-settings-content { padding: 16px; }.company-settings-content .company-settings-tabs { overflow-x: auto; scrollbar-width: none; }.company-settings-content .company-settings-tabs button { white-space: nowrap; } }
+
+/* Final header contrast and order editor containment */
+.recipes-board-header,
+.recipe-editor-hero,
+.catalog-board-header,
+.catalog-editor-hero,
+.finance-board-header,
+.customers-board-header,
+.customer-editor-hero,
+.company-board-header {
+  background: linear-gradient(135deg, var(--app-header) 0%, var(--app-header-strong) 100%);
+  box-shadow: 0 16px 32px color-mix(in srgb, var(--app-header-strong) 28%, transparent);
+}
+
+.recipes-new-button,
+.recipe-editor-total,
+.catalog-new-button,
+.catalog-editor-total,
+.finance-board-primary-action,
+.customers-new-button { color: var(--app-header); }
+
+@media (max-width: 960px) {
+  .order-editor {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    overflow-x: clip;
+  }
+
+  .order-editor-content,
+  .order-editor-form,
+  .order-editor .form-box,
+  .order-editor .tabs {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .order-editor .form-box,
+  .order-editor .order-product-row,
+  .order-editor .values-config-row {
+    overflow-wrap: anywhere;
+  }
+}
