@@ -1,5 +1,10 @@
 import type { CompanySettings, Input, Recipe } from '../../db/types.js';
-import { normalizeQuantity } from '../common/units.js';
+import {
+  calcMarkupFromSalePrice,
+  calcRecipeProductionCost,
+  calcSalePriceFromMarkup,
+  normalizeQuantity
+} from '@doce-horizonte/domain';
 
 export type PricePreview = {
   directCost: number;
@@ -24,24 +29,7 @@ export type ProfitFromPrice = {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-export const calcSalePriceFromMarkup = (
-  baseCost: number,
-  variablePercent: number,
-  markupPercent: number
-) => {
-  const denominator = 1 - variablePercent / 100;
-  return denominator > 0 ? (baseCost * (1 + markupPercent / 100)) / denominator : 0;
-};
-
-export const calcMarkupFromSalePrice = (
-  salePrice: number,
-  baseCost: number,
-  variablePercent: number
-) => {
-  if (salePrice <= 0 || baseCost <= 0) return 0;
-  const netRevenue = salePrice * (1 - variablePercent / 100);
-  return ((netRevenue - baseCost) / baseCost) * 100;
-};
+export { calcMarkupFromSalePrice, calcSalePriceFromMarkup } from '@doce-horizonte/domain';
 
 export const calcRecipeDirectCost = (
   recipe: Recipe,
@@ -71,37 +59,6 @@ export const calcRecipeDirectCost = (
 
   visited.delete(recipe.id);
   return inputsCost + subRecipesCost;
-};
-
-export const calcRecipeProductionCost = (
-  recipe: Recipe,
-  inputs: Input[],
-  recipes: Recipe[],
-  settings: CompanySettings,
-  visited: Set<string> = new Set()
-): number => {
-  if (visited.has(recipe.id)) return 0;
-  visited.add(recipe.id);
-
-  const inputsCost = recipe.ingredients.reduce((sum, ingredient) => {
-    const input = inputs.find((item) => item.id === ingredient.inputId);
-    if (!input || input.packageSize <= 0) return sum;
-    const normalizedQty = normalizeQuantity(ingredient.quantity, ingredient.unit, input.unit);
-    return sum + (input.packagePrice / input.packageSize) * normalizedQty;
-  }, 0);
-
-  const subRecipesCost = recipe.subRecipes.reduce((sum, item) => {
-    const sub = recipes.find((candidate) => candidate.id === item.recipeId);
-    if (!sub || sub.yield <= 0) return sum;
-    return sum + (calcRecipeProductionCost(sub, inputs, recipes, settings, visited) / sub.yield) * item.quantity;
-  }, 0);
-
-  visited.delete(recipe.id);
-  const hours = Math.max(recipe.prepTimeMinutes ?? 0, 0) / 60;
-  return inputsCost
-    + subRecipesCost
-    + settings.laborCostPerHour * hours
-    + settings.fixedCostPerHour * hours;
 };
 
 export const calcPricePreview = ({
