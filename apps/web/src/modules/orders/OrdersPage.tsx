@@ -3,13 +3,9 @@ import type { CSSProperties } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
-import { formatDateBr, normalizeDateKey, toDateKey } from '../shared/date.ts';
-import { ListToolbar } from '../shared/ListToolbar.tsx';
-import { SelectField } from '../shared/SelectField.tsx';
+import { normalizeDateKey, toDateKey } from '../shared/date.ts';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
-import { ListSkeleton } from '../shared/ListSkeleton.tsx';
-import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { fetchWithCache, invalidateQueryCache, prefetchWithCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { orderTabs } from './order-tabs.ts';
@@ -28,6 +24,10 @@ import { readOrderImages } from './order-images.ts';
 import { OrderNotesSection } from './OrderNotesSection.tsx';
 import { OrderImagesSection } from './OrderImagesSection.tsx';
 import { OrderAlertsSection } from './OrderAlertsSection.tsx';
+import { OrdersListPanel } from './OrdersListPanel.tsx';
+import { OrderProductEditModal } from './OrderProductEditModal.tsx';
+import { OrderValueModal } from './OrderValueModal.tsx';
+import { OrderProductPicker } from './OrderProductPicker.tsx';
 import type {
   CompanySettings,
   CustomerForm,
@@ -40,7 +40,6 @@ import type {
   ValueConfigType
 } from './order-types.ts';
 
-const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 const toDateTimeLocal = (iso?: string) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -57,13 +56,6 @@ const statusLabelMap: Record<OrderStatus, string> = {
 };
 
 const getStatusLabel = (status: OrderStatus) => statusLabelMap[status] ?? status;
-const getStatusClassName = (status: OrderStatus) => {
-  if (status === 'CONFIRMADO') return 'is-confirmado';
-  if (status === 'CANCELADO') return 'is-cancelado';
-  if (status === 'CONCLUIDO') return 'is-concluido';
-  return 'is-aguardando';
-};
-
 const getCurrentWeekRange = () => {
   const today = new Date();
   const day = today.getDay();
@@ -726,102 +718,25 @@ export const OrdersPage = () => {
       return { ...prev, products: next };
     });
   };
-  const statusFilterButtons: Array<{ value: OrderStatusFilter; label: string }> = [
-    { value: 'OPEN', label: 'Em aberto' },
-    { value: 'AGUARDANDO_RETORNO', label: 'Aguardando' },
-    { value: 'CONFIRMADO', label: 'Confirmados' },
-    { value: 'CONCLUIDO', label: 'Concluidos' },
-    { value: 'CANCELADO', label: 'Cancelados' }
-  ];
-
   return (
     <div className="page">
-      {!isFormRoute && (
-      <div className="panel">
-        <ListToolbar
-          title="Pedidos e orcamentos"
-          searchValue={search}
+      {!isFormRoute ? (
+        <OrdersListPanel
+          orders={filtered}
+          search={search}
+          statusFilter={statusFilter}
+          currentWeekOnly={currentWeekOnly}
+          loading={ordersQuery.loading && orders.length === 0}
+          refreshing={ordersQuery.isFetching}
           onSearch={setSearch}
-          actionLabel="+"
-          onAction={handleNew}
+          onNew={handleNew}
+          onStatusFilter={setStatusFilter}
+          onToggleWeek={() => setCurrentWeekOnly((current) => !current)}
+          onOpen={(id) => navigate(`/app/pedidos/${id}`)}
+          onPdf={(id) => void handleGeneratePdf(id)}
+          onDelete={setDeleteTarget}
         />
-        <div className="orders-filters">
-          <div className="orders-status-filters" role="tablist" aria-label="Filtrar pedidos por status">
-            {statusFilterButtons.map((filterOption) => (
-              <button
-                key={filterOption.value}
-                type="button"
-                className={statusFilter === filterOption.value ? 'ghost active' : 'ghost'}
-                onClick={() => setStatusFilter(filterOption.value)}
-                aria-pressed={statusFilter === filterOption.value}
-              >
-                {filterOption.label}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className={currentWeekOnly ? 'ghost active' : 'ghost'}
-            onClick={() => setCurrentWeekOnly((current) => !current)}
-          >
-            Desta semana
-          </button>
-        </div>
-        {ordersQuery.isFetching && !(ordersQuery.loading && orders.length === 0) ? <p className="muted">Atualizando pedidos...</p> : null}
-        {ordersQuery.loading && orders.length === 0 ? (
-          <ListSkeleton />
-        ) : (
-          <div className="table">
-            {filtered.map((order) => (
-              <div
-                key={order.id}
-                className={`list-row order-list-row ${getStatusClassName(order.status)}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/app/pedidos/${order.id}`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    navigate(`/app/pedidos/${order.id}`);
-                  }
-                }}
-              >
-                <div>
-                  <strong>{order.customerSnapshot?.name ?? 'Sem cliente'}</strong>
-                  <span className="muted order-list-status-text">
-                    Entrega: {order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'} • {getStatusLabel(order.status)}
-                  </span>
-                </div>
-                <div className="inline-right">
-                  <button
-                    type="button"
-                    className="icon-button small pdf-action"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleGeneratePdf(order.id);
-                    }}
-                    aria-label="PDF"
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Excluir"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDeleteTarget(order);
-                    }}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      )}
+      ) : null}
 
       {showForm && (
         <div className="panel order-editor">
@@ -947,31 +862,9 @@ export const OrdersPage = () => {
         </div>
       )}
 
-      {editProductIndex !== null && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal">
-            <div className="modal-header">
-              <h4>Editar item do pedido</h4>
-              <p>Essa alteracao vale apenas para este pedido.</p>
-            </div>
-            <div className="form">
-              <label>
-                Nome no pedido
-                <input value={editProductName} onChange={(e) => setEditProductName(e.target.value)} />
-              </label>
-              <label>
-                Valor unitario no pedido
-                <MoneyInput value={editProductUnitPrice} onChange={setEditProductUnitPrice} />
-              </label>
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => setEditProductIndex(null)}>Cancelar</button>
-              <button type="button" onClick={applyProductEditModal}>Salvar item</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {editProductIndex !== null ? (
+        <OrderProductEditModal name={editProductName} unitPrice={editProductUnitPrice} onNameChange={setEditProductName} onPriceChange={setEditProductUnitPrice} onCancel={() => setEditProductIndex(null)} onSave={applyProductEditModal} />
+      ) : null}
       {showCustomerModal ? (
         <OrderCustomerModal
           form={customerForm}
@@ -981,63 +874,9 @@ export const OrdersPage = () => {
         />
       ) : null}
 
-     {valueModalOpen ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal">
-            <div className="modal-header">
-              <div className="modal-icon">
-                <span className="material-symbols-outlined" aria-hidden="true">calculate</span>
-              </div>
-              <div>
-                <h4>{valueModalType === 'ADDITION' ? 'Adicionar valor' : valueModalType === 'DISCOUNT' ? 'Configurar desconto' : 'Configurar frete'}</h4>
-                <p>Defina o tipo e o valor que sera aplicado no pedido.</p>
-              </div>
-            </div>
-            <div className="form">
-              {valueModalType === 'ADDITION' ? (
-                <label>
-                  Nome
-                  <input value={valueModalLabel} onChange={(e) => setValueModalLabel(e.target.value)} />
-                </label>
-              ) : (
-                <label>
-                  Tipo
-                  <input value={valueModalType === 'DISCOUNT' ? 'Desconto' : 'Frete'} disabled />
-                </label>
-              )}
-              <label>
-                Modo
-                <SelectField
-                  value={valueModalType === 'SHIPPING' ? 'FIXED' : valueModalMode}
-                  onChange={(value) => setValueModalMode(value as 'PERCENT' | 'FIXED')}
-                  disabled={valueModalType === 'SHIPPING'}
-                  options={[
-                    { value: 'FIXED', label: 'R$' },
-                    { value: 'PERCENT', label: '%' }
-                  ]}
-                />
-              </label>
-              <label>
-                Valor
-                {valueModalMode === 'FIXED' || valueModalType === 'SHIPPING' ? (
-                  <MoneyInput value={valueModalAmount} onChange={setValueModalAmount} />
-                ) : (
-                  <input
-                    type="number"
-                    value={valueModalAmount === 0 ? '' : valueModalAmount}
-                    onChange={(e) => setValueModalAmount(Number(e.target.value || 0))}
-                  />
-                )}
-              </label>
-            </div>
-            <div className="modal-actions values-modal-actions">
-              <button type="button" className="ghost" onClick={() => setValueModalOpen(false)}>Cancelar</button>
-              <button type="button" onClick={saveValueModal}>Salvar</button>
-            </div>
-          </div>
-        </div>
+      {valueModalOpen ? (
+        <OrderValueModal type={valueModalType} label={valueModalLabel} mode={valueModalMode} amount={valueModalAmount} onLabelChange={setValueModalLabel} onModeChange={setValueModalMode} onAmountChange={setValueModalAmount} onCancel={() => setValueModalOpen(false)} onSave={saveValueModal} />
       ) : null}
-
       {showCustomerPicker ? (
         <OrderCustomerPicker
           customers={pickerOrderedCustomers}
@@ -1068,71 +907,8 @@ export const OrdersPage = () => {
       ) : null}
 
       {showProductPicker ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal product-picker-modal">
-            <div className="product-picker-head">
-              <h4>Selecionar produtos</h4>
-              <div className="product-picker-head-right">
-                <strong className="product-picker-count">{productPickerSelectedIds.length} selecionado(s)</strong>
-                <button type="button" className="icon-button small" onClick={() => setShowProductPicker(false)} aria-label="Fechar">
-                  <span className="material-symbols-outlined" aria-hidden="true">close</span>
-                </button>
-              </div>
-            </div>
-            <input
-              className="product-picker-search"
-              type="search"
-              value={productPickerSearch}
-              onChange={(e) => setProductPickerSearch(e.target.value)}
-              placeholder="Buscar produto..."
-            />
-            <div className="product-picker-list">
-              {pickerSelectedProducts.map((product) => {
-                const checked = productPickerSelectedIds.includes(product.id);
-                return (
-                  <label key={product.id} className="product-picker-row">
-                    <div className="product-picker-main">
-                      <strong>{product.name}</strong>
-                      <span className="muted">{formatCurrency(product.unitPrice || product.salePrice || 0)}</span>
-                    </div>
-                    <input
-                      className="pretty-checkbox"
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => toggleProductPickerItem(product.id, event.target.checked)}
-                    />
-                  </label>
-                );
-              })}
-              {pickerSelectedProducts.length > 0 && pickerUnselectedProducts.length > 0 ? (
-                <div className="product-picker-divider" aria-hidden="true" />
-              ) : null}
-              {pickerUnselectedProducts.map((product) => {
-                const checked = productPickerSelectedIds.includes(product.id);
-                return (
-                  <label key={product.id} className="product-picker-row">
-                    <div className="product-picker-main">
-                      <strong>{product.name}</strong>
-                      <span className="muted">{formatCurrency(product.unitPrice || product.salePrice || 0)}</span>
-                    </div>
-                    <input
-                      className="pretty-checkbox"
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => toggleProductPickerItem(product.id, event.target.checked)}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => setShowProductPicker(false)}>Cancelar</button>
-              <button type="button" onClick={applyProductPicker}>Salvar selecao</button>
-            </div>
-          </div>
-        </div>
+        <OrderProductPicker selectedProducts={pickerSelectedProducts} unselectedProducts={pickerUnselectedProducts} selectedIds={productPickerSelectedIds} search={productPickerSearch} onSearch={setProductPickerSearch} onToggle={toggleProductPickerItem} onCancel={() => setShowProductPicker(false)} onSave={applyProductPicker} />
       ) : null}
-
       {pdfPreviewHtml ? (
         <div className="tasks-modal-backdrop" role="dialog" aria-modal="true">
           <div className="tasks-modal">
