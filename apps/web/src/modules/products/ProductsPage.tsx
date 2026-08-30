@@ -11,10 +11,8 @@ import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
-import { EntityListPanel } from '../shared/EntityListPanel.tsx';
-import { ClickableListRow } from '../shared/ClickableListRow.tsx';
-import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
 import { FormActions } from '../shared/FormActions.tsx';
+import { CatalogListPanel } from '../shared/CatalogListPanel.tsx';
 import { useProductPricing } from './useProductPricing.ts';
 
 type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'PACKAGING';
@@ -622,82 +620,18 @@ export const ProductsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <EntityListPanel
-        title="Produtos cadastrados"
-        searchValue={search}
-        onSearch={setSearch}
-        actionLabel="+"
-        onAction={handleNew}
-        loading={productsQuery.loading}
-        isEmpty={products.length === 0}
-      >
-        <div className="table">
-          {filtered.map((product) => (
-            <ClickableListRow
-              key={product.id}
-              onOpen={() => navigate(`/app/produtos/editar/${product.id}`)}
-              main={(
-                <>
-                  <strong>{product.name}</strong>
-                  <span className="muted">R$ {product.unitPrice?.toFixed(2)} un • R$ {product.salePrice.toFixed(2)}</span>
-                </>
-              )}
-              actions={(
-                <>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Duplicar"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      navigate('/app/produtos/novo', {
-                        state: {
-                          duplicateDraft: {
-                            name: `${product.name} copia`,
-                            prepTimeMinutes: product.prepTimeMinutes ?? 0,
-                            notes: product.notes ?? '',
-                            unitsCount: product.unitsCount ?? 1,
-                            targetProfitPercent: product.targetProfitPercent ?? 0,
-                            extraPercent: product.extraPercent ?? 0,
-                            unitPrice: product.unitPrice ?? 0,
-                            channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '',
-                            extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })),
-                            extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })),
-                            packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item }))
-                          } satisfies ProductFormState,
-                          unitPriceInput: product.unitPrice ?? 0
-                        }
-                      });
-                    }}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Excluir"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDeleteTarget(product);
-                    }}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                  </button>
-                </>
-              )}
-            />
-          ))}
-        </div>
-      </EntityListPanel>
+      <CatalogListPanel title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `${formatCurrency(product.unitPrice ?? 0)} por unidade · venda ${formatCurrency(product.salePrice)}`, badge: `${product.unitsCount || 0} un.` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
       ) : null}
 
       {showForm && (
         <>
-          <EntityEditorPanel
-            backTo="/app/produtos"
-            title={editingId ? 'Editar produto' : 'Novo produto'}
-            onBack={navigate}
-          >
+          <section className="catalog-editor product-editor">
+            <header className="catalog-editor-hero">
+              <button type="button" className="catalog-editor-back" onClick={() => navigate('/app/produtos')} aria-label="Voltar para produtos"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
+              <div className="catalog-editor-hero-copy"><span>Produto para venda</span><h1>{editingId ? 'Editar produto' : 'Novo produto'}</h1><small>Combine receitas e embalagens para chegar ao preço correto.</small></div>
+              <div className="catalog-editor-total"><span>Preço por unidade</span><strong>{formatCurrency(costSummary.unitPrice)}</strong></div>
+            </header>
+            <div className="catalog-editor-form">
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
                 <label>
@@ -726,7 +660,8 @@ export const ProductsPage = () => {
                 submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar produto'}
               />
             </form>
-          </EntityEditorPanel>
+            </div>
+          </section>
 
           <div className="panel">
             <h3>Calculo por unidade</h3>

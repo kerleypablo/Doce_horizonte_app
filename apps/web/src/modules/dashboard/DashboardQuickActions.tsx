@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 const quickActions = [
   { label: 'Novo pedido', icon: 'receipt_long', path: '/app/pedidos/novo' },
   { label: 'Nova receita', icon: 'menu_book', path: '/app/receitas/novo' },
+  { label: 'Novo insumo', icon: 'inventory_2', path: '/app/insumos/novo' },
   { label: 'Clientes', icon: 'groups', path: '/app/clientes' },
   { label: 'Produtos', icon: 'shopping_bag', path: '/app/produtos' }
 ];

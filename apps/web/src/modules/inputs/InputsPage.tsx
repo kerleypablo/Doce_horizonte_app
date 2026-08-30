@@ -8,10 +8,8 @@ import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
-import { EntityListPanel } from '../shared/EntityListPanel.tsx';
-import { ClickableListRow } from '../shared/ClickableListRow.tsx';
-import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
 import { FormActions } from '../shared/FormActions.tsx';
+import { CatalogListPanel } from '../shared/CatalogListPanel.tsx';
 
 export type InputItem = {
   id: string;
@@ -441,15 +439,7 @@ export const InputsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <EntityListPanel
-        title="Insumos cadastrados"
-        searchValue={search}
-        onSearch={setSearch}
-        actionLabel="+"
-        onAction={handleNew}
-        loading={inputsQuery.loading}
-        isEmpty={inputs.length === 0}
-        withTableHead
+      <CatalogListPanel title="Insumos" eyebrow="Estoque e custos" description="Cadastre matérias-primas e embalagens para calcular suas receitas." icon="inventory_2" singularLabel="insumo" actionLabel="Novo insumo" search={search} loading={inputsQuery.loading} items={filtered.map((input) => ({ ...input, subtitle: `${input.category} · ${input.packageSize} ${input.unit} · ${formatCurrency(input.packagePrice)}`, badge: input.brand || undefined }))} onSearch={setSearch} onNew={handleNew} onOpen={(input) => navigate(`/app/insumos/editar/${input.id}`)} onDuplicate={(input) => { const normalized = normalizeInputMeasureForForm(input.unit, input.packageSize); navigate('/app/insumos/novo', { state: { duplicateDraft: { name: `${input.name} copia`, brand: input.brand ?? '', category: input.category, unit: normalized.unit, packageSize: normalized.packageSize, packagePrice: input.packagePrice, notes: input.notes ?? '', tags: [...(input.tags ?? [])] } satisfies InputFormState } }); }} onDelete={askDeleteInput}
         filtersSlot={listTagOptions.length > 0 ? (
           <div className="list-tags-carousel" aria-label="Filtrar por tags">
             {listTagOptions.map((tag) => {
@@ -473,81 +463,17 @@ export const InputsPage = () => {
             })}
           </div>
         ) : null}
-      >
-        <div className="table">
-          <div className="table-head">
-            <span>Nome</span>
-            <span>Categoria</span>
-            <span>Pacote</span>
-            <span>Preco</span>
-          </div>
-          {filtered.map((input) => (
-            <ClickableListRow
-              key={input.id}
-              onOpen={() => navigate(`/app/insumos/editar/${input.id}`)}
-              main={(
-                <>
-                  <strong>{input.name}</strong>
-                  <span className="muted">
-                    {input.category} • {input.packageSize} {input.unit} • R$ {input.packagePrice.toFixed(2)}
-                    {input.tags?.length ? ` • ${input.tags.join(', ')}` : ''}
-                  </span>
-                </>
-              )}
-              actions={(
-                <>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Duplicar"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      navigate('/app/insumos/novo', {
-                        state: {
-                          duplicateDraft: (() => {
-                            const normalized = normalizeInputMeasureForForm(input.unit, input.packageSize);
-                            return {
-                              name: `${input.name} copia`,
-                              brand: input.brand ?? '',
-                              category: input.category,
-                              unit: normalized.unit,
-                              packageSize: normalized.packageSize,
-                              packagePrice: input.packagePrice,
-                              notes: input.notes ?? '',
-                              tags: [...(input.tags ?? [])]
-                            } satisfies InputFormState;
-                          })()
-                        }
-                      });
-                    }}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Excluir"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      askDeleteInput(input);
-                    }}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                  </button>
-                </>
-              )}
-            />
-          ))}
-        </div>
-      </EntityListPanel>
+      />
       ) : null}
 
       {showForm && (
-        <EntityEditorPanel
-          backTo="/app/insumos"
-          title={editingId ? 'Editar insumo' : 'Novo insumo'}
-          onBack={navigate}
-        >
+        <section className="catalog-editor input-editor">
+          <header className="catalog-editor-hero">
+            <button type="button" className="catalog-editor-back" onClick={() => navigate('/app/insumos')} aria-label="Voltar para insumos"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
+            <div className="catalog-editor-hero-copy"><span>Estoque e custos</span><h1>{editingId ? 'Editar insumo' : 'Novo insumo'}</h1><small>Informe o pacote comprado para o custo ser calculado corretamente.</small></div>
+            <div className="catalog-editor-total"><span>Custo por unidade</span><strong>{formatCurrency(form.packageSize > 0 ? form.packagePrice / form.packageSize : 0)}</strong></div>
+          </header>
+          <div className="catalog-editor-form">
           <form className="form" onSubmit={handleSubmit}>
             <div className="grid-2">
               <label>
@@ -682,7 +608,8 @@ export const InputsPage = () => {
               submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar insumo'}
             />
           </form>
-        </EntityEditorPanel>
+          </div>
+        </section>
       )}
 
       <ConfirmDialog

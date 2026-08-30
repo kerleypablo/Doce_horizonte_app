@@ -5,6 +5,7 @@ const actions = [
   { path: '/app/pedidos/novo', label: 'Novo pedido', icon: 'receipt_long' },
   { path: '/app/receitas/novo', label: 'Nova receita', icon: 'menu_book' },
   { path: '/app/produtos/novo', label: 'Novo produto', icon: 'shopping_bag' },
+  { path: '/app/insumos/novo', label: 'Novo insumo', icon: 'inventory_2' },
   { path: '/app/clientes/novo', label: 'Novo cliente', icon: 'person_add' }
 ];
 
