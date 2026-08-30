@@ -24,6 +24,10 @@ import { OrderCustomerSection } from './OrderCustomerSection.tsx';
 import { OrderCustomerPicker } from './OrderCustomerPicker.tsx';
 import { OrderCustomerModal } from './OrderCustomerModal.tsx';
 import { formatPhoneBR, onlyDigits } from './order-formatters.ts';
+import { readOrderImages } from './order-images.ts';
+import { OrderNotesSection } from './OrderNotesSection.tsx';
+import { OrderImagesSection } from './OrderImagesSection.tsx';
+import { OrderAlertsSection } from './OrderAlertsSection.tsx';
 import type {
   CompanySettings,
   CustomerForm,
@@ -153,7 +157,6 @@ export const OrdersPage = () => {
   const createRouteInitRef = useRef<string>('');
   const detailRouteInitRef = useRef<string>('');
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: '',
@@ -557,15 +560,13 @@ export const OrdersPage = () => {
   };
 
   const handleUploadImages = async (files: FileList | null) => {
-    if (!files?.length) return;
-    const readAsDataUrl = (file: File) =>
-      new Promise<{ name: string; dataUrl: string }>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve({ name: file.name, dataUrl: String(reader.result) });
-        reader.readAsDataURL(file);
-      });
-    const uploaded = await Promise.all(Array.from(files).map(readAsDataUrl));
-    setForm((prev) => ({ ...prev, images: [...prev.images, ...uploaded] }));
+    try {
+      const uploaded = await readOrderImages(files);
+      if (!uploaded.length) return;
+      setForm((prev) => ({ ...prev, images: [...prev.images, ...uploaded] }));
+    } catch {
+      setSubmitError('Nao foi possivel ler uma das imagens selecionadas.');
+    }
   };
 
   const handleCreateCustomer = async (event: React.FormEvent) => {
@@ -896,17 +897,13 @@ export const OrdersPage = () => {
             )}
 
             {tab === 'observacoes' && (
-              <div className="panel form-box">
-                <h4>Observacoes</h4>
-                <label>Obs entrega/retirada<textarea value={form.notesDelivery} onChange={(e) => updateFormField('notesDelivery', e.target.value)} rows={3} /></label>
-                <label>Obs gerais<textarea value={form.notesGeneral} onChange={(e) => updateFormField('notesGeneral', e.target.value)} rows={3} /></label>
-                <label>Obs pagamento<textarea value={form.notesPayment} onChange={(e) => updateFormField('notesPayment', e.target.value)} rows={3} /></label>
-                <label>PIX<textarea value={form.pix} onChange={(e) => updateFormField('pix', e.target.value)} rows={2} /></label>
-                <label>Termos<textarea value={form.terms} onChange={(e) => updateFormField('terms', e.target.value)} rows={3} /></label>
-              </div>
+              <OrderNotesSection
+                order={form}
+                onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))}
+              />
             )}
 
-            {tab === 'pagamentos' && (
+           {tab === 'pagamentos' && (
               <OrderPaymentsSection
                 payments={form.payments}
                 totals={totals}
@@ -920,57 +917,25 @@ export const OrdersPage = () => {
             )}
 
             {tab === 'imagens' && (
-              <div className="panel form-box">
-                <h4>Imagens de referencia</h4>
-                <input
-                  ref={imageInputRef}
-                  className="order-image-input-hidden"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleUploadImages(e.target.files)}
-                />
-                <div className="order-image-picker-row">
-                  <button type="button" className="ghost" onClick={() => imageInputRef.current?.click()}>
-                    Selecionar imagens
-                  </button>
-                  <span className="order-image-picker-text">
-                    {form.images.length > 0 ? `${form.images.length} imagem(ns) selecionada(s)` : 'Nenhuma imagem selecionada'}
-                  </span>
-                </div>
-                <div className="image-grid">
-                  {form.images.map((image, index) => (
-                    <div key={`${image.name}-${index}`} className="image-card">
-                      <img src={image.dataUrl} alt={image.name} />
-                      <span>{image.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <OrderImagesSection
+                images={form.images}
+                onSelect={(files) => void handleUploadImages(files)}
+                onRemove={(index) => setForm((current) => ({
+                  ...current,
+                  images: current.images.filter((_, itemIndex) => itemIndex !== index)
+                }))}
+              />
             )}
 
             {tab === 'alertas' && (
-              <div className="panel form-box">
-                <h4>Alertas (modelo)</h4>
-                <div className="form">
-                  {form.alerts.map((alert, index) => (
-                    <label key={`${alert.label}-${index}`} className="inline-right">
-                      <input
-                        type="checkbox"
-                        checked={alert.enabled}
-                        onChange={(e) => {
-                          setForm((prev) => {
-                            const next = [...prev.alerts];
-                            next[index] = { ...next[index], enabled: e.target.checked };
-                            return { ...prev, alerts: next };
-                          });
-                        }}
-                      />
-                      <span>{alert.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <OrderAlertsSection
+                alerts={form.alerts}
+                onToggle={(index, enabled) => setForm((current) => {
+                  const alerts = [...current.alerts];
+                  alerts[index] = { ...alerts[index], enabled };
+                  return { ...current, alerts };
+                })}
+              />
             )}
 
             <div className="actions">
