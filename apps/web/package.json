@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm --workspace @doce-horizonte/domain run build",
     "build": "vite build",
     "preview": "vite preview"
   },
