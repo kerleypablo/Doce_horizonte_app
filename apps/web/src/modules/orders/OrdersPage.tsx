@@ -14,6 +14,10 @@ import { fetchWithCache, invalidateQueryCache, prefetchWithCache, useCachedQuery
 import { queryKeys } from '../shared/queryKeys.ts';
 import { orderTabs } from './order-tabs.ts';
 import { buildOrderPdfHtml } from './order-pdf.ts';
+import { calculateOrderTotals } from './order-totals.ts';
+import { OrderTotalsSummary } from './OrderTotalsSummary.tsx';
+import { OrderValuesSection } from './OrderValuesSection.tsx';
+import { OrderProductsSection } from './OrderProductsSection.tsx';
 import type {
   CompanySettings,
   CustomerItem,
@@ -354,21 +358,7 @@ export const OrdersPage = () => {
   }, [orders, search, statusFilter, currentWeekOnly, currentWeekRange]);
   const activeTabIndex = orderTabs.findIndex((item) => item.key === tab);
 
-  const totals = useMemo(() => {
-    const productsTotal = form.products.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-    const additionsTotal = form.additions.reduce((sum, item) => {
-      if (item.mode === 'FIXED') return sum + item.value;
-      return sum + (productsTotal * item.value) / 100;
-    }, 0);
-    const discountTotal = form.discountMode === 'FIXED'
-      ? form.discountValue
-      : ((productsTotal + additionsTotal) * form.discountValue) / 100;
-    const subtotal = productsTotal + additionsTotal - discountTotal;
-    const total = subtotal + form.shippingValue;
-    const paid = form.payments.reduce((sum, p) => sum + p.amount, 0);
-    const pending = total - paid;
-    return { productsTotal, additionsTotal, discountTotal, subtotal, total, paid, pending };
-  }, [form]);
+  const totals = useMemo(() => calculateOrderTotals(form), [form]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -730,9 +720,6 @@ export const OrdersPage = () => {
     setForm((prev) => ({ ...prev, shippingValue: 0 }));
   };
 
-  const formatValueModeLabel = (mode: 'PERCENT' | 'FIXED') => (mode === 'PERCENT' ? '%' : 'R$');
-  const formatValueAmount = (mode: 'PERCENT' | 'FIXED', amount: number) =>
-    mode === 'PERCENT' ? `${amount}%` : formatCurrency(amount);
   const updateProductQuantity = (index: number, rawValue: string) => {
     setForm((prev) => {
       const next = [...prev.products];
@@ -966,136 +953,38 @@ export const OrdersPage = () => {
 
             {tab === 'produtos' && (
               <>
-                <div className="panel form-box">
-                  <h4>Produtos</h4>
-                  <div className="ingredients">
-                      {form.products.map((item, index) => (
-                        <div key={index} className="order-product-row">
-                          <span className="order-product-label">{item.name || 'Produto sem nome'}</span>
-                          <label className="add-item-qty-field">
-                            <span>Quantidade</span>
-                            <input
-                              className="order-product-qty"
-                              type="number"
-                              min={1}
-                              value={item.quantity > 0 ? item.quantity : ''}
-                              onChange={(e) => updateProductQuantity(index, e.target.value)}
-                              onBlur={() => normalizeProductQuantity(index)}
-                            />
-                          </label>
-                          <div className="order-product-actions">
-                          <button
-                            type="button"
-                            className="icon-button tiny"
-                            aria-label="Editar item do pedido"
-                            onClick={() => openProductEditModal(index)}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button tiny"
-                            aria-label="Remover"
-                            onClick={() => setForm((prev) => ({ ...prev, products: prev.products.filter((_, i) => i !== index) }))}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    <button type="button" className="ghost" onClick={openProductPicker}>+ Adicionar produto</button>
-                  </div>
-                </div>
-
-                <div className="panel form-box">
-                  <h4>Valores</h4>
-                  <div className="values-toolbar">
-                    <button type="button" className="ghost" onClick={() => setShowValueTypeMenu((prev) => !prev)}>+ Adicionar valor</button>
-                    {showValueTypeMenu ? (
-                      <div className="values-type-menu">
-                        <button type="button" onClick={() => openValueModal('SHIPPING')}>Frete</button>
-                        <button type="button" onClick={() => openValueModal('DISCOUNT')}>Desconto</button>
-                        <button type="button" onClick={() => openValueModal('ADDITION')}>Adicionais</button>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="values-config-list">
-                    {form.additions.map((item, index) => (
-                      <div key={`${item.label}-${index}`} className="values-config-row">
-                        <div>
-                          <strong>{item.label}</strong>
-                          <span className="muted">{formatValueAmount(item.mode, item.value)}</span>
-                        </div>
-                        <div className="values-config-actions">
-                          <span className="value-mode-badge">{formatValueModeLabel(item.mode)}</span>
-                          <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openValueModal('ADDITION', index)}>
-                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button tiny"
-                            aria-label="Remover"
-                            onClick={() => setForm((prev) => ({ ...prev, additions: prev.additions.filter((_, i) => i !== index) }))}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {form.discountValue > 0 ? (
-                      <div className="values-config-row">
-                        <div>
-                          <strong>Desconto</strong>
-                          <span className="muted">{formatValueAmount(form.discountMode, form.discountValue)}</span>
-                        </div>
-                        <div className="values-config-actions">
-                          <span className="value-mode-badge">{formatValueModeLabel(form.discountMode)}</span>
-                          <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openValueModal('DISCOUNT')}>
-                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                          </button>
-                          <button type="button" className="icon-button tiny" aria-label="Remover" onClick={removeDiscountValue}>
-                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {form.shippingValue > 0 ? (
-                      <div className="values-config-row">
-                        <div>
-                          <strong>Frete</strong>
-                          <span className="muted">{formatCurrency(form.shippingValue)}</span>
-                        </div>
-                        <div className="values-config-actions">
-                          <span className="value-mode-badge">R$</span>
-                          <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openValueModal('SHIPPING')}>
-                            <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                          </button>
-                          <button type="button" className="icon-button tiny" aria-label="Remover" onClick={removeShippingValue}>
-                            <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {form.additions.length === 0 && form.discountValue <= 0 && form.shippingValue <= 0 ? (
-                      <p className="muted">Nenhum valor adicional configurado.</p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="panel form-box">
-                  <h4>Resumo geral</h4>
-                  <div className="summary">
-                    <div><span>Produtos</span><strong>{formatCurrency(totals.productsTotal)}</strong></div>
-                    {form.additions.length > 0 ? <div><span>Adicionais</span><strong>{formatCurrency(totals.additionsTotal)}</strong></div> : null}
-                    {form.discountValue > 0 ? <div><span>Desconto</span><strong>{formatCurrency(totals.discountTotal)}</strong></div> : null}
-                    {form.shippingValue > 0 ? <div><span>Frete</span><strong>{formatCurrency(form.shippingValue)}</strong></div> : null}
-                    <div className="summary-total"><span>Total pedido</span><strong>{formatCurrency(totals.total)}</strong></div>
-                  </div>
-                </div>
+                <OrderProductsSection
+                  products={form.products}
+                  onAdd={openProductPicker}
+                  onEdit={openProductEditModal}
+                  onRemove={(index) => setForm((current) => ({
+                    ...current,
+                    products: current.products.filter((_, itemIndex) => itemIndex !== index)
+                  }))}
+                  onQuantityChange={updateProductQuantity}
+                  onQuantityBlur={normalizeProductQuantity}
+                />
+                <OrderValuesSection
+                  additions={form.additions}
+                  discountMode={form.discountMode}
+                  discountValue={form.discountValue}
+                  shippingValue={form.shippingValue}
+                  menuOpen={showValueTypeMenu}
+                  onToggleMenu={() => setShowValueTypeMenu((current) => !current)}
+                  onOpenValue={openValueModal}
+                  onRemoveAddition={(index) => setForm((current) => ({
+                    ...current,
+                    additions: current.additions.filter((_, itemIndex) => itemIndex !== index)
+                  }))}
+                  onRemoveDiscount={removeDiscountValue}
+                  onRemoveShipping={removeShippingValue}
+                />
+                <OrderTotalsSummary
+                  totals={totals}
+                  additionsCount={form.additions.length}
+                  discountValue={form.discountValue}
+                  shippingValue={form.shippingValue}
+                />
               </>
             )}
 
