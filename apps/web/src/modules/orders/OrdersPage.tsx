@@ -52,6 +52,7 @@ const statusLabelMap: Record<OrderStatus, string> = {
 };
 
 const getStatusLabel = (status: OrderStatus) => statusLabelMap[status] ?? status;
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const getCurrentWeekRange = () => {
   const today = new Date();
   const day = today.getDay();
@@ -447,32 +448,40 @@ export const OrdersPage = () => {
       ) : null}
 
       {showForm && (
-        <div className="panel order-editor">
-          <div className="panel-title-row">
-            {isFormRoute && (
-              <button type="button" className="icon-button small" onClick={() => navigate('/app/pedidos')} aria-label="Voltar">
-                <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
-              </button>
-            )}
-            <h3>{editingId ? 'Editar pedido/orcamento' : 'Novo pedido/orcamento'}</h3>
-          </div>
-          <div className="tabs order-tabs" style={{ '--order-tab-index': Math.max(activeTabIndex, 0) } as CSSProperties}>
-            <span className="order-tabs-indicator" aria-hidden="true" />
-            {orderTabs.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                title={item.label}
-                className={tab === item.key ? 'tab-icon active' : 'tab-icon'}
-                onClick={() => setTab(item.key)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">{item.icon}</span>
-                <span className="tab-icon-label">{item.label}</span>
-              </button>
-            ))}
-          </div>
+        <div className="order-editor">
+          <header className="order-editor-hero">
+            <button type="button" className="order-editor-back" onClick={() => (isFormRoute ? navigate('/app/pedidos') : setShowForm(false))} aria-label="Voltar para pedidos">
+              <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+            </button>
+            <div className="order-editor-hero-copy">
+              <span>{editingId ? 'Edição de venda' : 'Nova venda'}</span>
+              <h1>{editingId ? 'Editar pedido' : 'Cadastrar pedido'}</h1>
+              <small>Etapa {activeTabIndex + 1} de {orderTabs.length} · {orderTabs[activeTabIndex]?.label}</small>
+            </div>
+            <div className="order-editor-total">
+              <span>Total atual</span>
+              <strong>{formatCurrency(totals.total)}</strong>
+            </div>
+          </header>
 
-          <form className="form" onSubmit={handleSubmit}>
+          <div className="order-editor-content">
+            <div className="tabs order-tabs" style={{ '--order-tab-index': Math.max(activeTabIndex, 0) } as CSSProperties}>
+              <span className="order-tabs-indicator" aria-hidden="true" />
+              {orderTabs.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  title={item.label}
+                  className={tab === item.key ? 'tab-icon active' : 'tab-icon'}
+                  onClick={() => setTab(item.key)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">{item.icon}</span>
+                  <span className="tab-icon-label">{item.label}</span>
+                </button>
+              ))}
+            </div>
+
+          <form className="form order-editor-form" onSubmit={handleSubmit}>
             {tab === 'pessoa' && (
               <OrderCustomerSection
                 order={form}
@@ -561,12 +570,13 @@ export const OrdersPage = () => {
               />
             )}
 
-            <div className="actions">
+            <div className="actions order-editor-actions">
               <button type="button" className="ghost" onClick={() => (isFormRoute ? navigate('/app/pedidos') : setShowForm(false))}>Cancelar</button>
               <button type="submit">{editingId ? 'Salvar alteracoes' : 'Salvar pedido'}</button>
             </div>
             {submitError && <div className="error">{submitError}</div>}
           </form>
+          </div>
         </div>
       )}
 
