@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
-import type { RecipeItem } from '../recipes/RecipesPage.tsx';
+import type { RecipeItem } from '../recipes/recipe-types.ts';
 import { SelectField } from '../shared/SelectField.tsx';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';

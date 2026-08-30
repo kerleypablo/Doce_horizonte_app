@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { calcProductPreview } from '@doce-horizonte/domain';
 import type { InputItem } from '../inputs/InputsPage.tsx';
-import type { RecipeItem } from '../recipes/RecipesPage.tsx';
+import type { RecipeItem } from '../recipes/recipe-types.ts';
 import type { ProductItem, ProductFormState, Settings } from './product-types.ts';
 
 export const useProductPricing = (params: {

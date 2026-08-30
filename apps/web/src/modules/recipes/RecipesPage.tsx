@@ -9,37 +9,11 @@ import { TagInput } from '../shared/TagInput.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
-import { EntityListPanel } from '../shared/EntityListPanel.tsx';
-import { ClickableListRow } from '../shared/ClickableListRow.tsx';
-import { EntityEditorPanel } from '../shared/EntityEditorPanel.tsx';
 import { FormActions } from '../shared/FormActions.tsx';
+import { RecipesListPanel } from './RecipesListPanel.tsx';
+import type { RecipeFormState, RecipeItem } from './recipe-types.ts';
 
-export type RecipeItem = {
-  id: string;
-  name: string;
-  description?: string;
-  prepTimeMinutes: number;
-  yield: number;
-  yieldUnit: 'kg' | 'g' | 'l' | 'ml' | 'un';
-  ingredients: {
-    inputId: string;
-    quantity: number;
-    unit: 'kg' | 'g' | 'l' | 'ml' | 'un';
-  }[];
-  subRecipes: { recipeId: string; quantity: number }[];
-  tags: string[];
-};
-
-type RecipeFormState = {
-  name: string;
-  description: string;
-  prepTimeMinutes: number;
-  yield: number;
-  yieldUnit: RecipeItem['yieldUnit'];
-  ingredients: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
-  subRecipes: { recipeId: string; quantity: number }[];
-  tags: string[];
-};
+export type { RecipeItem } from './recipe-types.ts';
 
 type Settings = {
   overheadMethod: 'PERCENT_DIRECT' | 'PER_UNIT';
@@ -544,82 +518,17 @@ export const RecipesPage = () => {
 
   return (
     <div className="page recipes-page">
-      {!isCreateView && !editingRouteId ? (
-      <EntityListPanel
-        title="Receitas cadastradas"
-        searchValue={search}
-        onSearch={setSearch}
-        actionLabel="+"
-        onAction={handleNew}
-        loading={recipesQuery.loading}
-        isEmpty={recipes.length === 0}
-      >
-        <div className="table">
-          {filtered.map((recipe) => (
-            <ClickableListRow
-              key={recipe.id}
-              onOpen={() => navigate(`/app/receitas/editar/${recipe.id}`)}
-              main={(
-                <>
-                  <strong>{recipe.name}</strong>
-                  <span className="muted">
-                    {recipe.prepTimeMinutes ?? 0} min • Rendimento {recipe.yield} {recipe.yieldUnit}
-                    {recipe.tags?.length ? ` • ${recipe.tags.join(', ')}` : ''}
-                  </span>
-                </>
-              )}
-              actions={(
-                <>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Duplicar"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      navigate('/app/receitas/novo', {
-                        state: {
-                          duplicateDraft: {
-                            name: `${recipe.name} copia`,
-                            description: recipe.description ?? '',
-                            prepTimeMinutes: recipe.prepTimeMinutes ?? 0,
-                            yield: recipe.yield,
-                            yieldUnit: recipe.yieldUnit ?? 'un',
-                            ingredients: (recipe.ingredients ?? []).map((item) => ({ ...item })),
-                            subRecipes: (recipe.subRecipes ?? []).map((item) => ({ ...item })),
-                            tags: [...(recipe.tags ?? [])]
-                          } satisfies RecipeFormState
-                        }
-                      });
-                    }}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label="Excluir"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDeleteTarget(recipe);
-                    }}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                  </button>
-                </>
-              )}
-            />
-          ))}
-        </div>
-      </EntityListPanel>
-      ) : null}
+      {!isCreateView && !editingRouteId ? <RecipesListPanel recipes={filtered} search={search} loading={recipesQuery.loading} onSearch={setSearch} onNew={handleNew} onOpen={(id) => navigate(`/app/receitas/editar/${id}`)} onDuplicate={(recipe) => navigate('/app/receitas/novo', { state: { duplicateDraft: { name: `${recipe.name} copia`, description: recipe.description ?? '', prepTimeMinutes: recipe.prepTimeMinutes ?? 0, yield: recipe.yield, yieldUnit: recipe.yieldUnit ?? 'un', ingredients: (recipe.ingredients ?? []).map((item) => ({ ...item })), subRecipes: (recipe.subRecipes ?? []).map((item) => ({ ...item })), tags: [...(recipe.tags ?? [])] } satisfies RecipeFormState } })} onDelete={setDeleteTarget} /> : null}
 
       {showForm && (
         <>
-          <EntityEditorPanel
-            backTo="/app/receitas"
-            title={editingId ? 'Editar receita' : 'Nova receita'}
-            onBack={navigate}
-          >
+          <section className="recipe-editor">
+            <header className="recipe-editor-hero">
+              <button type="button" className="recipe-editor-back" onClick={() => navigate('/app/receitas')} aria-label="Voltar para receitas"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
+              <div className="recipe-editor-hero-copy"><span>Ficha técnica</span><h1>{editingId ? 'Editar receita' : 'Nova receita'}</h1><small>Defina o rendimento, os insumos e o custo deste preparo.</small></div>
+              <div className="recipe-editor-total"><span>Custo atual</span><strong>{formatCurrency(costSummary.total)}</strong></div>
+            </header>
+            <div className="recipe-editor-form">
             <form className="form" onSubmit={handleSubmit}>
               <div className="grid-2">
                 <label>
@@ -670,7 +579,8 @@ export const RecipesPage = () => {
                 submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar receita'}
               />
             </form>
-          </EntityEditorPanel>
+            </div>
+          </section>
 
           <div className="panel">
             <h3>Insumos</h3>
