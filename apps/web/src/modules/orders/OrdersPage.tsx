@@ -2,11 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
-import { apiFetch } from '../shared/api.ts';
 import { normalizeDateKey, toDateKey } from '../shared/date.ts';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
-import { fetchWithCache, invalidateQueryCache, prefetchWithCache, useCachedQuery } from '../shared/queryCache.ts';
+import { fetchWithCache, invalidateQueryCache, prefetchWithCache } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { orderTabs } from './order-tabs.ts';
 import { buildOrderPdfHtml } from './order-pdf.ts';
@@ -28,6 +27,10 @@ import { OrdersListPanel } from './OrdersListPanel.tsx';
 import { OrderProductEditModal } from './OrderProductEditModal.tsx';
 import { OrderValueModal } from './OrderValueModal.tsx';
 import { OrderProductPicker } from './OrderProductPicker.tsx';
+import { createOrderForm, toDateTimeLocal } from './order-form.ts';
+import type { OrderFormState } from './order-form.ts';
+import { orderService } from './order-service.ts';
+import { useOrderData } from './useOrderData.ts';
 import type {
   CompanySettings,
   CustomerForm,
@@ -40,14 +43,6 @@ import type {
   ValueConfigType
 } from './order-types.ts';
 
-const toDateTimeLocal = (iso?: string) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-const currentDateTimeLocal = () => toDateTimeLocal(new Date().toISOString());
 const statusLabelMap: Record<OrderStatus, string> = {
   AGUARDANDO_RETORNO: 'Aguardando',
   CONCLUIDO: 'Concluido',
@@ -68,34 +63,6 @@ const getCurrentWeekRange = () => {
   end.setHours(23, 59, 59, 999);
   return { start: toDateKey(start), end: toDateKey(end) };
 };
-
-const newOrderForm = (defaults?: CompanySettings) => ({
-  type: 'PEDIDO' as 'PEDIDO' | 'ORCAMENTO',
-  orderDateTime: currentDateTimeLocal(),
-  customerId: '',
-  deliveryAddress: '',
-  deliveryType: 'ENTREGA' as 'ENTREGA' | 'RETIRADA',
-  deliveryDate: '',
-  status: 'AGUARDANDO_RETORNO' as 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO',
-  products: [] as { productId: string; name: string; unitPrice: number; quantity: number; notes?: string }[],
-  additions: [] as { label: string; mode: 'PERCENT' | 'FIXED'; value: number }[],
-  discountMode: 'FIXED' as 'PERCENT' | 'FIXED',
-  discountValue: 0,
-  shippingValue: 0,
-  notesDelivery: defaults?.defaultNotesDelivery ?? '',
-  notesGeneral: defaults?.defaultNotesGeneral ?? '',
-  notesPayment: defaults?.defaultNotesPayment ?? '',
-  pix: '',
-  terms: '',
-  payments: [] as { date: string; amount: number; note?: string }[],
-  images: [] as { name: string; dataUrl: string }[],
-  alerts: [
-    { label: 'Lembrar 3 dias antes da entrega', enabled: false },
-    { label: 'Lembrar 1 dia antes da entrega', enabled: false }
-  ] as { label: string; enabled: boolean }[]
-});
-
-type OrderFormState = ReturnType<typeof newOrderForm>;
 
 export const OrdersPage = () => {
   const { user } = useAuth();
@@ -122,7 +89,7 @@ export const OrdersPage = () => {
   const [orderDefaults, setOrderDefaults] = useState<CompanySettings>({});
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [tab, setTab] = useState<'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'>('pessoa');
-  const [form, setForm] = useState(newOrderForm(orderDefaults));
+  const [form, setForm] = useState(createOrderForm(orderDefaults));
   const [showValueTypeMenu, setShowValueTypeMenu] = useState(false);
   const [valueModalOpen, setValueModalOpen] = useState(false);
   const [valueModalType, setValueModalType] = useState<ValueConfigType>('ADDITION');
@@ -172,31 +139,8 @@ export const OrdersPage = () => {
     return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
   }, [location.state]);
 
-  const ordersQuery = useCachedQuery(
-    queryKeys.orders,
-    () => apiFetch<OrderListItem[]>('/orders?view=list', { token: user?.token }),
-    { staleTime: 60_000, enabled: Boolean(user?.token), refetchInterval: 90_000 }
-  );
-  const detailQuery = useCachedQuery(
-    `order-detail:${orderId ?? ''}`,
-    () => apiFetch<OrderItem>(`/orders/${orderId}`, { token: user?.token }),
-    { staleTime: 60_000, enabled: Boolean(user?.token && isDetailView && orderId) }
-  );
-  const customersQuery = useCachedQuery(
-    queryKeys.customers,
-    () => apiFetch<CustomerItem[]>('/customers', { token: user?.token }),
-    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
-  );
-  const productsQuery = useCachedQuery(
-    queryKeys.products,
-    () => apiFetch<ProductItem[]>('/products', { token: user?.token }),
-    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
-  );
-  const settingsQuery = useCachedQuery(
-    queryKeys.companySettings,
-    () => apiFetch<CompanySettings>('/company/settings', { token: user?.token }),
-    { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
-  );
+  const { ordersQuery, detailQuery, customersQuery, productsQuery, settingsQuery } =
+    useOrderData(user?.token, orderId, isDetailView);
 
   useEffect(() => {
     if (ordersQuery.data) setOrders(ordersQuery.data);
@@ -242,7 +186,7 @@ export const OrdersPage = () => {
   }, [isCreateView, settingsQuery.data]);
 
   const resetForm = () => {
-    setForm(newOrderForm(orderDefaults));
+    setForm(createOrderForm(orderDefaults));
     setEditingId(null);
     setTab('pessoa');
   };
@@ -255,17 +199,17 @@ export const OrdersPage = () => {
     if (user?.token) {
       prefetchWithCache(
         queryKeys.customers,
-        () => apiFetch('/customers', { token: user.token }),
+        () => orderService.customers(user.token),
         { staleTime: 3 * 60_000 }
       );
       prefetchWithCache(
         queryKeys.products,
-        () => apiFetch('/products', { token: user.token }),
+        () => orderService.products(user.token),
         { staleTime: 3 * 60_000 }
       );
       prefetchWithCache(
         queryKeys.companySettings,
-        () => apiFetch('/company/settings', { token: user.token }),
+        () => orderService.settings(user.token),
         { staleTime: 5 * 60_000 }
       );
     }
@@ -277,7 +221,7 @@ export const OrdersPage = () => {
       const initialDeliveryDate = deliveryDateFromQuery || deliveryDateFromState;
       const initKey = `${pathname}|${initialDeliveryDate || ''}`;
       if (createRouteInitRef.current !== initKey) {
-        const next = newOrderForm(latestOrderDefaultsRef.current);
+        const next = createOrderForm(latestOrderDefaultsRef.current);
         if (initialDeliveryDate) next.deliveryDate = initialDeliveryDate;
         setForm(next);
         setEditingId(null);
@@ -305,7 +249,7 @@ export const OrdersPage = () => {
     }
     setEditingId(selectedOrder.id);
     setForm({
-      ...newOrderForm(orderDefaults),
+      ...createOrderForm(orderDefaults),
       ...selectedOrder,
       orderDateTime: toDateTimeLocal(selectedOrder.orderDateTime),
       customerId: selectedOrder.customerId ?? '',
@@ -367,19 +311,7 @@ export const OrdersPage = () => {
           : undefined
       };
 
-      if (editingId) {
-        await apiFetch(`/orders/${editingId}`, {
-          method: 'PUT',
-          token: user?.token,
-          body: JSON.stringify(payload)
-        });
-      } else {
-        await apiFetch('/orders', {
-          method: 'POST',
-          token: user?.token,
-          body: JSON.stringify(payload)
-        });
-      }
+      await orderService.save(editingId, payload, user?.token);
 
       resetForm();
       setShowForm(false);
@@ -563,11 +495,7 @@ export const OrdersPage = () => {
 
   const handleCreateCustomer = async (event: React.FormEvent) => {
     event.preventDefault();
-    const created = await apiFetch<CustomerItem>('/customers', {
-      method: 'POST',
-      token: user?.token,
-      body: JSON.stringify({ ...customerForm, phone: onlyDigits(customerForm.phone) })
-    });
+    const created = await orderService.createCustomer(customerForm, user?.token);
     setCustomers((prev) => [created, ...prev]);
     setForm((prev) => ({ ...prev, customerId: created.id }));
     setCustomerPickerSelectedId(created.id);
@@ -591,7 +519,7 @@ export const OrdersPage = () => {
   const handleGeneratePdf = async (orderIdToPrint: string) => {
     const order = await fetchWithCache<OrderItem>(
       `order-detail:${orderIdToPrint}`,
-      () => apiFetch<OrderItem>(`/orders/${orderIdToPrint}`, { token: user?.token }),
+      () => orderService.detail(orderIdToPrint, user?.token),
       { staleTime: 60_000 }
     );
     setPdfPreviewHtml(buildOrderPdfHtml(order, settingsQuery.data));
@@ -624,10 +552,7 @@ export const OrdersPage = () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await apiFetch(`/orders/${deleteTarget.id}`, {
-        method: 'DELETE',
-        token: user?.token
-      });
+      await orderService.remove(deleteTarget.id, user?.token);
       setOrders((prev) => prev.filter((item) => item.id !== deleteTarget.id));
       invalidateQueryCache(queryKeys.orders);
       invalidateQueryCache(queryKeys.ordersSummaryCalendar);
