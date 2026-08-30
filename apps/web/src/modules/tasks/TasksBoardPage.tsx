@@ -211,6 +211,10 @@ export const TasksBoardPage = () => {
 
   return (
     <div className="page tasks-page">
+      <header className="tasks-board-header">
+        <div><span>Produção</span><h1>Tasks</h1><small>Organize o que precisa ser preparado em cada dia.</small></div>
+        <div className="tasks-board-status"><span className="material-symbols-outlined" aria-hidden="true">checklist</span><span>{orders.length} pedidos no período</span></div>
+      </header>
       <div className="panel tasks-toolbar">
         <div className="tasks-mode-switch">
           <button type="button" className={mode === 'week' ? 'active' : ''} onClick={() => setMode('week')}>Semana</button>

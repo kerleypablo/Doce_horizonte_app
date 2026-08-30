@@ -597,6 +597,10 @@
   }
 }
 
+/* Tasks board */
+.tasks-page { width: min(1280px, 100%); margin: 0 auto; }.tasks-board-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 26px; border-radius: var(--radius-lg); color: #fff; background: linear-gradient(135deg, var(--app-header) 0%, var(--app-header-strong) 100%); box-shadow: 0 16px 32px color-mix(in srgb, var(--app-header-strong) 28%, transparent); }.tasks-board-header > div:first-child > span { color: color-mix(in srgb, #fff 76%, transparent); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }.tasks-board-header h1 { margin: 3px 0 6px; color: #fff; font-size: clamp(1.7rem, 3vw, 2.2rem); }.tasks-board-header small { color: color-mix(in srgb, #fff 82%, transparent); }.tasks-board-status { display: inline-flex; align-items: center; gap: 8px; padding: 11px 14px; border: 1px solid color-mix(in srgb, #fff 32%, transparent); border-radius: 12px; color: #fff; background: color-mix(in srgb, #000 10%, transparent); font-size: .85rem; font-weight: 700; }.tasks-toolbar, .tasks-board-panel { border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); }.tasks-mode-switch { padding: 4px; border-radius: 12px; background: var(--surface-alt); }.tasks-mode-switch button { border-radius: 8px; }.tasks-mode-switch button.active { color: #fff; background: var(--accent); border-color: var(--accent); }.tasks-column { border-radius: 16px; }.tasks-order-card { border-radius: 12px; box-shadow: 0 3px 10px color-mix(in srgb, var(--app-header-strong) 7%, transparent); }
+@media (max-width: 700px) { .tasks-board-header { display: grid; align-items: flex-start; padding: 20px; }.tasks-board-status { width: 100%; justify-content: center; }.tasks-toolbar { align-items: stretch; flex-direction: column; }.tasks-mode-switch, .tasks-period-nav { justify-content: center; }.tasks-kanban { grid-auto-columns: minmax(275px, 82vw); } }
+
 /* Order editor redesign */
 .order-editor {
   overflow: visible;
@@ -3060,7 +3064,7 @@ button:disabled {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
 }
 
 .tasks-toolbar {
