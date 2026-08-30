@@ -69,7 +69,7 @@ export const onboardingRoutes = async (app: FastifyInstance) => {
       company_email: '',
       pix_key: '',
       logo_data_url: '',
-      app_theme: 'caramelo',
+      app_theme: 'vinho',
       dark_mode: false,
       default_notes_delivery: '',
       default_notes_general: '',

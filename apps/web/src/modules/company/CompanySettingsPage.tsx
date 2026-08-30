@@ -8,6 +8,7 @@ import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { PagBankEdiSettingsSection } from './PagBankEdiSettingsSection.tsx';
+import type { AppTheme } from '../shared/app-theme.ts';
 
 type SalesChannel = {
   id?: string;
@@ -38,7 +39,7 @@ type Settings = {
   companyEmail: string;
   pixKey: string;
   logoDataUrl: string;
-  appTheme: 'caramelo' | 'oceano' | 'floresta' | 'branco_pop';
+  appTheme: AppTheme;
   darkMode: boolean;
   defaultNotesDelivery: string;
   defaultNotesGeneral: string;

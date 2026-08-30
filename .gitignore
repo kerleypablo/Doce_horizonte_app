@@ -7,3 +7,4 @@ node_modules
 /apps/*/node_modules
 /apps/*/.env
 /packages/*/dist
+.local-run/

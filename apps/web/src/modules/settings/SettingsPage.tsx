@@ -4,6 +4,8 @@ import { apiFetch } from '../shared/api.ts';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
+import { appThemeOptions, normalizeAppTheme } from '../shared/app-theme.ts';
+import type { AppTheme } from '../shared/app-theme.ts';
 
 type SalesChannel = {
   id?: string;
@@ -21,7 +23,7 @@ type Settings = {
   companyEmail: string;
   pixKey: string;
   logoDataUrl: string;
-  appTheme: 'caramelo' | 'oceano' | 'floresta' | 'branco_pop';
+  appTheme: AppTheme;
   darkMode: boolean;
   defaultNotesDelivery: string;
   defaultNotesGeneral: string;
@@ -35,13 +37,6 @@ type Settings = {
   defaultProfitPercent: number;
   salesChannels: SalesChannel[];
 };
-
-const themeOptions: Array<{ value: Settings['appTheme']; label: string }> = [
-  { value: 'caramelo', label: 'Caramelo' },
-  { value: 'oceano', label: 'Oceano' },
-  { value: 'floresta', label: 'Floresta' },
-  { value: 'branco_pop', label: 'Branco Pop' }
-];
 
 export const SettingsPage = () => {
   const { user } = useAuth();
@@ -60,7 +55,7 @@ export const SettingsPage = () => {
       const darkOverride = typeof window !== 'undefined' ? window.localStorage.getItem('app-dark-override') : null;
       setSettings({
         ...settingsQuery.data,
-        appTheme: (themeOverride as Settings['appTheme'] | null) ?? settingsQuery.data.appTheme,
+        appTheme: normalizeAppTheme(themeOverride ?? settingsQuery.data.appTheme),
         darkMode: darkOverride === null ? settingsQuery.data.darkMode : darkOverride === 'true'
       });
     }
@@ -90,10 +85,6 @@ export const SettingsPage = () => {
         window.localStorage.setItem('app-theme-override', settings.appTheme);
         window.localStorage.setItem('app-dark-override', settings.darkMode ? 'true' : 'false');
       }
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('app-theme-override', settings.appTheme);
-        window.localStorage.setItem('app-dark-override', settings.darkMode ? 'true' : 'false');
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar configuracoes';
       setSubmitError(message);
@@ -119,19 +110,32 @@ export const SettingsPage = () => {
       <div className="panel">
         <h3>Aparencia do app</h3>
         <div className="settings-theme-grid">
-          {themeOptions.map((theme) => (
+          {appThemeOptions.map((theme) => (
             <button
               key={theme.value}
               type="button"
               className={settings.appTheme === theme.value ? 'settings-theme-option active' : 'settings-theme-option'}
               onClick={() => setSettings({ ...settings, appTheme: theme.value })}
+              aria-pressed={settings.appTheme === theme.value}
             >
-              {theme.label}
+              <span className="settings-theme-preview" aria-hidden="true">
+                {theme.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}
+              </span>
+              <span className="settings-theme-copy">
+                <strong>{theme.label}</strong>
+                <small>{theme.description}</small>
+              </span>
+              {settings.appTheme === theme.value ? (
+                <span className="material-symbols-outlined settings-theme-check" aria-hidden="true">check_circle</span>
+              ) : null}
             </button>
           ))}
         </div>
         <label className="settings-switch">
-          <span>Modo escuro</span>
+          <span className="settings-dark-copy">
+            <span className="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+            <span><strong>Modo escuro</strong><small>Reduz o brilho em ambientes com pouca luz</small></span>
+          </span>
           <input
             type="checkbox"
             checked={settings.darkMode}
