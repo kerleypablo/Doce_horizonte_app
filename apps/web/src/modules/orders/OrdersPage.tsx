@@ -18,6 +18,8 @@ import { calculateOrderTotals } from './order-totals.ts';
 import { OrderTotalsSummary } from './OrderTotalsSummary.tsx';
 import { OrderValuesSection } from './OrderValuesSection.tsx';
 import { OrderProductsSection } from './OrderProductsSection.tsx';
+import { OrderPaymentsSection } from './OrderPaymentsSection.tsx';
+import { OrderPaymentModal } from './OrderPaymentModal.tsx';
 import type {
   CompanySettings,
   CustomerItem,
@@ -552,6 +554,7 @@ export const OrdersPage = () => {
   };
 
   const savePaymentModal = () => {
+    if (!paymentModalDate || !Number.isFinite(paymentModalAmount) || paymentModalAmount <= 0) return;
     const nextPayment = {
       date: paymentModalDate,
       amount: paymentModalAmount,
@@ -1000,46 +1003,16 @@ export const OrdersPage = () => {
             )}
 
             {tab === 'pagamentos' && (
-              <div className="panel form-box">
-                <h4>Pagamentos</h4>
-                <div className="summary">
-                  <div><span>Total pedido</span><strong>{formatCurrency(totals.total)}</strong></div>
-                </div>
-                <div className="values-toolbar">
-                  <button type="button" className="ghost" onClick={() => openPaymentModal()}>+ Adicionar pagamento</button>
-                </div>
-                <div className="values-config-list">
-                  {form.payments.map((payment, index) => (
-                    <div key={index} className="values-config-row">
-                      <div>
-                        <strong>Pagamento {index + 1}</strong>
-                        <span className="muted">
-                          {formatDateBr(payment.date)} • {formatCurrency(payment.amount)}
-                          {payment.note ? ` • ${payment.note}` : ''}
-                        </span>
-                      </div>
-                      <div className="values-config-actions">
-                        <button type="button" className="icon-button tiny" aria-label="Editar" onClick={() => openPaymentModal(index)}>
-                          <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button tiny"
-                          aria-label="Remover"
-                          onClick={() => setForm((prev) => ({ ...prev, payments: prev.payments.filter((_, i) => i !== index) }))}
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {form.payments.length === 0 ? <p className="muted">Nenhum pagamento adicionado.</p> : null}
-                </div>
-                <div className="summary payments-summary">
-                  <div><span>Total pago</span><strong>{formatCurrency(totals.paid)}</strong></div>
-                  <div className="summary-total"><span>Falta receber</span><strong>{formatCurrency(totals.pending)}</strong></div>
-                </div>
-              </div>
+              <OrderPaymentsSection
+                payments={form.payments}
+                totals={totals}
+                onAdd={() => openPaymentModal()}
+                onEdit={openPaymentModal}
+                onRemove={(index) => setForm((current) => ({
+                  ...current,
+                  payments: current.payments.filter((_, itemIndex) => itemIndex !== index)
+                }))}
+              />
             )}
 
             {tab === 'imagens' && (
@@ -1273,37 +1246,17 @@ export const OrdersPage = () => {
       ) : null}
 
       {paymentModalOpen ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal">
-            <div className="modal-header">
-              <div className="modal-icon">
-                <span className="material-symbols-outlined" aria-hidden="true">payments</span>
-              </div>
-              <div>
-                <h4>{paymentModalIndex === null ? 'Adicionar pagamento' : 'Editar pagamento'}</h4>
-                <p>Defina os dados do pagamento do pedido.</p>
-              </div>
-            </div>
-            <div className="form">
-              <label>
-                Data
-                <input type="date" value={paymentModalDate} onChange={(e) => setPaymentModalDate(e.target.value)} />
-              </label>
-              <label>
-                Valor
-                <MoneyInput value={paymentModalAmount} onChange={setPaymentModalAmount} />
-              </label>
-              <label>
-                Observacao
-                <input value={paymentModalNote} onChange={(e) => setPaymentModalNote(e.target.value)} />
-              </label>
-            </div>
-            <div className="modal-actions values-modal-actions">
-              <button type="button" className="ghost" onClick={() => setPaymentModalOpen(false)}>Cancelar</button>
-              <button type="button" onClick={savePaymentModal}>Salvar</button>
-            </div>
-          </div>
-        </div>
+        <OrderPaymentModal
+          editing={paymentModalIndex !== null}
+          date={paymentModalDate}
+          amount={paymentModalAmount}
+          note={paymentModalNote}
+          onDateChange={setPaymentModalDate}
+          onAmountChange={setPaymentModalAmount}
+          onNoteChange={setPaymentModalNote}
+          onCancel={() => setPaymentModalOpen(false)}
+          onSave={savePaymentModal}
+        />
       ) : null}
 
       {showProductPicker ? (
