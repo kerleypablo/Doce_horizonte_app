@@ -12,6 +12,19 @@ export type CustomerItem = {
   notes?: string;
 };
 
+export type CustomerForm = {
+  name: string;
+  phone: string;
+  personType: 'PF' | 'PJ';
+  email: string;
+  address: string;
+  number: string;
+  city: string;
+  neighborhood: string;
+  zipCode: string;
+  notes: string;
+};
+
 export type OrderCustomerSnapshot = Partial<CustomerItem> & {
   deliveryAddress?: string;
 };

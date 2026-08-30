@@ -20,8 +20,13 @@ import { OrderValuesSection } from './OrderValuesSection.tsx';
 import { OrderProductsSection } from './OrderProductsSection.tsx';
 import { OrderPaymentsSection } from './OrderPaymentsSection.tsx';
 import { OrderPaymentModal } from './OrderPaymentModal.tsx';
+import { OrderCustomerSection } from './OrderCustomerSection.tsx';
+import { OrderCustomerPicker } from './OrderCustomerPicker.tsx';
+import { OrderCustomerModal } from './OrderCustomerModal.tsx';
+import { formatPhoneBR, onlyDigits } from './order-formatters.ts';
 import type {
   CompanySettings,
+  CustomerForm,
   CustomerItem,
   OrderItem,
   OrderListItem,
@@ -31,28 +36,7 @@ import type {
   ValueConfigType
 } from './order-types.ts';
 
-const onlyDigits = (value: string) => value.replace(/\D/g, '');
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
-const formatDateTimeBr = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-const formatPhoneBR = (value: string) => {
-  const digits = onlyDigits(value).slice(0, 11);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-};
-
 const toDateTimeLocal = (iso?: string) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -171,7 +155,7 @@ export const OrdersPage = () => {
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
-  const [customerForm, setCustomerForm] = useState({
+  const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: '',
     phone: '',
     personType: 'PF' as 'PF' | 'PJ',
@@ -866,92 +850,12 @@ export const OrdersPage = () => {
 
           <form className="form" onSubmit={handleSubmit}>
             {tab === 'pessoa' && (
-              <>
-                <div className="panel form-box">
-                  <div className="order-box-head">
-                    <h4>Pedido</h4>
-                    <span className="order-date-label">{formatDateTimeBr(form.orderDateTime)}</span>
-                  </div>
-                  <div>
-                    <label>
-                      Tipo
-                      <SelectField
-                        value={form.type}
-                        onChange={(value) => updateFormField('type', value as 'PEDIDO' | 'ORCAMENTO')}
-                        options={[
-                          { value: 'PEDIDO', label: 'Pedido' },
-                          { value: 'ORCAMENTO', label: 'Orcamento' }
-                        ]}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="panel form-box">
-                  <h4>Cliente</h4>
-                  <div className="values-toolbar">
-                    <button type="button" className="ghost" onClick={openCustomerPicker}>
-                      {selectedCustomer ? 'Trocar cliente' : '+ Selecionar cliente'}
-                    </button>
-                  </div>
-                  {selectedCustomer ? (
-                    <div className="values-config-row">
-                      <div>
-                        <strong>{selectedCustomer.name}</strong>
-                        <span className="muted">{formatPhoneBR(selectedCustomer.phone)}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="muted">Nenhum cliente selecionado.</p>
-                  )}
-                </div>
-
-                <div className="panel form-box">
-                  <h4>Entrega</h4>
-                  <div className="grid-2">
-                    <label>
-                      Entrega ou retirada
-                      <SelectField
-                        value={form.deliveryType}
-                        onChange={(value) => updateFormField('deliveryType', value as 'ENTREGA' | 'RETIRADA')}
-                        options={[
-                          { value: 'ENTREGA', label: 'Entrega' },
-                          { value: 'RETIRADA', label: 'Retirada' }
-                        ]}
-                      />
-                    </label>
-                    <label>
-                      Data de entrega
-                      <input type="date" value={form.deliveryDate} onChange={(e) => updateFormField('deliveryDate', e.target.value)} />
-                    </label>
-                  </div>
-                  {form.deliveryType === 'ENTREGA' ? (
-                    <label>
-                      Endereco de entrega
-                      <textarea
-                        value={form.deliveryAddress}
-                        onChange={(e) => updateFormField('deliveryAddress', e.target.value)}
-                        rows={3}
-                        placeholder="Digite o endereco completo da entrega"
-                      />
-                    </label>
-                  ) : null}
-                </div>
-
-                <div className="panel form-box">
-                  <h4>Status</h4>
-                  <SelectField
-                    value={form.status}
-                    onChange={(value) => updateFormField('status', value as 'AGUARDANDO_RETORNO' | 'CONCLUIDO' | 'CONFIRMADO' | 'CANCELADO')}
-                    options={[
-                      { value: 'AGUARDANDO_RETORNO', label: 'Aguardando retorno' },
-                      { value: 'CONFIRMADO', label: 'Confirmado' },
-                      { value: 'CONCLUIDO', label: 'Concluido' },
-                      { value: 'CANCELADO', label: 'Cancelado' }
-                    ]}
-                  />
-                </div>
-              </>
+              <OrderCustomerSection
+                order={form}
+                customer={selectedCustomer}
+                onOpenCustomer={openCustomerPicker}
+                onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))}
+              />
             )}
 
             {tab === 'produtos' && (
@@ -1103,33 +1007,16 @@ export const OrdersPage = () => {
         </div>
       )}
 
-      {showCustomerModal && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal">
-            <div className="modal-header">
-              <h4>Novo cliente</h4>
-              <p>Cadastro rapido sem sair do pedido</p>
-            </div>
-            <form className="form" onSubmit={handleCreateCustomer}>
-              <label>Nome<input value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} required /></label>
-              <label>Telefone<input value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: formatPhoneBR(e.target.value) })} required /></label>
-              <label>Tipo pessoa
-                <SelectField
-                  value={customerForm.personType}
-                  onChange={(value) => setCustomerForm({ ...customerForm, personType: value as 'PF' | 'PJ' })}
-                  options={[{ value: 'PF', label: 'Pessoa fisica' }, { value: 'PJ', label: 'Pessoa juridica' }]}
-                />
-              </label>
-              <div className="modal-actions">
-                <button type="button" className="ghost" onClick={() => setShowCustomerModal(false)}>Cancelar</button>
-                <button type="submit">Salvar cliente</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {showCustomerModal ? (
+        <OrderCustomerModal
+          form={customerForm}
+          onChange={setCustomerForm}
+          onCancel={() => setShowCustomerModal(false)}
+          onSubmit={handleCreateCustomer}
+        />
+      ) : null}
 
-      {valueModalOpen ? (
+     {valueModalOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal">
             <div className="modal-header">
@@ -1187,65 +1074,21 @@ export const OrdersPage = () => {
       ) : null}
 
       {showCustomerPicker ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal product-picker-modal">
-            <div className="product-picker-head">
-              <h4>Selecionar cliente</h4>
-              <div className="product-picker-head-right">
-                <button type="button" className="icon-button small" onClick={() => setShowCustomerPicker(false)} aria-label="Fechar">
-                  <span className="material-symbols-outlined" aria-hidden="true">close</span>
-                </button>
-              </div>
-            </div>
-            <div className="product-picker-search-row customer-picker-search-row">
-              <input
-                className="product-picker-search"
-                type="search"
-                value={customerPickerSearch}
-                onChange={(e) => setCustomerPickerSearch(e.target.value)}
-                placeholder="Buscar cliente..."
-              />
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="Novo cliente"
-                onClick={() => {
-                  setShowCustomerPicker(false);
-                  setShowCustomerModal(true);
-                }}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">person_add</span>
-              </button>
-            </div>
-            <div className="product-picker-list">
-              {pickerOrderedCustomers.map((customer) => {
-                const selected = customer.id === customerPickerSelectedId;
-                return (
-                  <button
-                    key={customer.id}
-                    type="button"
-                    className={selected ? 'product-picker-row customer-picker-row active' : 'product-picker-row customer-picker-row'}
-                    onClick={() => selectCustomerFromPicker(customer.id)}
-                  >
-                    <div className="product-picker-main">
-                      <strong>{customer.name}</strong>
-                      <span className="muted">{formatPhoneBR(customer.phone)}</span>
-                    </div>
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      {selected ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => setShowCustomerPicker(false)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
+        <OrderCustomerPicker
+          customers={pickerOrderedCustomers}
+          selectedId={customerPickerSelectedId}
+          search={customerPickerSearch}
+          onSearch={setCustomerPickerSearch}
+          onSelect={selectCustomerFromPicker}
+          onNew={() => {
+            setShowCustomerPicker(false);
+            setShowCustomerModal(true);
+          }}
+          onClose={() => setShowCustomerPicker(false)}
+        />
       ) : null}
 
-      {paymentModalOpen ? (
+     {paymentModalOpen ? (
         <OrderPaymentModal
           editing={paymentModalIndex !== null}
           date={paymentModalDate}
