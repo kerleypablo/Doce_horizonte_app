@@ -90,7 +90,7 @@ const originCostRulesPayloadSchema = z.object({
 const tagsSchema = z.array(z.string().trim().min(1).max(40)).max(12);
 
 const manualSaleProductSchema = z.object({
-  productId: z.string().min(1),
+  productId: z.string().uuid(),
   name: z.string().min(1),
   unitPrice: z.number().min(0),
   quantity: z.number().positive()
@@ -267,6 +267,8 @@ export const financeRoutes = async (app: FastifyInstance) => {
   const financeGuard = { preHandler: [app.authenticate, app.requireModule('financeiro')] };
   const assertAccountOwnership = (companyId: string, ids: Array<string | undefined>) =>
     assertCompanyOwns({ companyId, table: 'financial_accounts', ids, resourceName: 'A conta financeira' });
+  const assertManualSaleReferencesOwnership = (companyId: string, productIds: string[]) =>
+    assertCompanyOwns({ companyId, table: 'products', ids: productIds, resourceName: 'Um dos produtos da venda' });
 
 	  const mapAccount = (row: any) => ({
 	    id: row.id,
@@ -1045,6 +1047,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
     const body = manualSaleCreateSchema.parse(request.body);
     await assertAccountOwnership(auth.companyId, [body.accountId]);
+    await assertManualSaleReferencesOwnership(auth.companyId, body.products.map((product) => product.productId));
     const tags = normalizeTags(body.tags);
     const lines = body.lines?.length
       ? body.lines
@@ -1076,6 +1079,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
     const params = request.params as { id: string };
     const body = manualSaleSchema.parse(request.body);
     await assertAccountOwnership(auth.companyId, [body.accountId]);
+    await assertManualSaleReferencesOwnership(auth.companyId, body.products.map((product) => product.productId));
     const { data, error } = await supabaseAdmin
       .from('financial_manual_sales')
       .update({
