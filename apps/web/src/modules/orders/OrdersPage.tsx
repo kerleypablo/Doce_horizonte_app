@@ -31,6 +31,7 @@ import { createOrderForm, toDateTimeLocal } from './order-form.ts';
 import type { OrderFormState } from './order-form.ts';
 import { orderService } from './order-service.ts';
 import { useOrderData } from './useOrderData.ts';
+import { useOrderEditors } from './useOrderEditors.ts';
 import type {
   CompanySettings,
   CustomerForm,
@@ -39,8 +40,7 @@ import type {
   OrderListItem,
   OrderStatus,
   OrderStatusFilter,
-  ProductItem,
-  ValueConfigType
+  ProductItem
 } from './order-types.ts';
 
 const statusLabelMap: Record<OrderStatus, string> = {
@@ -90,18 +90,6 @@ export const OrdersPage = () => {
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [tab, setTab] = useState<'pessoa' | 'produtos' | 'observacoes' | 'pagamentos' | 'imagens' | 'alertas'>('pessoa');
   const [form, setForm] = useState(createOrderForm(orderDefaults));
-  const [showValueTypeMenu, setShowValueTypeMenu] = useState(false);
-  const [valueModalOpen, setValueModalOpen] = useState(false);
-  const [valueModalType, setValueModalType] = useState<ValueConfigType>('ADDITION');
-  const [valueModalAdditionIndex, setValueModalAdditionIndex] = useState<number | null>(null);
-  const [valueModalLabel, setValueModalLabel] = useState('');
-  const [valueModalMode, setValueModalMode] = useState<'PERCENT' | 'FIXED'>('FIXED');
-  const [valueModalAmount, setValueModalAmount] = useState(0);
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentModalIndex, setPaymentModalIndex] = useState<number | null>(null);
-  const [paymentModalDate, setPaymentModalDate] = useState(new Date().toISOString().slice(0, 10));
-  const [paymentModalAmount, setPaymentModalAmount] = useState(0);
-  const [paymentModalNote, setPaymentModalNote] = useState('');
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [productPickerSearch, setProductPickerSearch] = useState('');
   const [productPickerSelectedIds, setProductPickerSelectedIds] = useState<string[]>([]);
@@ -109,9 +97,6 @@ export const OrdersPage = () => {
   const [customerPickerSearch, setCustomerPickerSearch] = useState('');
   const [customerPickerSelectedId, setCustomerPickerSelectedId] = useState('');
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [editProductIndex, setEditProductIndex] = useState<number | null>(null);
-  const [editProductName, setEditProductName] = useState('');
-  const [editProductUnitPrice, setEditProductUnitPrice] = useState(0);
   const [pdfPreviewHtml, setPdfPreviewHtml] = useState<string | null>(null);
   const createRouteInitRef = useRef<string>('');
   const detailRouteInitRef = useRef<string>('');
@@ -129,6 +114,7 @@ export const OrdersPage = () => {
     zipCode: '',
     notes: ''
   });
+  const { product: productEditor, payment: paymentEditor, value: valueEditor } = useOrderEditors(form, setForm);
   const deliveryDateFromQuery = useMemo(() => {
     const value = new URLSearchParams(location.search).get('deliveryDate');
     return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
@@ -425,63 +411,15 @@ export const OrdersPage = () => {
     return [selected, ...pickerFilteredCustomers.filter((item) => item.id !== customerPickerSelectedId)];
   }, [pickerFilteredCustomers, customerPickerSelectedId]);
 
-  const openProductEditModal = (index: number) => {
-    const item = form.products[index];
-    if (!item) return;
-    setEditProductIndex(index);
-    setEditProductName(item.name);
-    setEditProductUnitPrice(item.unitPrice);
-  };
-
-  const applyProductEditModal = () => {
-    if (editProductIndex === null) return;
-    setForm((prev) => {
-      const next = [...prev.products];
-      next[editProductIndex] = {
-        ...next[editProductIndex],
-        name: editProductName,
-        unitPrice: editProductUnitPrice
-      };
-      return { ...prev, products: next };
-    });
-    setEditProductIndex(null);
-  };
-
-  const openPaymentModal = (index?: number) => {
-    if (typeof index === 'number') {
-      const current = form.payments[index];
-      if (!current) return;
-      setPaymentModalIndex(index);
-      setPaymentModalDate(current.date);
-      setPaymentModalAmount(current.amount);
-      setPaymentModalNote(current.note ?? '');
-    } else {
-      setPaymentModalIndex(null);
-      setPaymentModalDate(new Date().toISOString().slice(0, 10));
-      setPaymentModalAmount(0);
-      setPaymentModalNote('');
-    }
-    setPaymentModalOpen(true);
-  };
-
-  const savePaymentModal = () => {
-    if (!paymentModalDate || !Number.isFinite(paymentModalAmount) || paymentModalAmount <= 0) return;
-    const nextPayment = {
-      date: paymentModalDate,
-      amount: paymentModalAmount,
-      note: paymentModalNote
-    };
-    if (paymentModalIndex === null) {
-      setForm((prev) => ({ ...prev, payments: [...prev.payments, nextPayment] }));
-    } else {
-      setForm((prev) => {
-        const next = [...prev.payments];
-        next[paymentModalIndex] = nextPayment;
-        return { ...prev, payments: next };
-      });
-    }
-    setPaymentModalOpen(false);
-  };
+  const {
+    editProductIndex, editProductName, editProductUnitPrice, setEditProductName,
+    setEditProductUnitPrice, setEditProductIndex, openProductEditModal, applyProductEditModal
+  } = productEditor;
+  const {
+    paymentModalOpen, paymentModalIndex, paymentModalDate, paymentModalAmount, paymentModalNote,
+    setPaymentModalOpen, setPaymentModalDate, setPaymentModalAmount, setPaymentModalNote,
+    openPaymentModal, savePaymentModal
+  } = paymentEditor;
 
   const handleUploadImages = async (files: FileList | null) => {
     try {
@@ -563,67 +501,12 @@ export const OrdersPage = () => {
     }
   };
 
-  const openValueModal = (type: ValueConfigType, additionIndex?: number) => {
-    setShowValueTypeMenu(false);
-    setValueModalType(type);
-    if (type === 'ADDITION') {
-      if (typeof additionIndex === 'number') {
-        const current = form.additions[additionIndex];
-        if (!current) return;
-        setValueModalAdditionIndex(additionIndex);
-        setValueModalLabel(current.label);
-        setValueModalMode(current.mode);
-        setValueModalAmount(current.value);
-      } else {
-        setValueModalAdditionIndex(null);
-        setValueModalLabel('Adicional');
-        setValueModalMode('FIXED');
-        setValueModalAmount(0);
-      }
-    } else if (type === 'DISCOUNT') {
-      setValueModalAdditionIndex(null);
-      setValueModalLabel('Desconto');
-      setValueModalMode(form.discountMode);
-      setValueModalAmount(form.discountValue);
-    } else {
-      setValueModalAdditionIndex(null);
-      setValueModalLabel('Frete');
-      setValueModalMode('FIXED');
-      setValueModalAmount(form.shippingValue);
-    }
-    setValueModalOpen(true);
-  };
-
-  const saveValueModal = () => {
-    if (valueModalType === 'ADDITION') {
-      if (!valueModalLabel.trim()) return;
-      if (valueModalAdditionIndex === null) {
-        setForm((prev) => ({
-          ...prev,
-          additions: [...prev.additions, { label: valueModalLabel.trim(), mode: valueModalMode, value: valueModalAmount }]
-        }));
-      } else {
-        setForm((prev) => {
-          const next = [...prev.additions];
-          next[valueModalAdditionIndex] = { label: valueModalLabel.trim(), mode: valueModalMode, value: valueModalAmount };
-          return { ...prev, additions: next };
-        });
-      }
-    } else if (valueModalType === 'DISCOUNT') {
-      setForm((prev) => ({ ...prev, discountMode: valueModalMode, discountValue: valueModalAmount }));
-    } else {
-      setForm((prev) => ({ ...prev, shippingValue: valueModalAmount }));
-    }
-    setValueModalOpen(false);
-  };
-
-  const removeDiscountValue = () => {
-    setForm((prev) => ({ ...prev, discountValue: 0 }));
-  };
-
-  const removeShippingValue = () => {
-    setForm((prev) => ({ ...prev, shippingValue: 0 }));
-  };
+  const {
+    showValueTypeMenu, valueModalOpen, valueModalType, valueModalLabel, valueModalMode,
+    valueModalAmount, setShowValueTypeMenu, setValueModalOpen, setValueModalLabel,
+    setValueModalMode, setValueModalAmount, openValueModal, saveValueModal,
+    removeDiscountValue, removeShippingValue
+  } = valueEditor;
 
   const updateProductQuantity = (index: number, rawValue: string) => {
     setForm((prev) => {
