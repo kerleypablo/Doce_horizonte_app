@@ -117,9 +117,6 @@ export const DashboardPage = () => {
     <div className="dashboard-page">
       <section className="dashboard-hero">
         <div className="dashboard-welcome">
-          <div className="dashboard-company-mark">
-            {settings?.logoDataUrl ? <img src={settings.logoDataUrl} alt={`Logo de ${settings.companyName ?? 'sua empresa'}`} /> : <span className="material-symbols-outlined" aria-hidden="true">bakery_dining</span>}
-          </div>
           <div><span>{settings?.companyName ?? 'Doce Horizonte'}</span><h1>{getGreeting(today)}, {firstName}</h1><small>Confira como está sua operação hoje.</small></div>
         </div>
         <DashboardMetrics monthlySales={monthlySales} weekOrders={currentWeekOrders.length} todayDeliveries={todayDeliveries} confirmedOrders={confirmedOrders} loading={revenueQuery.loading || weekOrdersQuery.loading} hidden={!showRevenue} onToggleVisibility={() => setShowRevenue((current) => !current)} />
