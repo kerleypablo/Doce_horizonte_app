@@ -6820,79 +6820,67 @@ button.finance-dashboard-action-link {
   }
 }
 
-/* Compact phones and landscape phones: keep actions visible inside the viewport. */
+/* Narrow layout: retain the original card format, but size each board to its actual available area. */
 @media (max-width: 800px) {
   .orders-board {
-    width: auto;
+    width: calc(100% + 28px);
     max-width: none;
+    margin: -16px -14px 0;
   }
 
   .orders-board-header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
   }
 
   .orders-new-button {
-    width: 100%;
-    justify-content: center;
+    width: auto;
+    max-width: 148px;
+    white-space: nowrap;
   }
 
-  .orders-board-card {
-    min-width: 0;
-  }
-
+  .orders-board-card,
   .orders-board-card-main,
   .orders-board-card-heading,
   .orders-board-card-heading strong,
-  .orders-board-card-side {
-    min-width: 0;
-  }
-
-  .catalog-board-header,
-  .customers-board-header {
-    min-width: 0;
-  }
-
-  .catalog-board-header > div,
-  .customers-board-header > div,
-  .catalog-board-header small,
-  .customers-board-header small {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
+  .orders-board-card-side,
+  .catalog-board,
+  .catalog-card-list,
   .catalog-board-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .customers-new-button {
+    min-height: 60px;
+    font-size: 1rem;
+  }
+
+  .recipes-board-card {
     grid-template-columns: 42px minmax(0, 1fr) auto;
     align-items: start;
+    gap: 10px;
   }
 
-  .catalog-board-card-actions {
+  .recipes-board-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .recipes-board-card-side {
+    display: none;
+  }
+
+  .recipes-board-card-actions {
     grid-column: auto;
     align-self: start;
-  }
-
-  .customers-board-card {
-    grid-template-columns: 42px minmax(0, 1fr) auto;
-    align-items: start;
-  }
-
-  .customers-board-card-actions {
-    grid-column: auto;
-    align-self: start;
-  }
-
-  .customers-board-card-actions .icon-button,
-  .catalog-board-card-actions .icon-button {
-    width: 38px;
-    height: 38px;
   }
 
   .dashboard-page {
-    width: auto;
+    width: calc(100% + 28px);
     max-width: none;
-    margin-right: -14px;
-    margin-left: -14px;
+    margin: -16px -14px 0;
   }
 
   .dashboard-hero {
