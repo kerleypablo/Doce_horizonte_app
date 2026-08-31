@@ -10,6 +10,7 @@ type CatalogListItem = {
 };
 
 type CatalogListPanelProps<T extends CatalogListItem> = {
+  className?: string;
   title: string;
   eyebrow: string;
   description: string;
@@ -27,8 +28,8 @@ type CatalogListPanelProps<T extends CatalogListItem> = {
   onDelete: (item: T) => void;
 };
 
-export const CatalogListPanel = <T extends CatalogListItem>({ title, eyebrow, description, icon, singularLabel, actionLabel, search, loading, items, filtersSlot, onSearch, onNew, onOpen, onDuplicate, onDelete }: CatalogListPanelProps<T>) => (
-  <section className="catalog-board">
+export const CatalogListPanel = <T extends CatalogListItem>({ className, title, eyebrow, description, icon, singularLabel, actionLabel, search, loading, items, filtersSlot, onSearch, onNew, onOpen, onDuplicate, onDelete }: CatalogListPanelProps<T>) => (
+  <section className={`catalog-board ${className ?? ''}`}>
     <header className="catalog-board-header">
       <div><span>{eyebrow}</span><h1>{title}</h1><small>{description}</small></div>
       <button type="button" className="catalog-new-button" onClick={onNew}><span className="material-symbols-outlined" aria-hidden="true">add</span>{actionLabel}</button>

@@ -21,6 +21,15 @@
   --radius-lg: 20px;
 }
 
+.products-catalog .catalog-board-card-main > strong {
+  font-size: .9rem;
+}
+
+.products-catalog .catalog-board-card-main > span,
+.products-catalog .catalog-board-card-side {
+  font-size: .74rem;
+}
+
 /* Home redesign */
 .dashboard-page {
   display: grid;

@@ -68,6 +68,14 @@ type Settings = {
 };
 
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
+const normalizeInputQuantity = (quantity: number, from: ProductItem['directInputs'][number]['unit'], to: InputItem['unit']) => {
+  if (from === to || from === 'un' || to === 'un') return quantity;
+  const weight = { kg: 1000, g: 1 } as const;
+  const volume = { l: 1000, ml: 1 } as const;
+  if (from in weight && to in weight) return quantity * weight[from as keyof typeof weight] / weight[to as keyof typeof weight];
+  if (from in volume && to in volume) return quantity * volume[from as keyof typeof volume] / volume[to as keyof typeof volume];
+  return quantity;
+};
 const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
 const inputUnitOptions = [
   { value: 'g', label: 'g' },
@@ -658,7 +666,7 @@ export const ProductsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <CatalogListPanel title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `Venda ${formatCurrency(product.unitPrice)}`, badge: `Lucro: ${product.targetProfitPercent || 0}%` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
+      <CatalogListPanel className="products-catalog" title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `Venda ${formatCurrency(product.unitPrice)}`, badge: `Lucro: ${product.targetProfitPercent || 0}%` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
       ) : null}
 
       {showForm && (
@@ -861,7 +869,12 @@ export const ProductsPage = () => {
             <div className="ingredients">
               {form.directInputs.map((item, index) => (
                 <div key={`${item.inputId}-${index}`} className="add-item-row recipe-add-item-row">
-                  <span className="order-product-label">{inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'}</span>
+                  <div className="order-product-label">
+                    <span>{inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'}</span>
+                    <small className="order-product-meta">
+                      {item.quantity} {item.unit} · {formatCurrency((inputsById.get(item.inputId)?.packagePrice ?? 0) / Math.max(inputsById.get(item.inputId)?.packageSize ?? 1, 1) * normalizeInputQuantity(item.quantity, item.unit, inputsById.get(item.inputId)?.unit ?? 'un'))}
+                    </small>
+                  </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
                     <input className="add-item-qty-input" type="number" min={0} step="0.01" value={item.quantity === 0 ? '' : item.quantity} onChange={(e) => {

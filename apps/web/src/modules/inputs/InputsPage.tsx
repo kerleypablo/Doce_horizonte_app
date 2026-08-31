@@ -544,6 +544,7 @@ export const InputsPage = () => {
                 <MoneyInput
                   className={fieldErrors.packagePrice ? 'field-input-invalid' : ''}
                   value={form.packagePrice}
+                  placeholder="R$ 0,00"
                   onChange={(value) => {
                     setForm({ ...form, packagePrice: value });
                     if (fieldErrors.packagePrice) setFieldErrors((current) => ({ ...current, packagePrice: undefined }));
