@@ -29,6 +29,8 @@ const orderImageSchema = z.object({
   dataUrl: z.string().min(1)
 });
 
+const orderStatusSchema = z.enum(['AGUARDANDO_RETORNO', 'CONCLUIDO', 'CONFIRMADO', 'CANCELADO']);
+
 const orderSchema = z.object({
   type: z.enum(['PEDIDO', 'ORCAMENTO']),
   orderDateTime: z.string().min(1),
@@ -50,7 +52,7 @@ const orderSchema = z.object({
     .optional(),
   deliveryType: z.enum(['ENTREGA', 'RETIRADA']),
   deliveryDate: z.string().optional(),
-  status: z.enum(['AGUARDANDO_RETORNO', 'CONCLUIDO', 'CONFIRMADO', 'CANCELADO']),
+  status: orderStatusSchema,
   products: z.array(orderProductSchema).default([]),
   additions: z.array(orderAdjustmentSchema).default([]),
   discountMode: z.enum(['PERCENT', 'FIXED']).default('FIXED'),
@@ -513,6 +515,22 @@ const toBooleanQueryValue = (value: boolean | string | undefined, defaultValue =
       .single();
 
     if (error) return reply.status(404).send({ message: 'Pedido nao encontrado' });
+    return reply.send(mapOrder(updated));
+  });
+
+  app.patch('/orders/:id/status', pedidosGuard, async (request, reply) => {
+    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const id = request.params as { id: string };
+    const { status } = z.object({ status: orderStatusSchema }).parse(request.body);
+    const { data: updated, error } = await supabaseAdmin
+      .from('orders')
+      .update({ status })
+      .eq('id', id.id)
+      .eq('company_id', auth.companyId)
+      .select('*')
+      .single();
+
+    if (error || !updated) return reply.status(404).send({ message: 'Pedido nao encontrado' });
     return reply.send(mapOrder(updated));
   });
 

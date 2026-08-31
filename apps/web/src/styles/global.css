@@ -6366,6 +6366,49 @@ button.finance-dashboard-action-link {
   gap: 8px;
 }
 
+.orders-swipe-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.orders-swipe-action {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.orders-swipe-action .material-symbols-outlined {
+  font-size: 22px;
+}
+
+.orders-swipe-action-right {
+  justify-content: flex-start;
+  background: #2f9b5b;
+}
+
+.orders-swipe-action-left {
+  justify-content: flex-end;
+  background: #bd7b25;
+}
+
+.orders-swipe-card .orders-board-card {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  touch-action: pan-y;
+  transition: border-color .2s ease, transform .18s ease;
+}
+
+.orders-swipe-card.dragging .orders-board-card {
+  transition: none;
+}
+
 .orders-board-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

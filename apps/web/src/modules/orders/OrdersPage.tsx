@@ -402,6 +402,21 @@ export const OrdersPage = () => {
     }
   };
 
+  const handleSwipeStatusChange = async (order: OrderListItem, status: OrderStatus) => {
+    if (order.status === status) return;
+    const previousStatus = order.status;
+    setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status } : item));
+    try {
+      await orderService.updateStatus(order.id, status, user?.token);
+      invalidateQueryCache(queryKeys.orders);
+      invalidateQueryCache(queryKeys.ordersSummaryCalendar);
+      invalidateQueryCache('tasks-board');
+    } catch {
+      setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status: previousStatus } : item));
+      ordersQuery.refetch().catch(() => undefined);
+    }
+  };
+
   const {
     showValueTypeMenu, valueModalOpen, valueModalType, valueModalLabel, valueModalMode,
     valueModalAmount, setShowValueTypeMenu, setValueModalOpen, setValueModalLabel,
@@ -442,6 +457,7 @@ export const OrdersPage = () => {
           onStatusFilter={setStatusFilter}
           onToggleWeek={() => setCurrentWeekOnly((current) => !current)}
           onOpen={(id) => navigate(`/app/pedidos/${id}`)}
+          onStatusChange={handleSwipeStatusChange}
           onPdf={(id) => void handleGeneratePdf(id)}
           onDelete={setDeleteTarget}
         />
