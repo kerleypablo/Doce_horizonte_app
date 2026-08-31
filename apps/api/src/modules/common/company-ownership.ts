@@ -29,12 +29,14 @@ export const assertCompanyOwns = async (params: {
 export const assertProductCompositionOwnership = async (companyId: string, data: {
   extraRecipes: { recipeId: string }[];
   extraProducts: { productId: string }[];
+  directInputs: { inputId: string }[];
   packagingInputs: { inputId: string }[];
   channelId?: string;
 }) => {
   await Promise.all([
     assertCompanyOwns({ companyId, table: 'recipes', ids: data.extraRecipes.map((item) => item.recipeId), resourceName: 'Uma das receitas' }),
     assertCompanyOwns({ companyId, table: 'products', ids: data.extraProducts.map((item) => item.productId), resourceName: 'Um dos produtos componentes' }),
+    assertCompanyOwns({ companyId, table: 'inputs', ids: data.directInputs.map((item) => item.inputId), resourceName: 'Um dos insumos' }),
     assertCompanyOwns({ companyId, table: 'inputs', ids: data.packagingInputs.map((item) => item.inputId), resourceName: 'Uma das embalagens' }),
     assertCompanyOwns({ companyId, table: 'sales_channels', ids: [data.channelId], resourceName: 'O canal de venda' })
   ]);

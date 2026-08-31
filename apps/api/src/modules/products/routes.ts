@@ -16,6 +16,7 @@ const productSchema = z.object({
   channelId: z.string().optional(),
   extraRecipes: z.array(z.object({ recipeId: z.string().min(1), quantity: z.number().positive() })).default([]),
   extraProducts: z.array(z.object({ productId: z.string().min(1), quantity: z.number().positive() })).default([]),
+  directInputs: z.array(z.object({ inputId: z.string().min(1), quantity: z.number().positive(), unit: z.enum(['kg', 'g', 'l', 'ml', 'un']) })).default([]),
   packagingInputs: z.array(z.object({ inputId: z.string().min(1), quantity: z.number().positive(), unit: z.enum(['kg', 'g', 'l', 'ml', 'un']) })).default([])
 });
 
@@ -77,6 +78,7 @@ export const productRoutes = async (app: FastifyInstance) => {
     channelId: row.channel_id ?? undefined,
     extraRecipes: withLegacyBaseRecipe(mappedRecipes, row.recipe_id ?? undefined, recipes),
     extraProducts: row.extra_products ?? [],
+    directInputs: row.direct_inputs ?? [],
     packagingInputs: row.packaging_inputs ?? []
     };
   };
@@ -137,6 +139,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       extraPercent: data.extraPercent,
       extraRecipes: data.extraRecipes,
       extraProducts: data.extraProducts,
+      directInputs: data.directInputs,
       packagingInputs: data.packagingInputs,
       settings: {
         overheadMethod: companySettings.overhead_method,
@@ -179,6 +182,7 @@ export const productRoutes = async (app: FastifyInstance) => {
         channel_id: channel?.id,
         extra_recipes: data.extraRecipes,
         extra_products: data.extraProducts,
+        direct_inputs: data.directInputs,
         packaging_inputs: data.packagingInputs
       })
       .select('*')
@@ -231,6 +235,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       extraPercent: data.extraPercent,
       extraRecipes: data.extraRecipes,
       extraProducts: data.extraProducts,
+      directInputs: data.directInputs,
       packagingInputs: data.packagingInputs,
       settings: {
         overheadMethod: companySettings.overhead_method,
@@ -271,6 +276,7 @@ export const productRoutes = async (app: FastifyInstance) => {
         channel_id: channel?.id,
         extra_recipes: data.extraRecipes,
         extra_products: data.extraProducts,
+        direct_inputs: data.directInputs,
         packaging_inputs: data.packagingInputs
       })
       .eq('id', id.id)

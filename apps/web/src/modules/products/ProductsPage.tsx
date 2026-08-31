@@ -15,7 +15,7 @@ import { FormActions } from '../shared/FormActions.tsx';
 import { CatalogListPanel } from '../shared/CatalogListPanel.tsx';
 import { useProductPricing } from './useProductPricing.ts';
 
-type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'PACKAGING';
+type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'DIRECT_INPUT' | 'PACKAGING';
 
 export type ProductItem = {
   id: string;
@@ -30,6 +30,7 @@ export type ProductItem = {
   channelId?: string;
   extraRecipes: { recipeId: string; quantity: number }[];
   extraProducts: { productId: string; quantity: number }[];
+  directInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
   packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
 };
 
@@ -44,6 +45,7 @@ type ProductFormState = {
   channelId: string;
   extraRecipes: { recipeId: string; quantity: number }[];
   extraProducts: { productId: string; quantity: number }[];
+  directInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
   packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
 };
 
@@ -131,6 +133,7 @@ export const ProductsPage = () => {
     manualUnitPrice: 0,
     extraRecipes: [] as { recipeId: string; quantity: number }[],
     extraProducts: [] as { productId: string; quantity: number }[],
+    directInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[],
     packagingInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[]
   });
   const confirmActionRef = useRef<null | (() => void)>(null);
@@ -146,6 +149,7 @@ export const ProductsPage = () => {
     channelId: '',
     extraRecipes: [] as { recipeId: string; quantity: number }[],
     extraProducts: [] as { productId: string; quantity: number }[],
+    directInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[],
     packagingInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[]
   });
 
@@ -160,6 +164,7 @@ export const ProductsPage = () => {
     channelId: settings?.salesChannels.find((channel) => channel.active)?.id ?? '',
     extraRecipes: [],
     extraProducts: [],
+    directInputs: [],
     packagingInputs: []
   });
 
@@ -226,6 +231,7 @@ export const ProductsPage = () => {
               ...duplicateDraft,
               extraRecipes: duplicateDraft.extraRecipes.map((item) => ({ ...item })),
               extraProducts: duplicateDraft.extraProducts.map((item) => ({ ...item })),
+              directInputs: (duplicateDraft.directInputs ?? []).map((item) => ({ ...item })),
               packagingInputs: duplicateDraft.packagingInputs.map((item) => ({ ...item }))
             }
           : createEmptyForm()
@@ -251,6 +257,7 @@ export const ProductsPage = () => {
         channelId: current.channelId ?? settings?.salesChannels[0]?.id ?? '',
         extraRecipes: current.extraRecipes ?? [],
         extraProducts: current.extraProducts ?? [],
+        directInputs: current.directInputs ?? [],
         packagingInputs: current.packagingInputs ?? []
       });
       setUnitPriceInput(current.unitPrice ?? 0);
@@ -303,6 +310,11 @@ export const ProductsPage = () => {
         productId: item.productId,
         quantity: Number(item.quantity)
       })),
+      directInputs: form.directInputs.map((item) => ({
+        inputId: item.inputId,
+        quantity: Number(item.quantity),
+        unit: item.unit
+      })),
       packagingInputs: form.packagingInputs.map((item) => ({
         inputId: item.inputId,
         quantity: Number(item.quantity),
@@ -345,6 +357,10 @@ export const ProductsPage = () => {
     () => inputs.filter((input) => input.category === 'embalagem'),
     [inputs]
   );
+  const directInputCandidates = useMemo(
+    () => inputs.filter((input) => input.category !== 'embalagem'),
+    [inputs]
+  );
   const productCandidates = useMemo(
     () => products.filter((product) => product.id !== editingId),
     [products, editingId]
@@ -363,6 +379,12 @@ export const ProductsPage = () => {
       setPickerSelectedIds(
         form.extraProducts
           .map((item) => item.productId)
+          .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
+      );
+    } else if (type === 'DIRECT_INPUT') {
+      setPickerSelectedIds(
+        form.directInputs
+          .map((item) => item.inputId)
           .filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index)
       );
     } else {
@@ -386,7 +408,7 @@ export const ProductsPage = () => {
         description: '',
         tags: []
       });
-    } else if (pickerType === 'PACKAGING') {
+    } else if (pickerType === 'PACKAGING' || pickerType === 'DIRECT_INPUT') {
       setQuickInputForm({
         name: '',
         brand: '',
@@ -441,7 +463,7 @@ export const ProductsPage = () => {
         invalidateQueryCache(queryKeys.recipes);
         await recipesQuery.refetch();
         setPickerSelectedIds((current) => (current.includes(created.id) ? current : [...current, created.id]));
-      } else if (pickerType === 'PACKAGING') {
+      } else if (pickerType === 'PACKAGING' || pickerType === 'DIRECT_INPUT') {
         if (!quickInputForm.name.trim() || Number(quickInputForm.packageSize) <= 0 || Number(quickInputForm.packagePrice) <= 0) {
           setQuickCreateError('Preencha nome, tamanho e preco da embalagem.');
           return;
@@ -452,7 +474,7 @@ export const ProductsPage = () => {
           body: JSON.stringify({
             name: quickInputForm.name.trim(),
             brand: quickInputForm.brand.trim() || undefined,
-            category: 'embalagem',
+            category: pickerType === 'DIRECT_INPUT' ? 'producao' : 'embalagem',
             unit: quickInputForm.unit,
             packageSize: Number(quickInputForm.packageSize),
             packagePrice: Number(quickInputForm.packagePrice),
@@ -517,8 +539,8 @@ export const ProductsPage = () => {
   const pickerAllItems = useMemo(() => {
     if (pickerType === 'EXTRA_RECIPE') return recipes as Array<{ id: string; name: string }>;
     if (pickerType === 'EXTRA_PRODUCT') return productCandidates as Array<{ id: string; name: string }>;
-    return packagingCandidates as Array<{ id: string; name: string }>;
-  }, [pickerType, recipes, productCandidates, packagingCandidates]);
+    return (pickerType === 'DIRECT_INPUT' ? directInputCandidates : packagingCandidates) as Array<{ id: string; name: string }>;
+  }, [pickerType, recipes, productCandidates, directInputCandidates, packagingCandidates]);
 
   const pickerFilteredItems = useMemo(() => {
     const needle = pickerSearch.trim().toLowerCase();
@@ -564,6 +586,18 @@ export const ProductsPage = () => {
         })
         .filter((item): item is { productId: string; quantity: number } => Boolean(item));
       setForm((prev) => ({ ...prev, extraProducts: next }));
+    } else if (pickerType === 'DIRECT_INPUT') {
+      const existingById = new Map(form.directInputs.map((item) => [item.inputId, item] as const));
+      const next = pickerSelectedIds
+        .map((id) => {
+          const existing = existingById.get(id);
+          if (existing) return existing;
+          const input = inputsById.get(id);
+          if (!input) return null;
+          return { inputId: id, quantity: 0, unit: input.unit as 'kg' | 'g' | 'l' | 'ml' | 'un' };
+        })
+        .filter((item): item is { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' } => Boolean(item));
+      setForm((prev) => ({ ...prev, directInputs: next }));
     } else {
       const existingById = new Map(form.packagingInputs.map((item) => [item.inputId, item] as const));
       const next = pickerSelectedIds
@@ -620,7 +654,7 @@ export const ProductsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <CatalogListPanel title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `${formatCurrency(product.unitPrice ?? 0)} por unidade · venda ${formatCurrency(product.salePrice)}`, badge: `${product.unitsCount || 0} un.` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
+      <CatalogListPanel title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `${formatCurrency(product.unitPrice ?? 0)} por unidade · venda ${formatCurrency(product.salePrice)}`, badge: `${product.unitsCount || 0} un.` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
       ) : null}
 
       {showForm && (
@@ -819,6 +853,35 @@ export const ProductsPage = () => {
           </div>
 
           <div className="panel">
+            <h3>Insumos</h3>
+            <div className="ingredients">
+              {form.directInputs.map((item, index) => (
+                <div key={`${item.inputId}-${index}`} className="add-item-row recipe-add-item-row">
+                  <span className="order-product-label">{inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'}</span>
+                  <label className="add-item-qty-field">
+                    <span>Quantidade</span>
+                    <input className="add-item-qty-input" type="number" min={0} step="0.01" value={item.quantity === 0 ? '' : item.quantity} onChange={(e) => {
+                      const next = [...form.directInputs];
+                      next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
+                      setForm({ ...form, directInputs: next });
+                    }} aria-label="Quantidade" />
+                  </label>
+                  <SelectField className="add-item-unit-select" value={item.unit} onChange={(value) => {
+                    const next = [...form.directInputs];
+                    next[index] = { ...next[index], unit: value as ProductItem['directInputs'][number]['unit'] };
+                    setForm({ ...form, directInputs: next });
+                  }} options={units.map((unit) => ({ value: unit, label: unit }))} />
+                  <button type="button" className="icon-button tiny" aria-label="Remover insumo" onClick={() => setForm((prev) => ({ ...prev, directInputs: prev.directInputs.filter((_, itemIndex) => itemIndex !== index) }))}>
+                    <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="ghost" onClick={() => openPicker('DIRECT_INPUT')}>+ Adicionar insumo</button>
+              <small className="muted">A quantidade usa a unidade escolhida e entra no custo e no preço calculado do produto.</small>
+            </div>
+          </div>
+
+          <div className="panel">
             <h3>Embalagens</h3>
             <div className="ingredients">
               {form.packagingInputs.map((item, index) => (
@@ -876,7 +939,7 @@ export const ProductsPage = () => {
                 <strong>R$ {costSummary.fixed.toFixed(2)}</strong>
               </div>
               <div>
-                <span>Composicao, receitas e embalagens</span>
+                <span>Composicao, receitas, insumos e embalagens</span>
                 <strong>R$ {costSummary.inputs.toFixed(2)}</strong>
               </div>
               <div className="summary-total">
@@ -898,6 +961,8 @@ export const ProductsPage = () => {
                   ? 'Selecionar receitas'
                   : pickerType === 'EXTRA_PRODUCT'
                     ? 'Selecionar produtos'
+                    : pickerType === 'DIRECT_INPUT'
+                      ? 'Selecionar insumos'
                     : 'Selecionar embalagens'}
               </h4>
               <div className="product-picker-head-right">
@@ -916,9 +981,11 @@ export const ProductsPage = () => {
                 placeholder={
                   pickerType === 'EXTRA_RECIPE'
                     ? 'Buscar receita...'
-                    : pickerType === 'EXTRA_PRODUCT'
-                      ? 'Buscar produto...'
-                      : 'Buscar embalagem...'
+                  : pickerType === 'EXTRA_PRODUCT'
+                    ? 'Buscar produto...'
+                    : pickerType === 'DIRECT_INPUT'
+                      ? 'Buscar insumo...'
+                    : 'Buscar embalagem...'
                 }
               />
               <button type="button" className="icon-button" onClick={openQuickCreate} aria-label="Criar novo">
@@ -1008,16 +1075,19 @@ export const ProductsPage = () => {
             <div className="modal-header">
               <div className="modal-icon">
                 <span className="material-symbols-outlined" aria-hidden="true">
-                  {pickerType === 'EXTRA_RECIPE' ? 'menu_book' : pickerType === 'PACKAGING' ? 'inventory_2' : 'shopping_bag'}
+                  {pickerType === 'EXTRA_RECIPE' ? 'menu_book' : pickerType === 'EXTRA_PRODUCT' ? 'shopping_bag' : 'inventory_2'}
                 </span>
               </div>
               <div>
                 <h4>
                   {pickerType === 'EXTRA_RECIPE'
                     ? 'Nova receita'
-                    : pickerType === 'PACKAGING'
-                      ? 'Nova embalagem'
-                      : 'Novo produto'}
+                    : pickerType === 'EXTRA_PRODUCT'
+                      ? 'Novo produto'
+                      : pickerType === 'DIRECT_INPUT'
+                        ? 'Novo insumo'
+                        : 'Nova embalagem'
+                  }
                 </h4>
                 <p>Cadastre sem sair da selecao.</p>
               </div>
@@ -1092,7 +1162,7 @@ export const ProductsPage = () => {
                 </>
               ) : null}
 
-              {pickerType === 'PACKAGING' ? (
+              {pickerType === 'PACKAGING' || pickerType === 'DIRECT_INPUT' ? (
                 <>
                   <label>
                     Nome

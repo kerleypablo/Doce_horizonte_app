@@ -2831,6 +2831,11 @@ button:disabled {
   gap: 16px;
 }
 
+.input-measure-fields {
+  display: grid;
+  gap: 16px;
+}
+
 .inline-field {
   display: grid;
   grid-template-columns: 1fr auto;

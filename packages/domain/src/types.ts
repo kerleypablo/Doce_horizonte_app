@@ -86,5 +86,6 @@ export type Product = {
   channelId?: string;
   extraRecipes: { recipeId: string; quantity: number }[];
   extraProducts: { productId: string; quantity: number }[];
+  directInputs?: { inputId: string; quantity: number; unit: Unit }[];
   packagingInputs: { inputId: string; quantity: number; unit: Unit }[];
 };

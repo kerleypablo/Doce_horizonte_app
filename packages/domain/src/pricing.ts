@@ -67,6 +67,8 @@ const calcPackagingCost = (items: Product['packagingInputs'], inputs: Input[]) =
   return sum + input.packagePrice / input.packageSize * normalizeQuantity(item.quantity, item.unit, input.unit);
 }, 0);
 
+const calcDirectInputsCost = (items: NonNullable<Product['directInputs']>, inputs: Input[]) => calcPackagingCost(items, inputs);
+
 const calcRecipePortionCost = (recipe: Recipe, quantity: number, inputs: Input[], recipes: Recipe[], settings: CompanySettings) => {
   if (recipe.yield <= 0) return 0;
   return calcRecipeProductionCost(recipe, inputs, recipes, settings) / recipe.yield * quantity;
@@ -87,7 +89,7 @@ const calcProductCompositionCost = (product: Product, inputs: Input[], recipes: 
     return sum + unitCost * item.quantity;
   }, 0);
   visited.delete(product.id);
-  const directCost = recipesCost + productsCost + calcPackagingCost(product.packagingInputs, inputs);
+  const directCost = recipesCost + productsCost + calcDirectInputsCost(product.directInputs ?? [], inputs) + calcPackagingCost(product.packagingInputs, inputs);
   const overhead = settings.overheadMethod === 'PERCENT_DIRECT'
     ? directCost * settings.overheadPercent / 100
     : settings.overheadPerUnit * Math.max(product.unitsCount, 1);
@@ -95,13 +97,14 @@ const calcProductCompositionCost = (product: Product, inputs: Input[], recipes: 
   return directCost + overhead + settings.laborCostPerHour * hours + settings.fixedCostPerHour * hours;
 };
 
-export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPercent, extraPercent, extraRecipes, extraProducts, packagingInputs, settings, inputs, recipes, products, feePercent, paymentFeePercent, feeFixed }: {
+export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPercent, extraPercent, extraRecipes, extraProducts, directInputs = [], packagingInputs, settings, inputs, recipes, products, feePercent, paymentFeePercent, feeFixed }: {
   unitsCount: number;
   prepTimeMinutes: number;
   targetProfitPercent: number;
   extraPercent: number;
   extraRecipes: Product['extraRecipes'];
   extraProducts: Product['extraProducts'];
+  directInputs?: Product['directInputs'];
   packagingInputs: Product['packagingInputs'];
   settings: CompanySettings;
   inputs: Input[];
@@ -123,7 +126,7 @@ export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPe
     const unitCost = compositionTotal > 0 ? compositionTotal / Math.max(product.unitsCount, 1) : (product.unitPrice || product.salePrice / Math.max(product.unitsCount, 1));
     return sum + unitCost * item.quantity;
   }, 0);
-  const directCost = recipesCost + productsCost + calcPackagingCost(packagingInputs, inputs);
+  const directCost = recipesCost + productsCost + calcDirectInputsCost(directInputs, inputs) + calcPackagingCost(packagingInputs, inputs);
   const baseOverhead = settings.overheadMethod === 'PERCENT_DIRECT'
     ? directCost * settings.overheadPercent / 100
     : settings.overheadPerUnit * safeUnits;

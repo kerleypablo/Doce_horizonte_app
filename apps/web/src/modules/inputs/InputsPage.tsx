@@ -494,7 +494,7 @@ export const InputsPage = () => {
                 <input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
               </label>
             </div>
-            <div className="grid-3">
+            <div className="input-measure-fields">
               <label>
                 Categoria
                 <SelectField
@@ -507,29 +507,31 @@ export const InputsPage = () => {
                   ]}
                 />
               </label>
+              <div className="grid-2">
               <label>
                 Tamanho pacote
-                <div className="inline-field">
-                  <input
-                    className={fieldErrors.packageSize ? 'field-input-invalid' : ''}
-                    type="number"
-                    value={form.packageSize === 0 ? '' : form.packageSize}
-                    onChange={(e) => {
-                      setForm({ ...form, packageSize: Number(e.target.value || 0) });
-                      if (fieldErrors.packageSize) setFieldErrors((current) => ({ ...current, packageSize: undefined }));
-                    }}
-                    min={0}
-                    step="0.01"
-                  />
-                  <SelectField
-                    className="unit-select"
-                    value={form.unit}
-                    onChange={(value) => setForm({ ...form, unit: value as InputItem['unit'] })}
-                    options={[...inputUnitOptions]}
-                  />
-                </div>
+                <input
+                  className={fieldErrors.packageSize ? 'field-input-invalid' : ''}
+                  type="number"
+                  value={form.packageSize === 0 ? '' : form.packageSize}
+                  onChange={(e) => {
+                    setForm({ ...form, packageSize: Number(e.target.value || 0) });
+                    if (fieldErrors.packageSize) setFieldErrors((current) => ({ ...current, packageSize: undefined }));
+                  }}
+                  min={0}
+                  step="0.01"
+                />
                 {fieldErrors.packageSize ? <span className="field-error">{fieldErrors.packageSize}</span> : null}
               </label>
+              <label>
+                Unidade
+                <SelectField
+                  value={form.unit}
+                  onChange={(value) => setForm({ ...form, unit: value as InputItem['unit'] })}
+                  options={[...inputUnitOptions]}
+                />
+              </label>
+              </div>
             </div>
             <div className="grid-2">
               <label>

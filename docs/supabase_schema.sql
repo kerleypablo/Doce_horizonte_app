@@ -111,6 +111,7 @@ create table if not exists products (
   channel_id uuid references sales_channels(id) on delete set null,
   extra_recipes jsonb not null default '[]',
   extra_products jsonb not null default '[]',
+  direct_inputs jsonb not null default '[]',
   packaging_inputs jsonb not null default '[]',
   created_at timestamp with time zone default now()
 );
