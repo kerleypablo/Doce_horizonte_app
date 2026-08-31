@@ -65,6 +65,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    if (!user?.token || !user.refreshToken) return;
+    supabase.auth.setSession({ access_token: user.token, refresh_token: user.refreshToken }).catch(() => undefined);
+  }, [user?.token, user?.refreshToken]);
+
+  useEffect(() => {
     if (!user?.token || user.avatarUrl) return;
     const loadProfile = async () => {
       const { data } = await supabase.auth.getUser(user.token);

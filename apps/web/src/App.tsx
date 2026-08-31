@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { LoginPage } from './modules/auth/LoginPage.tsx';
 import { SplashPage } from './modules/auth/SplashPage.tsx';
+import { ProfilePage } from './modules/auth/ProfilePage.tsx';
 import { RegisterPage } from './modules/auth/RegisterPage.tsx';
 import { OAuthCallbackPage } from './modules/auth/OAuthCallbackPage.tsx';
 import { OnboardingPage } from './modules/auth/OnboardingPage.tsx';
@@ -34,6 +35,7 @@ const App = () => {
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/app" element={<DashboardPage />} />
+        <Route path="/app/perfil" element={<ProfilePage />} />
         <Route path="/app/insumos" element={<InputsPage />} />
         <Route path="/app/insumos/novo" element={<InputsPage />} />
         <Route path="/app/insumos/editar/:inputId" element={<InputsPage />} />

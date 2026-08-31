@@ -75,6 +75,7 @@ const isPathActive = (pathname: string, path: string) => {
 
 const getHeaderTitle = (pathname: string) => {
   if (pathname === '/app') return 'Visão geral';
+  if (pathname === '/app/perfil') return 'Perfil';
   if (pathname === '/backoffice') return 'Backoffice';
   const matched = navItems.find((item) => isPathActive(pathname, item.path));
   if (!matched) return 'Visão geral';
@@ -88,6 +89,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const isTasksMode = pathname.startsWith('/app/tasks');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const headerTitle = getHeaderTitle(pathname);
   const visibleNavItems = navItems.filter((item) => {
     if (item.requiresMaster && user?.role !== 'master') return false;
@@ -141,6 +143,10 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const financeEnabled = Boolean(user?.modules?.includes('financeiro'));
   const thirdDestination = financeEnabled ? '/app/financeiro' : '/app/receitas';
   const isMoreActive = !['/app', '/app/pedidos', thirdDestination].some((path) => isPathActive(pathname, path));
+  const handleLogout = () => {
+    setProfileMenuOpen(false);
+    logout();
+  };
 
   if (isTasksMode) {
     return (
@@ -187,7 +193,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
           <div className="role">
             Perfil: {user?.role === 'master' ? 'Master' : user?.role === 'admin' ? 'Admin' : 'Comum'}
           </div>
-          <button onClick={logout}>Sair</button>
+          <button onClick={handleLogout}>Sair</button>
         </div>
       </aside>
       <div className={`drawer-backdrop ${drawerOpen ? 'open' : ''}`} onClick={() => setDrawerOpen(false)} />
@@ -200,9 +206,9 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             {pathname === '/app' ? <span>{settingsQuery.data?.companyName ?? 'Doce Horizonte'}</span> : null}
             <strong>{headerTitle}</strong>
           </div>
-          <div className="mobile-user" aria-label="Usuario logado">
+          <button type="button" className="mobile-user profile-trigger" onClick={() => setProfileMenuOpen((current) => !current)} aria-label="Abrir perfil" aria-expanded={profileMenuOpen}>
             {avatarContent}
-          </div>
+          </button>
         </header>
         <header className="app-header">
           <div>
@@ -213,13 +219,20 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             <span>
               {user?.role === 'master' ? 'Master' : user?.role === 'admin' ? 'Administrador' : 'Operacional'}
             </span>
-            <div className="mobile-user" aria-label="Usuario logado">
+            <button type="button" className="mobile-user profile-trigger" onClick={() => setProfileMenuOpen((current) => !current)} aria-label="Abrir perfil" aria-expanded={profileMenuOpen}>
               {avatarContent}
-            </div>
+            </button>
           </div>
         </header>
         <section className="content">{children}</section>
       </main>
+      {profileMenuOpen ? (
+        <div className="profile-menu" role="menu" aria-label="Menu do perfil">
+          <div className="profile-menu-user"><strong>{user?.name ?? 'Usuário'}</strong><span>{user?.email ?? 'Conta conectada'}</span></div>
+          <Link to="/app/perfil" role="menuitem" onClick={() => setProfileMenuOpen(false)}><span className="material-symbols-outlined" aria-hidden="true">manage_accounts</span>Perfil</Link>
+          <button type="button" role="menuitem" onClick={handleLogout}><span className="material-symbols-outlined" aria-hidden="true">logout</span>Sair</button>
+        </div>
+      ) : null}
       <nav className="bottom-nav" aria-label="Navegação principal">
         <Link to="/app" className={pathname === '/app' ? 'active' : ''}>
           <span className="material-symbols-outlined nav-icon" aria-hidden="true">home</span>
