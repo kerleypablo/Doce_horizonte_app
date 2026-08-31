@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { LoginPage } from './modules/auth/LoginPage.tsx';
+import { SplashPage } from './modules/auth/SplashPage.tsx';
 import { RegisterPage } from './modules/auth/RegisterPage.tsx';
 import { OAuthCallbackPage } from './modules/auth/OAuthCallbackPage.tsx';
 import { OnboardingPage } from './modules/auth/OnboardingPage.tsx';
@@ -26,7 +27,7 @@ import {
 const App = () => {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<SplashPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/oauth" element={<OAuthCallbackPage />} />

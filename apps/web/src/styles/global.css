@@ -21,6 +21,28 @@
   --radius-lg: 20px;
 }
 
+.splash-page {
+  display: grid;
+  width: 100vw;
+  min-height: 100vh;
+  padding: 28px;
+  place-items: center;
+  overflow: hidden;
+  background: #3d120c;
+}
+
+.splash-logo {
+  width: min(680px, 92vw);
+  max-height: min(680px, 82vh);
+  object-fit: contain;
+  animation: splash-logo-in .55s ease-out both;
+}
+
+@keyframes splash-logo-in {
+  from { opacity: 0; transform: scale(.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .products-catalog .catalog-board-card-main > strong {
   font-size: .9rem;
 }
