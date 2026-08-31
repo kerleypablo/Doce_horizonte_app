@@ -188,7 +188,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       .select('*')
       .single();
 
-    if (error) return reply.status(400).send({ message: 'Erro ao criar produto' });
+    if (error) return reply.status(400).send({ message: `Nao foi possivel criar o produto: ${error.message}` });
     return reply.status(201).send({ product: mapProduct(created, (recipes ?? []).map(mapRecipe)), preview });
   });
 
@@ -284,7 +284,7 @@ export const productRoutes = async (app: FastifyInstance) => {
       .select('*')
       .single();
 
-    if (error) return reply.status(404).send({ message: 'Produto nao encontrado' });
+    if (error) return reply.status(400).send({ message: `Nao foi possivel salvar o produto: ${error.message}` });
     return reply.send({ product: mapProduct(updated, (recipes ?? []).map(mapRecipe)), preview });
   });
 

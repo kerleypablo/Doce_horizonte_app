@@ -339,7 +339,6 @@ export const ProductsPage = () => {
         return prev.map((item) => (item.id === response.product.id ? response.product : item));
       });
       invalidateQueryCache(queryKeys.products);
-      await productsQuery.refetch();
 
       resetForm();
       setShowForm(false);
@@ -659,7 +658,7 @@ export const ProductsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <CatalogListPanel title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `${formatCurrency(product.unitPrice ?? 0)} por unidade · venda ${formatCurrency(product.salePrice)}`, badge: `${product.unitsCount || 0} un.` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
+      <CatalogListPanel title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `Venda ${formatCurrency(product.salePrice)}`, badge: `Lucro ${product.targetProfitPercent || 0}%` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
       ) : null}
 
       {showForm && (
@@ -693,7 +692,7 @@ export const ProductsPage = () => {
                 Observacoes
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
               </label>
-              {saveError ? <p className="error">{saveError}</p> : null}
+              {saveError ? <p className="error" role="alert">{saveError}</p> : null}
               <FormActions
                 onCancel={() => navigate('/app/produtos')}
                 submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar produto'}
