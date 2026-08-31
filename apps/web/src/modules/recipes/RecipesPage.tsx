@@ -134,6 +134,11 @@ export const RecipesPage = () => {
   }, [recipesQuery.data]);
 
   useEffect(() => {
+    if (isCreateView || editingRouteId) return;
+    recipesQuery.refetch().catch(() => undefined);
+  }, [pathname]);
+
+  useEffect(() => {
     if (settingsQuery.data) setSettings(settingsQuery.data);
   }, [settingsQuery.data]);
 

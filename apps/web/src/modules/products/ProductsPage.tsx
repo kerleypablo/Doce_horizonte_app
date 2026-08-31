@@ -198,6 +198,11 @@ export const ProductsPage = () => {
   }, [productsQuery.data]);
 
   useEffect(() => {
+    if (isCreateView || editingRouteId) return;
+    productsQuery.refetch().catch(() => undefined);
+  }, [pathname]);
+
+  useEffect(() => {
     const loadedSettings = settingsQuery.data;
     if (!loadedSettings) return;
     setSettings(loadedSettings);
@@ -334,7 +339,7 @@ export const ProductsPage = () => {
         return prev.map((item) => (item.id === response.product.id ? response.product : item));
       });
       invalidateQueryCache(queryKeys.products);
-      productsQuery.refetch().catch(() => undefined);
+      await productsQuery.refetch();
 
       resetForm();
       setShowForm(false);

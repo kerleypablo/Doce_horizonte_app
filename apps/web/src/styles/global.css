@@ -2836,6 +2836,12 @@ button:disabled {
   gap: 16px;
 }
 
+.input-package-measure-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 10px;
+}
+
 .inline-field {
   display: grid;
   grid-template-columns: 1fr auto;

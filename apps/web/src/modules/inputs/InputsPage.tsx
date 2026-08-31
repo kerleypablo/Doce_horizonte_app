@@ -143,6 +143,11 @@ export const InputsPage = () => {
   }, [inputsQuery.data]);
 
   useEffect(() => {
+    if (isCreateView || editingRouteId) return;
+    inputsQuery.refetch().catch(() => undefined);
+  }, [pathname]);
+
+  useEffect(() => {
     if (isCreateView) {
       setForm(duplicateDraft ? { ...duplicateDraft, tags: [...duplicateDraft.tags] } : createEmptyForm());
       setTagDraft('');
@@ -507,7 +512,7 @@ export const InputsPage = () => {
                   ]}
                 />
               </label>
-              <div className="grid-2">
+              <div className="input-package-measure-row">
               <label>
                 Tamanho pacote
                 <input
