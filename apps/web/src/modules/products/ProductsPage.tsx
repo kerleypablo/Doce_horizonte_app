@@ -326,12 +326,12 @@ export const ProductsPage = () => {
       directInputs: form.directInputs.map((item) => ({
         inputId: item.inputId,
         quantity: Number(item.quantity),
-        unit: item.unit
+        unit: inputsById.get(item.inputId)?.unit ?? item.unit
       })),
       packagingInputs: form.packagingInputs.map((item) => ({
         inputId: item.inputId,
         quantity: Number(item.quantity),
-        unit: item.unit
+        unit: inputsById.get(item.inputId)?.unit ?? item.unit
       }))
     };
 
@@ -774,7 +774,7 @@ export const ProductsPage = () => {
             <h3>Adicionar receitas</h3>
             <div className="ingredients">
               {form.extraRecipes.map((item, index) => (
-                <div key={`${item.recipeId}-${index}`} className="add-item-row">
+                <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-add-item-row">
                   <div className="order-product-label">
                   <span>{recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
                   <small className="order-product-meta">
@@ -797,6 +797,7 @@ export const ProductsPage = () => {
                       aria-label="Quantidade"
                     />
                   </label>
+                  <SelectField className="add-item-unit-select" value={recipesById.get(item.recipeId)?.yieldUnit ?? 'un'} onChange={() => undefined} options={[{ value: recipesById.get(item.recipeId)?.yieldUnit ?? 'un', label: recipesById.get(item.recipeId)?.yieldUnit ?? 'un' }]} disabled />
                   <button
                     type="button"
                     className="icon-button tiny"
@@ -823,7 +824,7 @@ export const ProductsPage = () => {
             <h3>Adicionar produtos</h3>
             <div className="ingredients">
               {form.extraProducts.map((item, index) => (
-                <div key={`${item.productId}-${index}`} className="add-item-row">
+                <div key={`${item.productId}-${index}`} className="add-item-row recipe-add-item-row">
                   <span className="order-product-label">
                     {productsById.get(item.productId)?.name ?? 'Produto nao encontrado'}
                   </span>
@@ -843,6 +844,7 @@ export const ProductsPage = () => {
                       aria-label="Quantidade"
                     />
                   </label>
+                  <SelectField className="add-item-unit-select" value="un" onChange={() => undefined} options={[{ value: 'un', label: 'un' }]} disabled />
                   <button
                     type="button"
                     className="icon-button tiny"
@@ -872,7 +874,7 @@ export const ProductsPage = () => {
                   <div className="order-product-label">
                     <span>{inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'}</span>
                     <small className="order-product-meta">
-                      {item.quantity} {item.unit} · {formatCurrency((inputsById.get(item.inputId)?.packagePrice ?? 0) / Math.max(inputsById.get(item.inputId)?.packageSize ?? 1, 1) * normalizeInputQuantity(item.quantity, item.unit, inputsById.get(item.inputId)?.unit ?? 'un'))}
+                      {item.quantity} {inputsById.get(item.inputId)?.unit ?? item.unit} · {formatCurrency((inputsById.get(item.inputId)?.packagePrice ?? 0) / Math.max(inputsById.get(item.inputId)?.packageSize ?? 1, 1) * normalizeInputQuantity(item.quantity, inputsById.get(item.inputId)?.unit ?? item.unit, inputsById.get(item.inputId)?.unit ?? 'un'))}
                     </small>
                   </div>
                   <label className="add-item-qty-field">
@@ -883,11 +885,7 @@ export const ProductsPage = () => {
                       setForm({ ...form, directInputs: next });
                     }} aria-label="Quantidade" />
                   </label>
-                  <SelectField className="add-item-unit-select" value={item.unit} onChange={(value) => {
-                    const next = [...form.directInputs];
-                    next[index] = { ...next[index], unit: value as ProductItem['directInputs'][number]['unit'] };
-                    setForm({ ...form, directInputs: next });
-                  }} options={units.map((unit) => ({ value: unit, label: unit }))} />
+                  <SelectField className="add-item-unit-select" value={inputsById.get(item.inputId)?.unit ?? item.unit} onChange={() => undefined} options={[{ value: inputsById.get(item.inputId)?.unit ?? item.unit, label: inputsById.get(item.inputId)?.unit ?? item.unit }]} disabled />
                   <button type="button" className="icon-button tiny" aria-label="Remover insumo" onClick={() => setForm((prev) => ({ ...prev, directInputs: prev.directInputs.filter((_, itemIndex) => itemIndex !== index) }))}>
                     <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
                   </button>
@@ -902,7 +900,7 @@ export const ProductsPage = () => {
             <h3>Embalagens</h3>
             <div className="ingredients">
               {form.packagingInputs.map((item, index) => (
-                <div key={`${item.inputId}-${index}`} className="add-item-row">
+                <div key={`${item.inputId}-${index}`} className="add-item-row recipe-add-item-row">
                   <span className="order-product-label">
                     {inputsById.get(item.inputId)?.name ?? 'Embalagem nao encontrada'}
                   </span>
@@ -922,6 +920,7 @@ export const ProductsPage = () => {
                       aria-label="Quantidade"
                     />
                   </label>
+                  <SelectField className="add-item-unit-select" value={inputsById.get(item.inputId)?.unit ?? item.unit} onChange={() => undefined} options={[{ value: inputsById.get(item.inputId)?.unit ?? item.unit, label: inputsById.get(item.inputId)?.unit ?? item.unit }]} disabled />
                   <button
                     type="button"
                     className="icon-button tiny"
