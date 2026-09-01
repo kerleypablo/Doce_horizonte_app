@@ -20,6 +20,13 @@ const productSchema = z.object({
   packagingInputs: z.array(z.object({ inputId: z.string().min(1), quantity: z.number().positive(), unit: z.enum(['kg', 'g', 'l', 'ml', 'un']) })).default([])
 });
 
+const productsListQuerySchema = z.object({
+  view: z.literal('list').optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  search: z.string().trim().max(120).optional()
+});
+
 export const productRoutes = async (app: FastifyInstance) => {
   const cadastrosGuard = { preHandler: [app.authenticate, app.requireModule('cadastros')] };
 
@@ -85,6 +92,24 @@ export const productRoutes = async (app: FastifyInstance) => {
 
   app.get('/products', cadastrosGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
+    const query = productsListQuerySchema.parse(request.query ?? {});
+
+    if (query.view === 'list') {
+      let productsQuery = supabaseAdmin
+        .from('products')
+        .select('*')
+        .eq('company_id', auth.companyId)
+        .order('created_at', { ascending: false })
+        .range(query.offset, query.offset + query.limit);
+
+      if (query.search) productsQuery = productsQuery.ilike('name', `%${query.search}%`);
+
+      const { data, error } = await productsQuery;
+      if (error) throw error;
+      const items = (data ?? []).slice(0, query.limit).map((row) => mapProduct(row));
+      return { items, hasMore: (data ?? []).length > query.limit };
+    }
+
     const [{ data }, { data: recipes }] = await Promise.all([
       supabaseAdmin
       .from('products')

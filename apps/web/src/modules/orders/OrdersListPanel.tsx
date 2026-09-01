@@ -1,5 +1,6 @@
 import { normalizeDateKey, toDateKey } from '../shared/date.ts';
 import { ListSkeleton } from '../shared/ListSkeleton.tsx';
+import { InfiniteScrollSentinel } from '../shared/InfiniteScrollSentinel.tsx';
 import { useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { OrderListItem, OrderStatus, OrderStatusFilter } from './order-types.ts';
@@ -61,6 +62,8 @@ type OrdersListPanelProps = {
   currentWeekOnly: boolean;
   loading: boolean;
   refreshing: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
   onSearch: (value: string) => void;
   onNew: () => void;
   onStatusFilter: (value: OrderStatusFilter) => void;
@@ -69,6 +72,7 @@ type OrdersListPanelProps = {
   onStatusChange: (order: OrderListItem, status: OrderStatus) => void;
   onPdf: (id: string) => void;
   onDelete: (order: OrderListItem) => void;
+  onLoadMore: () => void;
 };
 
 const nextStatusOnRightSwipe = (status: OrderStatus): OrderStatus | null => {
@@ -162,8 +166,8 @@ const SwipeableOrderCard = ({
 };
 
 export const OrdersListPanel = ({
-  orders, search, statusFilter, currentWeekOnly, loading, refreshing,
-  onSearch, onNew, onStatusFilter, onToggleWeek, onOpen, onStatusChange, onPdf, onDelete
+  orders, search, statusFilter, currentWeekOnly, loading, refreshing, hasMore, loadingMore,
+  onSearch, onNew, onStatusFilter, onToggleWeek, onOpen, onStatusChange, onPdf, onDelete, onLoadMore
 }: OrdersListPanelProps) => {
   const groups = groupOrders(orders);
 
@@ -211,6 +215,7 @@ export const OrdersListPanel = ({
         </div>
       ) : null}
       {!loading ? (
+        <>
         <div className="orders-date-groups">
           {groups.map((group) => (
             <section key={group.key} className="orders-date-group">
@@ -221,6 +226,8 @@ export const OrdersListPanel = ({
             </section>
           ))}
         </div>
+        <InfiniteScrollSentinel hasMore={hasMore} loading={loadingMore} onVisible={onLoadMore} />
+        </>
       ) : null}
     </section>
   );

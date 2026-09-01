@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
-import { normalizeDateKey, toDateKey } from '../shared/date.ts';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { fetchWithCache, invalidateQueryCache, prefetchWithCache } from '../shared/queryCache.ts';
@@ -31,6 +30,7 @@ import { createOrderForm, toDateTimeLocal } from './order-form.ts';
 import type { OrderFormState } from './order-form.ts';
 import { orderService } from './order-service.ts';
 import { useOrderData } from './useOrderData.ts';
+import { useInfiniteList } from '../shared/useInfiniteList.ts';
 import { useOrderEditors } from './useOrderEditors.ts';
 import { useOrderPickers } from './useOrderPickers.ts';
 import type {
@@ -44,28 +44,7 @@ import type {
   ProductItem
 } from './order-types.ts';
 
-const statusLabelMap: Record<OrderStatus, string> = {
-  AGUARDANDO_RETORNO: 'Aguardando',
-  CONCLUIDO: 'Concluido',
-  CONFIRMADO: 'Confirmado',
-  CANCELADO: 'Cancelado'
-};
-
-const getStatusLabel = (status: OrderStatus) => statusLabelMap[status] ?? status;
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-const getCurrentWeekRange = () => {
-  const today = new Date();
-  const day = today.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const start = new Date(today);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(today.getDate() + diffToMonday);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-  return { start: toDateKey(start), end: toDateKey(end) };
-};
-
 export const OrdersPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -75,7 +54,6 @@ export const OrdersPage = () => {
   const isCreateView = pathname === '/app/pedidos/novo';
   const isDetailView = Boolean(orderId);
   const isFormRoute = isCreateView || isDetailView;
-  const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [saving, setSaving] = useState(false);
@@ -122,12 +100,19 @@ export const OrdersPage = () => {
     return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
   }, [location.state]);
 
-  const { ordersQuery, detailQuery, customersQuery, productsQuery, settingsQuery } =
-    useOrderData(user?.token, orderId, isDetailView);
+  const { detailQuery, customersQuery, productsQuery, settingsQuery } =
+    useOrderData(user?.token, orderId, isDetailView, isFormRoute);
 
-  useEffect(() => {
-    if (ordersQuery.data) setOrders(ordersQuery.data);
-  }, [ordersQuery.data]);
+  const ordersListQuery = useInfiniteList<OrderListItem>({
+    enabled: Boolean(user?.token) && !isFormRoute,
+    resetKey: `${search.trim().toLocaleLowerCase()}|${statusFilter}|${currentWeekOnly}`,
+    fetchPage: (offset) => {
+      const params = new URLSearchParams({ view: 'list', offset: String(offset), limit: '20', status: statusFilter, currentWeek: String(currentWeekOnly) });
+      if (search.trim()) params.set('search', search.trim());
+      return orderService.listPage(params, user?.token);
+    }
+  });
+  const orders = ordersListQuery.items;
 
   useEffect(() => {
     if (customersQuery.data) setCustomers(customersQuery.data);
@@ -250,20 +235,6 @@ export const OrdersPage = () => {
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const selectedCustomer = useMemo(() => customerMap.get(form.customerId), [customerMap, form.customerId]);
 
-  const currentWeekRange = useMemo(() => getCurrentWeekRange(), []);
-  const filtered = useMemo(() => {
-    const searchTerm = search.toLowerCase().trim();
-    return orders.filter((order) => {
-      const customerName = order.customerSnapshot?.name ?? '';
-      const haystack = `${order.number} ${order.type} ${customerName} ${getStatusLabel(order.status)}`.toLowerCase();
-      if (searchTerm && !haystack.includes(searchTerm)) return false;
-      if (statusFilter === 'OPEN' && (order.status === 'CONCLUIDO' || order.status === 'CANCELADO')) return false;
-      if (statusFilter !== 'OPEN' && order.status !== statusFilter) return false;
-      if (!currentWeekOnly) return true;
-      const deliveryDate = normalizeDateKey(order.deliveryDate);
-      return Boolean(deliveryDate && deliveryDate >= currentWeekRange.start && deliveryDate <= currentWeekRange.end);
-    });
-  }, [orders, search, statusFilter, currentWeekOnly, currentWeekRange]);
   const activeTabIndex = orderTabs.findIndex((item) => item.key === tab);
 
   const totals = useMemo(() => calculateOrderTotals(form), [form]);
@@ -303,7 +274,6 @@ export const OrdersPage = () => {
       invalidateQueryCache(queryKeys.ordersSummaryCalendar);
       invalidateQueryCache('tasks-board');
       invalidateQueryCache(`order-detail:${editingId ?? ''}`);
-      await ordersQuery.refetch();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao salvar pedido';
       setSubmitError(message);
@@ -392,10 +362,10 @@ export const OrdersPage = () => {
     setDeleting(true);
     try {
       await orderService.remove(deleteTarget.id, user?.token);
-      setOrders((prev) => prev.filter((item) => item.id !== deleteTarget.id));
+      ordersListQuery.setItems((prev) => prev.filter((item) => item.id !== deleteTarget.id));
       invalidateQueryCache(queryKeys.orders);
       invalidateQueryCache(queryKeys.ordersSummaryCalendar);
-      await ordersQuery.refetch();
+      await ordersListQuery.refresh();
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -405,15 +375,15 @@ export const OrdersPage = () => {
   const handleSwipeStatusChange = async (order: OrderListItem, status: OrderStatus) => {
     if (order.status === status) return;
     const previousStatus = order.status;
-    setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status } : item));
+    ordersListQuery.setItems((current) => current.map((item) => item.id === order.id ? { ...item, status } : item));
     try {
       await orderService.updateStatus(order.id, status, user?.token);
       invalidateQueryCache(queryKeys.orders);
       invalidateQueryCache(queryKeys.ordersSummaryCalendar);
       invalidateQueryCache('tasks-board');
     } catch {
-      setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status: previousStatus } : item));
-      ordersQuery.refetch().catch(() => undefined);
+      ordersListQuery.setItems((current) => current.map((item) => item.id === order.id ? { ...item, status: previousStatus } : item));
+      ordersListQuery.refresh().catch(() => undefined);
     }
   };
 
@@ -446,12 +416,14 @@ export const OrdersPage = () => {
     <div className="page">
       {!isFormRoute ? (
         <OrdersListPanel
-          orders={filtered}
+          orders={orders}
           search={search}
           statusFilter={statusFilter}
           currentWeekOnly={currentWeekOnly}
-          loading={ordersQuery.loading && orders.length === 0}
-          refreshing={ordersQuery.isFetching}
+          loading={ordersListQuery.loading && orders.length === 0}
+          refreshing={ordersListQuery.loadingMore}
+          hasMore={ordersListQuery.hasMore}
+          loadingMore={ordersListQuery.loadingMore}
           onSearch={setSearch}
           onNew={handleNew}
           onStatusFilter={setStatusFilter}
@@ -460,6 +432,7 @@ export const OrdersPage = () => {
           onStatusChange={handleSwipeStatusChange}
           onPdf={(id) => void handleGeneratePdf(id)}
           onDelete={setDeleteTarget}
+          onLoadMore={ordersListQuery.loadMore}
         />
       ) : null}
 

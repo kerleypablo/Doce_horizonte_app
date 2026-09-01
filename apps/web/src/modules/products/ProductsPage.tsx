@@ -13,6 +13,7 @@ import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { FormActions } from '../shared/FormActions.tsx';
 import { CatalogListPanel } from '../shared/CatalogListPanel.tsx';
+import { useInfiniteList } from '../shared/useInfiniteList.ts';
 import { useProductPricing } from './useProductPricing.ts';
 
 type ProductPickerType = 'EXTRA_RECIPE' | 'EXTRA_PRODUCT' | 'DIRECT_INPUT' | 'PACKAGING';
@@ -91,6 +92,8 @@ export const ProductsPage = () => {
   const params = useParams<{ productId?: string }>();
   const isCreateView = pathname.endsWith('/novo');
   const editingRouteId = pathname.includes('/editar/') ? params.productId ?? null : null;
+  const isListView = !isCreateView && !editingRouteId;
+  const formDataEnabled = Boolean(user?.token) && !isListView;
   const duplicateState = (state as { duplicateDraft?: ProductFormState; unitPriceInput?: number } | null) ?? null;
   const duplicateDraft = duplicateState?.duplicateDraft ?? null;
   const duplicateUnitPriceInput = duplicateState?.unitPriceInput ?? 0;
@@ -179,23 +182,33 @@ export const ProductsPage = () => {
   const recipesQuery = useCachedQuery(
     queryKeys.recipes,
     () => apiFetch<RecipeItem[]>('/recipes', { token: user?.token }),
-    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+    { staleTime: 3 * 60_000, enabled: formDataEnabled }
   );
   const productsQuery = useCachedQuery(
     queryKeys.products,
     () => apiFetch<ProductItem[]>('/products', { token: user?.token }),
-    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+    { staleTime: 3 * 60_000, enabled: formDataEnabled }
   );
   const settingsQuery = useCachedQuery(
     queryKeys.companySettings,
     () => apiFetch<Settings>('/company/settings', { token: user?.token }),
-    { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+    { staleTime: 5 * 60_000, enabled: formDataEnabled }
   );
   const inputsQuery = useCachedQuery(
     queryKeys.inputs,
     () => apiFetch<InputItem[]>('/inputs', { token: user?.token }),
-    { staleTime: 3 * 60_000, enabled: Boolean(user?.token) }
+    { staleTime: 3 * 60_000, enabled: formDataEnabled }
   );
+
+  const listedProductsQuery = useInfiniteList<ProductItem>({
+    enabled: Boolean(user?.token) && isListView,
+    resetKey: search.trim().toLocaleLowerCase(),
+    fetchPage: (offset) => {
+      const params = new URLSearchParams({ view: 'list', offset: String(offset), limit: '20' });
+      if (search.trim()) params.set('search', search.trim());
+      return apiFetch<{ items: ProductItem[]; hasMore: boolean }>(`/products?${params.toString()}`, { token: user?.token });
+    }
+  });
 
   useEffect(() => {
     if (recipesQuery.data) setRecipes(recipesQuery.data);
@@ -204,11 +217,6 @@ export const ProductsPage = () => {
   useEffect(() => {
     if (productsQuery.data) setProducts(productsQuery.data);
   }, [productsQuery.data]);
-
-  useEffect(() => {
-    if (isCreateView || editingRouteId) return;
-    productsQuery.refetch().catch(() => undefined);
-  }, [pathname]);
 
   useEffect(() => {
     const loadedSettings = settingsQuery.data;
@@ -357,10 +365,6 @@ export const ProductsPage = () => {
       setSaving(false);
     }
   };
-
-  const filtered = products.filter((product) =>
-    product.name.toLowerCase().includes(search.toLowerCase())
-  );
 
   const recipesById = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const inputsById = useMemo(() => new Map(inputs.map((input) => [input.id, input])), [inputs]);
@@ -656,7 +660,7 @@ export const ProductsPage = () => {
       });
       setProducts((prev) => prev.filter((item) => item.id !== deleteTarget.id));
       invalidateQueryCache(queryKeys.products);
-      await productsQuery.refetch();
+      await listedProductsQuery.refresh();
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -666,7 +670,7 @@ export const ProductsPage = () => {
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <CatalogListPanel className="products-catalog" title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={productsQuery.loading} items={filtered.map((product) => ({ ...product, subtitle: `Venda ${formatCurrency(product.unitPrice)}`, badge: `Lucro: ${product.targetProfitPercent || 0}%` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} />
+      <CatalogListPanel className="products-catalog" title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={listedProductsQuery.loading} hasMore={listedProductsQuery.hasMore} loadingMore={listedProductsQuery.loadingMore} items={listedProductsQuery.items.map((product) => ({ ...product, subtitle: `Venda ${formatCurrency(product.unitPrice)}`, badge: `Lucro: ${product.targetProfitPercent || 0}%` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} onLoadMore={listedProductsQuery.loadMore} />
       ) : null}
 
       {showForm && (

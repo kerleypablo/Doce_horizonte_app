@@ -240,7 +240,12 @@ export const orderRoutes = async (app: FastifyInstance) => {
   };
 
   const listQuerySchema = z.object({
-    view: z.enum(['full', 'list']).optional()
+    view: z.enum(['full', 'list']).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    search: z.string().trim().max(120).optional(),
+    status: z.enum(['OPEN', 'AGUARDANDO_RETORNO', 'CONFIRMADO', 'CONCLUIDO', 'CANCELADO']).optional(),
+    currentWeek: z.enum(['true', 'false']).optional()
   });
 
 const summaryQuerySchema = z.object({
@@ -346,13 +351,41 @@ const toBooleanQueryValue = (value: boolean | string | undefined, defaultValue =
     const query = listQuerySchema.parse(request.query ?? {});
 
     if (query.view === 'list') {
-      const { data } = await supabaseAdmin
+      let ordersQuery = supabaseAdmin
         .from('orders')
         .select('id, number, type, order_datetime, delivery_date, status, customer_snapshot, products, additions, discount_mode, discount_value, shipping_value')
         .eq('company_id', auth.companyId)
         .order('created_at', { ascending: false });
 
-      return (data ?? []).map(mapOrderList);
+      if (query.status === 'OPEN') ordersQuery = ordersQuery.in('status', ['AGUARDANDO_RETORNO', 'CONFIRMADO']);
+      else if (query.status) ordersQuery = ordersQuery.eq('status', query.status);
+      if (query.currentWeek === 'true') {
+        const now = new Date();
+        const day = now.getDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        const start = new Date(now);
+        start.setDate(now.getDate() + diffToMonday);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        ordersQuery = ordersQuery
+          .gte('delivery_date', start.toISOString().slice(0, 10))
+          .lte('delivery_date', end.toISOString().slice(0, 10));
+      }
+      if (query.search) {
+        const safeSearch = query.search.replace(/[,%().]/g, ' ').trim();
+        if (safeSearch) ordersQuery = ordersQuery.or(`number.ilike.*${safeSearch}*,customer_snapshot->>name.ilike.*${safeSearch}*`);
+      }
+
+      if (query.offset === undefined) {
+        const { data, error } = await ordersQuery;
+        if (error) throw error;
+        return (data ?? []).map(mapOrderList);
+      }
+
+      const { data, error } = await ordersQuery.range(query.offset, query.offset + query.limit);
+      if (error) throw error;
+      const items = (data ?? []).slice(0, query.limit).map(mapOrderList);
+      return { items, hasMore: (data ?? []).length > query.limit };
     }
 
     const { data } = await supabaseAdmin

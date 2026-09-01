@@ -11,6 +11,7 @@ export type OrderSavePayload = Omit<OrderFormState, 'deliveryAddress'> & {
 
 export const orderService = {
   list: (token: Token) => apiFetch<OrderListItem[]>('/orders?view=list', { token }),
+  listPage: (params: URLSearchParams, token: Token) => apiFetch<{ items: OrderListItem[]; hasMore: boolean }>(`/orders?${params.toString()}`, { token }),
   detail: (id: string, token: Token) => apiFetch<OrderItem>(`/orders/${id}`, { token }),
   customers: (token: Token) => apiFetch<CustomerItem[]>('/customers', { token }),
   products: (token: Token) => apiFetch<ProductItem[]>('/products', { token }),
