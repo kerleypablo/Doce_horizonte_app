@@ -61,11 +61,6 @@ export type MethodRule = {
   value: number;
 };
 
-export type OriginCostRule = {
-  origin: SaleOrigin;
-  costPercent: number;
-};
-
 export type FinanceProduct = {
   id: string;
   name: string;
@@ -142,8 +137,6 @@ export type DashboardData = {
     manualSalesGross: number;
     manualSalesNet: number;
     manualSalesFees: number;
-    manualSalesEstimatedCost: number;
-    manualSalesEstimatedProfit: number;
     ordersEstimatedCost: number;
     ordersEstimatedProfit: number;
     expensesGross: number;
@@ -151,18 +144,15 @@ export type DashboardData = {
     recurringExpensesNet: number;
     totalEntries: number;
     netResult: number;
-    estimatedGrossProfit: number;
-    estimatedNetProfit: number;
     projectedBalance: number;
     checkedBalance?: number;
     balanceDifference: number | null;
   };
   chart: Array<{ date: string; orders: number; manualSales: number; expenses: number; net: number }>;
-  salesByOrigin: Array<{ origin: SaleOrigin; gross: number; net: number; estimatedCost: number; estimatedProfit: number; count: number }>;
+  salesByOrigin: Array<{ origin: SaleOrigin; gross: number; net: number; count: number }>;
   salesByMethod: Array<{ method: PaymentMethod; gross: number; net: number; fees: number; count: number }>;
   expensesByCategory: Array<{ category: ExpenseCategory; amount: number; count: number }>;
   methodRules: MethodRule[];
-  originCostRules: OriginCostRule[];
   dailyClosing: DailyClosing | null;
   accountClosings: AccountClosing[];
   accountsByType: Array<{ accountType: AccountType; balanceAmount: number; count: number }>;

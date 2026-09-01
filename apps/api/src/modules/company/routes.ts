@@ -32,7 +32,7 @@ const settingsSchema = z.object({
   companyEmail: z.string().optional(),
   pixKey: z.string().optional(),
   logoDataUrl: z.string().optional(),
-  appTheme: z.enum(['vinho', 'caramelo', 'oceano', 'floresta', 'branco_pop']).optional(),
+  appTheme: z.enum(['vinho', 'dourado', 'caramelo', 'oceano', 'floresta', 'branco_pop']).optional(),
   darkMode: z.boolean().optional(),
   defaultNotesDelivery: z.string().optional(),
   defaultNotesGeneral: z.string().optional(),

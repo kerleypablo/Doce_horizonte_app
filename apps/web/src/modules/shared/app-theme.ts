@@ -1,8 +1,8 @@
-export type AppTheme = 'vinho' | 'caramelo' | 'floresta' | 'oceano' | 'branco_pop';
-export type SelectableAppTheme = Extract<AppTheme, 'vinho' | 'caramelo' | 'floresta'>;
+export type AppTheme = 'vinho' | 'dourado' | 'caramelo' | 'floresta' | 'oceano' | 'branco_pop';
+export type SelectableAppTheme = Extract<AppTheme, 'vinho' | 'dourado' | 'caramelo' | 'floresta'>;
 
 export const normalizeAppTheme = (value?: string | null): SelectableAppTheme => {
-  if (value === 'caramelo' || value === 'floresta' || value === 'vinho') return value;
+  if (value === 'caramelo' || value === 'dourado' || value === 'floresta' || value === 'vinho') return value;
   return 'vinho';
 };
 
@@ -17,6 +17,12 @@ export const appThemeOptions: Array<{
     label: 'Vinho',
     description: 'Elegante e acolhedor',
     colors: ['#43062d', '#ef5350', '#fff8f8']
+  },
+  {
+    value: 'dourado',
+    label: 'Doce Gestão',
+    description: 'Vinho profundo e dourado',
+    colors: ['#4a130d', '#c99952', '#fbf5ef']
   },
   {
     value: 'caramelo',

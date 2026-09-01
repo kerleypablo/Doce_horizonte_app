@@ -7,7 +7,6 @@ import {
   financeDashboardKey,
   financeExpensesKey,
   financeManualSalesKey,
-  financeOriginCostRulesKey,
   financeRulesKey
 } from './constants.ts';
 import { monthStart, todayDate } from './utils.ts';
@@ -18,8 +17,7 @@ import type {
   FinanceAccountsSummary,
   FinanceProduct,
   ManualSale,
-  MethodRule,
-  OriginCostRule
+  MethodRule
 } from './types.ts';
 
 export const useFinanceRange = () => {
@@ -53,13 +51,6 @@ export const useFinanceRules = (token?: string) =>
   useCachedQuery(
     financeRulesKey,
     () => apiFetch<{ rules: MethodRule[] }>('/finance/method-rules', { token }),
-    { enabled: Boolean(token), staleTime: 45_000 }
-  );
-
-export const useFinanceOriginCostRules = (token?: string) =>
-  useCachedQuery(
-    financeOriginCostRulesKey,
-    () => apiFetch<{ rules: OriginCostRule[] }>('/finance/origin-cost-rules', { token }),
     { enabled: Boolean(token), staleTime: 45_000 }
   );
 

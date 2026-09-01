@@ -21,10 +21,18 @@ import {
   useFinanceProducts,
   useFinanceRange,
   useManualSales,
-  useManualSalesTags
+  useManualSalesTags,
+  useFinanceRules
 } from './hooks.ts';
 import { createEmptyManualSaleForm, createManualSaleLine, formatCurrency, isSaleOrigin, stripOriginTags } from './utils.ts';
-import type { ManualSaleProduct, PaymentMethod, SaleOrigin } from './types.ts';
+import type { ManualSaleProduct, MethodRule, PaymentMethod, SaleOrigin } from './types.ts';
+
+const calculateNetAmount = (amount: number, rule?: MethodRule) => {
+  if (!rule || rule.mode === 'NONE') return amount;
+  if (rule.mode === 'PERCENT') return Math.max(amount * (1 - rule.value / 100), 0);
+  if (rule.mode === 'FIXED_ADD') return amount + rule.value;
+  return Math.max(amount - rule.value, 0);
+};
 
 export const FinanceManualSalesPage = () => {
   const pageSize = 10;
@@ -42,6 +50,7 @@ export const FinanceManualSalesPage = () => {
   const salesQuery = useManualSales(user?.token, from, to, filterTag || undefined, searchText || undefined);
   const tagsQuery = useManualSalesTags(user?.token);
   const productsQuery = useFinanceProducts(user?.token);
+  const rulesQuery = useFinanceRules(user?.token);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [showForm, setShowForm] = useState(Boolean(isCreateView || editingRouteId));
@@ -85,6 +94,11 @@ export const FinanceManualSalesPage = () => {
   const tagOptions = tagsQuery.data?.tags ?? [];
   const reusableTagOptions = tagOptions.filter((tag) => !isSaleOrigin(tag));
   const grossTotal = form.lines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const totalFees = form.lines.reduce((sum, line) => {
+    const amount = Number(line.amount || 0);
+    const rule = (rulesQuery.data?.rules ?? []).find((item) => item.method === line.paymentMethod);
+    return sum + (amount - calculateNetAmount(amount, rule));
+  }, 0);
   const filteredSales = useMemo(() => (
     (salesQuery.data ?? []).filter((item) => filterMethod === 'ALL' || item.paymentMethod === filterMethod)
   ), [filterMethod, salesQuery.data]);
@@ -302,6 +316,10 @@ export const FinanceManualSalesPage = () => {
               <div className="finance-lines-total">
                 <span>Total bruto</span>
                 <strong>{formatCurrency(grossTotal)}</strong>
+              </div>
+              <div className="finance-lines-fee" aria-live="polite">
+                <span>{totalFees > 0 ? 'Taxas estimadas' : totalFees < 0 ? 'Acréscimo estimado' : 'Taxas estimadas'}</span>
+                <strong>{totalFees > 0 ? '-' : totalFees < 0 ? '+' : ''}{formatCurrency(Math.abs(totalFees))}</strong>
               </div>
             </div>
             <div className="finance-lines-block">

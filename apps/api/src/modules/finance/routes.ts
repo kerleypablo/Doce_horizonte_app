@@ -17,11 +17,6 @@ const expenseCategorySchema = z.enum([
   'MARKETING',
   'OUTROS'
 ]);
-const originCostRuleSchema = z.object({
-  origin: z.enum(['balcao', 'rua', 'porta-a-porta', 'ifood', 'outros']),
-  costPercent: z.number().min(0).max(100)
-});
-
 const dateRangeQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
@@ -81,10 +76,6 @@ const methodRuleSchema = z.object({
 
 const methodRulesPayloadSchema = z.object({
   rules: z.array(methodRuleSchema)
-});
-
-const originCostRulesPayloadSchema = z.object({
-  rules: z.array(originCostRuleSchema)
 });
 
 const tagsSchema = z.array(z.string().trim().min(1).max(40)).max(12);
@@ -202,23 +193,6 @@ const expenseCategories = [
 const getSaleOrigin = (tags: unknown): SaleOrigin => {
   const values = Array.isArray(tags) ? tags.map((tag) => String(tag)) : [];
   return values.find((tag): tag is SaleOrigin => saleOrigins.includes(tag as SaleOrigin)) ?? 'outros';
-};
-
-const defaultOriginCostRules = () =>
-  saleOrigins.map((origin) => ({
-    origin,
-    costPercent: origin === 'ifood' ? 50 : origin === 'rua' || origin === 'porta-a-porta' ? 45 : 40
-  }));
-
-const isMissingSupabaseTableError = (error: unknown) => {
-  const maybeError = error as { code?: string; message?: string } | null;
-  const message = maybeError?.message?.toLowerCase() ?? '';
-  return (
-    maybeError?.code === 'PGRST205' ||
-    maybeError?.code === '42P01' ||
-    message.includes('schema cache') ||
-    message.includes('does not exist')
-  );
 };
 
 const calcLiquidByRule = (gross: number, rule?: MethodRule) => {
@@ -401,37 +375,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
         value: rule.value
       }))
     );
-	    return defaults;
-	  };
-
-	  const getOriginCostRules = async (companyId: string) => {
-	    const { data, error } = await supabaseAdmin
-	      .from('financial_origin_cost_rules')
-	      .select('origin, cost_percent')
-	      .eq('company_id', companyId)
-	      .order('origin', { ascending: true });
-
-	    if (error) {
-	      if (isMissingSupabaseTableError(error)) return defaultOriginCostRules();
-	      throw error;
-	    }
-	    if ((data ?? []).length > 0) {
-	      const existing = new Map((data ?? []).map((item) => [String(item.origin), Number(item.cost_percent ?? 0)]));
-	      return defaultOriginCostRules().map((rule) => ({
-	        origin: rule.origin,
-	        costPercent: existing.get(rule.origin) ?? rule.costPercent
-	      }));
-	    }
-
-	    const defaults = defaultOriginCostRules();
-	    const { error: insertError } = await supabaseAdmin.from('financial_origin_cost_rules').insert(
-	      defaults.map((rule) => ({
-	        company_id: companyId,
-	        origin: rule.origin,
-	        cost_percent: rule.costPercent
-	      }))
-	    );
-	    if (insertError && !isMissingSupabaseTableError(insertError)) throw insertError;
 	    return defaults;
 	  };
 
@@ -977,37 +920,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	    return reply.send({ rules: body.rules });
 	  });
 
-	  app.get('/finance/origin-cost-rules', financeGuard, async (request) => {
-	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-	    const rules = await getOriginCostRules(auth.companyId);
-	    return { rules };
-	  });
-
-	  app.put('/finance/origin-cost-rules', financeGuard, async (request, reply) => {
-	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
-	    const body = originCostRulesPayloadSchema.parse(request.body);
-	    const incoming = new Map(body.rules.map((item) => [item.origin, item.costPercent]));
-	    const rules = defaultOriginCostRules().map((rule) => ({
-	      origin: rule.origin,
-	      costPercent: incoming.get(rule.origin) ?? rule.costPercent
-	    }));
-	    const payload = rules.map((rule) => ({
-	      company_id: auth.companyId,
-	      origin: rule.origin,
-	      cost_percent: rule.costPercent
-	    }));
-	    const { error } = await supabaseAdmin
-	      .from('financial_origin_cost_rules')
-	      .upsert(payload, { onConflict: 'company_id,origin' });
-	    if (error) {
-	      const message = isMissingSupabaseTableError(error)
-	        ? 'Tabela financial_origin_cost_rules nao existe no Supabase. Rode o SQL atualizado em docs/SUPABASE_FINANCE.sql.'
-	        : 'Erro ao salvar custos por origem';
-	      return reply.status(400).send({ message, detail: error.message });
-	    }
-	    return reply.send({ rules });
-	  });
-
 	  app.get('/finance/manual-sales', financeGuard, async (request) => {
     const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 	    const range = parseDateRange(request.query);
@@ -1198,9 +1110,7 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	    const auth = (request as typeof request & { auth: { companyId: string } }).auth;
 	    const range = parseDateRange(request.query);
 	    const rules = await getRules(auth.companyId);
-	    const originCostRules = await getOriginCostRules(auth.companyId);
 	    const rulesMap = new Map(rules.map((item) => [item.method, item]));
-	    const originCostMap = new Map(originCostRules.map((item) => [item.origin, item.costPercent]));
 
 		    const [{ data: accounts }, { data: sales }, { data: expenses }, { data: orders }, { data: closings }] = await Promise.all([
 	      supabaseAdmin
@@ -1256,10 +1166,9 @@ export const financeRoutes = async (app: FastifyInstance) => {
     }, 0);
     const manualSalesFees = Math.max(manualSalesGross - manualSalesNet, 0);
 
-		    const salesByOrigin = new Map<SaleOrigin, { origin: SaleOrigin; gross: number; net: number; estimatedCost: number; estimatedProfit: number; count: number }>(
-		      saleOrigins.map((origin) => [origin, { origin, gross: 0, net: 0, estimatedCost: 0, estimatedProfit: 0, count: 0 }])
+		    const salesByOrigin = new Map<SaleOrigin, { origin: SaleOrigin; gross: number; net: number; count: number }>(
+		      saleOrigins.map((origin) => [origin, { origin, gross: 0, net: 0, count: 0 }])
 		    );
-	    let manualSalesEstimatedCost = 0;
     const salesByMethod = new Map<MethodRule['method'], { method: MethodRule['method']; gross: number; net: number; fees: number; count: number }>(
       ['PIX', 'DINHEIRO', 'CARTAO', 'VOUCHER'].map((method) => [
         method as MethodRule['method'],
@@ -1273,14 +1182,10 @@ export const financeRoutes = async (app: FastifyInstance) => {
       const rule = rulesMap.get(method);
       const net = calcLiquidByRule(amount, rule);
 	      const origin = getSaleOrigin(row.tags);
-	      const estimatedCost = net * ((originCostMap.get(origin) ?? 0) / 100);
-	      manualSalesEstimatedCost += estimatedCost;
 	      const originEntry = salesByOrigin.get(origin);
 	      if (originEntry) {
 	        originEntry.gross += amount;
 	        originEntry.net += net;
-	        originEntry.estimatedCost += estimatedCost;
-	        originEntry.estimatedProfit += net - estimatedCost;
 	        originEntry.count += 1;
 	      }
       const methodEntry = salesByMethod.get(method);
@@ -1322,11 +1227,8 @@ export const financeRoutes = async (app: FastifyInstance) => {
 		    const ordersTotal = (orders ?? []).reduce((sum, row) => sum + calcOrderTotal(row), 0);
 		    const ordersEstimatedCost = (orders ?? []).reduce((sum, row) => sum + calcOrderEstimatedProductCost(row), 0);
 		    const ordersEstimatedProfit = ordersTotal - ordersEstimatedCost;
-		    const manualSalesEstimatedProfit = manualSalesNet - manualSalesEstimatedCost;
 		    const totalEntries = manualSalesNet + ordersTotal;
 		    const projectedBalance = accountsBalance + totalEntries - expensesNet;
-		    const estimatedGrossProfit = ordersEstimatedProfit + manualSalesEstimatedProfit;
-		    const estimatedNetProfit = estimatedGrossProfit - expensesNet;
       const accountClosingMap = new Map(
         (closings ?? []).map((row) => [String(row.account_id), row])
       );
@@ -1412,8 +1314,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	        manualSalesGross,
 	        manualSalesNet,
 	        manualSalesFees,
-	        manualSalesEstimatedCost,
-	        manualSalesEstimatedProfit,
 	        ordersEstimatedCost,
 	        ordersEstimatedProfit,
 	        expensesGross,
@@ -1421,8 +1321,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	        recurringExpensesNet,
 	        totalEntries,
 	        netResult: totalEntries - expensesNet,
-	        estimatedGrossProfit,
-	        estimatedNetProfit,
 	        projectedBalance,
 	        checkedBalance,
 	        balanceDifference
@@ -1432,7 +1330,6 @@ export const financeRoutes = async (app: FastifyInstance) => {
 	      salesByMethod: Array.from(salesByMethod.values()),
 	      expensesByCategory: Array.from(expensesByCategory.values()),
 	      methodRules: rules,
-	      originCostRules,
 	      dailyClosing: null,
 	      accountClosings,
 	      accountsByType: Array.from(accountsByType.values()),

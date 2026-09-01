@@ -948,6 +948,22 @@
   --shadow-soft: 0 4px 16px rgba(63, 14, 42, 0.07);
 }
 
+:root[data-theme='dourado'] {
+  --bg: #fbf5ef;
+  --surface: #fffdf9;
+  --surface-alt: #f6eadb;
+  --text: #30130e;
+  --muted: #76594d;
+  --accent: #c99952;
+  --accent-strong: #651b11;
+  --accent-soft: #f5dfbd;
+  --app-header: #4a130d;
+  --app-header-strong: #260604;
+  --border: #ead7c3;
+  --shadow: 0 10px 30px rgba(60, 16, 10, 0.12);
+  --shadow-soft: 0 4px 16px rgba(60, 16, 10, 0.08);
+}
+
 :root[data-theme='caramelo'] {
   --bg: #f7f2ed;
   --surface: #ffffff;
@@ -2088,6 +2104,21 @@ main {
 .finance-lines-total strong {
   font-size: 18px;
   color: var(--text);
+}
+
+.finance-lines-fee {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: -6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finance-lines-fee strong {
+  color: var(--danger);
+  font-size: 13px;
 }
 
 .finance-tag-reuse {

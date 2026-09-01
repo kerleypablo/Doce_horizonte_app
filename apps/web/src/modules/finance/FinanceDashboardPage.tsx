@@ -9,7 +9,6 @@ import { invalidateQueryCache } from '../shared/queryCache.ts';
 import { FinanceAccessBlocked } from './FinanceShared.tsx';
 import {
   financeDashboardKey,
-  financeOriginCostRulesKey,
   accountTypeLabels,
   expenseCategoryLabels,
   methodLabels,
@@ -19,17 +18,15 @@ import {
 import {
   useExpenses,
   useFinanceDashboard,
-  useFinanceOriginCostRules,
   useFinanceRange,
   useManualSales
 } from './hooks.ts';
 import { formatCompactCurrency, formatCurrency, monthStart, todayDate } from './utils.ts';
-import type { OriginCostRule, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
 type SalesTab = 'general' | 'byMethod';
 type ExpensesTab = 'general' | 'byMethod';
-type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'accounts' | 'costs' | 'rates';
+type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'accounts' | 'rates';
 type RangePreset = 'today' | 'week' | 'month' | 'custom';
 
 const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
@@ -53,7 +50,6 @@ const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
   { id: 'sales', label: 'Vendas' },
   { id: 'expenses', label: 'Despesas' },
   { id: 'accounts', label: 'Contas' },
-  { id: 'costs', label: 'Custos' },
   { id: 'rates', label: 'Taxas' }
 ];
 
@@ -304,22 +300,13 @@ export const FinanceDashboardPage = () => {
   const [activeExpensesTab, setActiveExpensesTab] = useState<ExpensesTab>('general');
 
   const dashboardQuery = useFinanceDashboard(user?.token, from, to);
-  const originCostRulesQuery = useFinanceOriginCostRules(user?.token);
   const salesQuery = useManualSales(user?.token, from, to);
   const expensesQuery = useExpenses(user?.token, from, to);
-  const [originRules, setOriginRules] = useState<OriginCostRule[]>([]);
-  const [originRulesSaving, setOriginRulesSaving] = useState(false);
 
   if (!user?.modules?.includes('financeiro')) return <FinanceAccessBlocked />;
 
   const data = dashboardQuery.data;
   const theme = getThemeTokens();
-
-  useEffect(() => {
-    if (originCostRulesQuery.data?.rules) {
-      setOriginRules(originCostRulesQuery.data.rules);
-    }
-  }, [originCostRulesQuery.data]);
 
   const openPicker = (ref: React.RefObject<HTMLInputElement>) => {
     const input = ref.current;
@@ -366,34 +353,6 @@ export const FinanceDashboardPage = () => {
     if (from === startDate && to === todayDate) return 'week';
     return 'custom';
   }, [from, to]);
-
-  const updateOriginRule = (origin: SaleOrigin, costPercent: number) => {
-    setOriginRules((current) => {
-      const map = new Map(current.map((item) => [item.origin, item.costPercent]));
-      map.set(origin, costPercent);
-      return Array.from(map.entries()).map(([itemOrigin, itemPercent]) => ({
-        origin: itemOrigin as SaleOrigin,
-        costPercent: itemPercent
-      }));
-    });
-  };
-
-  const saveOriginRules = async () => {
-    setOriginRulesSaving(true);
-    try {
-      await apiFetch('/finance/origin-cost-rules', {
-        method: 'PUT',
-        token: user?.token,
-        body: JSON.stringify({ rules: originRules })
-      });
-      invalidateQueryCache(financeOriginCostRulesKey);
-      invalidateQueryCache(financeDashboardKey);
-      await originCostRulesQuery.refetch();
-      await dashboardQuery.refetch();
-    } finally {
-      setOriginRulesSaving(false);
-    }
-  };
 
   const headlineCards = [
     {
@@ -513,10 +472,8 @@ export const FinanceDashboardPage = () => {
       buildBarChart({
         categories: (data?.salesByOrigin ?? []).map((item) => saleOriginLabels[item.origin]),
         firstSeries: (data?.salesByOrigin ?? []).map((item) => item.net),
-        secondSeries: (data?.salesByOrigin ?? []).map((item) => item.estimatedProfit),
         theme,
-        firstName: 'Liquido',
-        secondName: 'Lucro estimado'
+        firstName: 'Liquido'
       }),
     [data?.salesByOrigin, theme]
   );
@@ -1038,79 +995,11 @@ export const FinanceDashboardPage = () => {
     </div>
   );
 
-  const costsContent = (
-    <div className="finance-dashboard-content-grid">
-      <div className="finance-dashboard-main">
-        <article className="finance-dashboard-panel">
-          <div className="finance-dashboard-panel-head compact">
-            <div>
-              <span className="finance-dashboard-section-label">Custos por origem</span>
-              <h3>Percentual medio usado no lucro estimado</h3>
-            </div>
-            <div className="finance-dashboard-action-row">
-              <button type="button" className="finance-dashboard-action-link primary" onClick={saveOriginRules} disabled={originRulesSaving}>
-                {originRulesSaving ? 'Salvando...' : 'Salvar custos'}
-              </button>
-            </div>
-          </div>
-          <HighchartsReact
-            highcharts={Highcharts}
-            options={buildColumnChart({
-              categories: originRules.map((item) => saleOriginLabels[item.origin]),
-              values: originRules.map((item) => item.costPercent),
-              theme,
-              name: 'Custo %'
-            })}
-          />
-        </article>
-
-        <article className="finance-dashboard-panel">
-          <div className="finance-dashboard-panel-head compact">
-            <div>
-              <span className="finance-dashboard-section-label">Edicao</span>
-              <h3>Ajuste por canal de venda</h3>
-            </div>
-          </div>
-          <div className="finance-dashboard-cost-grid">
-            {originRules.map((rule) => (
-              <label key={rule.origin}>
-                <span>{saleOriginLabels[rule.origin]}</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={rule.costPercent}
-                  onChange={(event) => updateOriginRule(rule.origin, Number(event.target.value || 0))}
-                />
-              </label>
-            ))}
-          </div>
-        </article>
-      </div>
-
-      <aside className="finance-dashboard-side">
-        <article className="finance-dashboard-side-card">
-          <div className="finance-dashboard-list-head">
-            <h4>Custos configurados</h4>
-          </div>
-          {renderListRows(
-            originRules.map((item) => ({
-              title: saleOriginLabels[item.origin],
-              subtitle: 'Percentual medio',
-              value: `${item.costPercent}%`
-            }))
-          )}
-        </article>
-      </aside>
-    </div>
-  );
-
   const contentByHomeTab: Record<FinanceHomeTab, React.ReactNode> = {
     dashboard: dashboardSummaryContent,
     sales: salesContent,
     expenses: expensesContent,
     accounts: accountsContent,
-    costs: costsContent,
     rates: ratesContent
   };
 
