@@ -47,7 +47,7 @@ const expensesTabs: Array<{ id: ExpensesTab; label: string }> = [
 
 const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'sales', label: 'Vendas avulsas' },
+  { id: 'sales', label: 'Vendas' },
   { id: 'expenses', label: 'Despesas' },
   { id: 'accounts', label: 'Contas' },
   { id: 'rates', label: 'Taxas' }

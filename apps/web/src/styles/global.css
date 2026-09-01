@@ -1511,7 +1511,7 @@ main {
 
 .finance-filter-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -1534,6 +1534,14 @@ main {
 .finance-filter-summary strong {
   font-size: 16px;
   color: var(--text);
+}
+
+.finance-filter-count {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
 }
 
 .finance-list-board {
@@ -1596,7 +1604,7 @@ main {
 
 .finance-transaction-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 14px;
@@ -1612,11 +1620,10 @@ main {
 .finance-transaction-main { display: grid; min-width: 0; gap: 5px; }
 .finance-transaction-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .finance-transaction-heading strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.finance-transaction-badge { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; background: var(--surface-alt); color: var(--muted); font-size: 10px; font-weight: 700; }
 .finance-transaction-meta { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; }
 .finance-transaction-meta .material-symbols-outlined { font-size: 14px; }
 .finance-transaction-meta b { font-size: 10px; }
-.finance-transaction-value { display: grid; gap: 3px; text-align: right; }
+.finance-transaction-value { display: grid; gap: 3px; margin-top: 2px; }
 .finance-transaction-value small { color: var(--muted); font-size: 10px; }
 .finance-transaction-value strong { color: var(--text); font-size: 16px; }
 .finance-transaction-card.expense .finance-transaction-value strong { color: var(--danger); }
@@ -5544,15 +5551,12 @@ button:disabled {
     flex: 1 1 0;
   }
 
-  .finance-filter-summary {
-    grid-template-columns: 1fr;
-  }
+  .finance-filter-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .finance-list-board { padding: 14px; }
   .finance-list-board-header { align-items: flex-start; flex-direction: column; padding: 16px; }
   .finance-list-new-button { width: 100%; }
   .finance-transaction-card { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; }
-  .finance-transaction-value { grid-column: 2; text-align: left; }
   .finance-transaction-actions { grid-column: 3; grid-row: 1 / span 2; }
   .finance-transaction-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
 

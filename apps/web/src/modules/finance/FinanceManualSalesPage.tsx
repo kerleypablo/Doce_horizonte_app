@@ -423,30 +423,17 @@ export const FinanceManualSalesPage = () => {
               <span>Total liquido filtrado</span>
               <strong>{formatCurrency(filteredNetTotal)}</strong>
             </div>
-              <div>
-                <span>Vendas encontradas</span>
-                <strong>{filteredSales.length}</strong>
-              </div>
+            <small className="finance-filter-count">{filteredSales.length} {filteredSales.length === 1 ? 'venda encontrada' : 'vendas encontradas'}</small>
             </div>
           <div className="finance-transaction-list">
             {paginatedSales.map((item) => (
               <article key={item.id} className="finance-transaction-card sale">
                 <span className="finance-transaction-icon material-symbols-outlined" aria-hidden="true">point_of_sale</span>
                 <div className="finance-transaction-main">
-                  <div className="finance-transaction-heading"><strong>{item.description}</strong><span className="finance-transaction-badge">Venda avulsa</span></div>
-                  <span className="finance-transaction-meta"><span className="material-symbols-outlined" aria-hidden="true">event</span>{new Date(item.occurredAt).toLocaleString('pt-BR')} <b>•</b> {methodLabels[item.paymentMethod]}</span>
-                  {item.tags?.length ? (
-                    <span className="finance-list-tags">
-                      {item.tags.map((tag) => (isSaleOrigin(tag) ? saleOriginLabels[tag] : `#${tag}`)).join('  ')}
-                    </span>
-                  ) : null}
-                  {item.products?.length ? (
-                    <span className="finance-list-tags">
-                      {item.products.map((product) => `${product.name} x${product.quantity}`).join('  ')}
-                    </span>
-                  ) : null}
+                  <div className="finance-transaction-heading"><strong>{item.description}</strong></div>
+                  <span className="finance-transaction-meta"><span className="material-symbols-outlined" aria-hidden="true">event</span>{new Date(item.occurredAt).toLocaleDateString('pt-BR')} <b>•</b> {methodLabels[item.paymentMethod]} <b>•</b> {saleOriginLabels[item.tags?.find(isSaleOrigin) ?? 'outros']}</span>
+                  <div className="finance-transaction-value"><small>Valor líquido</small><strong>{formatCurrency(item.netAmount)}</strong></div>
                 </div>
-                <div className="finance-transaction-value"><small>Valor líquido</small><strong>{formatCurrency(item.netAmount)}</strong></div>
                 <div className="finance-transaction-actions">
                 <button
                   type="button"

@@ -262,21 +262,17 @@ export const FinanceExpensesPage = () => {
                 <span>Total liquido filtrado</span>
                 <strong>{formatCurrency(filteredNetTotal)}</strong>
               </div>
-              <div>
-                <span>Despesas encontradas</span>
-                <strong>{filtered.length}</strong>
-              </div>
+              <small className="finance-filter-count">{filtered.length} {filtered.length === 1 ? 'despesa encontrada' : 'despesas encontradas'}</small>
             </div>
           <div className="finance-transaction-list">
               {filtered.map((item) => (
                 <article key={item.id} className="finance-transaction-card expense">
                   <span className="finance-transaction-icon material-symbols-outlined" aria-hidden="true">receipt_long</span>
                   <div className="finance-transaction-main">
-                    <div className="finance-transaction-heading"><strong>{item.description}</strong><span className="finance-transaction-badge">{expenseCategoryLabels[item.category]}</span></div>
-                    <span className="finance-transaction-meta"><span className="material-symbols-outlined" aria-hidden="true">event</span>{new Date(item.occurredAt).toLocaleString('pt-BR')} <b>•</b> {methodLabels[item.paymentMethod]}</span>
-                    {item.recurring ? <span className="finance-list-tags">Recorrente</span> : null}
+                    <div className="finance-transaction-heading"><strong>{item.description}</strong></div>
+                    <span className="finance-transaction-meta"><span className="material-symbols-outlined" aria-hidden="true">event</span>{new Date(item.occurredAt).toLocaleDateString('pt-BR')} <b>•</b> {methodLabels[item.paymentMethod]} <b>•</b> {expenseCategoryLabels[item.category]}{item.recurring ? ' • Recorrente' : ''}</span>
+                    <div className="finance-transaction-value"><small>Saída líquida</small><strong>{formatCurrency(item.netAmount)}</strong></div>
                   </div>
-                  <div className="finance-transaction-value"><small>Saída líquida</small><strong>{formatCurrency(item.netAmount)}</strong></div>
                   <div className="finance-transaction-actions">
                   <button
                     type="button"
