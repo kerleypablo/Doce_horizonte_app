@@ -6650,13 +6650,17 @@ button.finance-dashboard-action-link {
 }
 
 .orders-swipe-action-right {
+  inset: 0 auto 0 0;
+  width: 50%;
   justify-content: flex-start;
-  background: #2f9b5b;
+  background: #3b9a62;
 }
 
 .orders-swipe-action-left {
+  inset: 0 0 0 auto;
+  width: 50%;
   justify-content: flex-end;
-  background: #bd7b25;
+  background: #d66161;
 }
 
 .orders-swipe-card .orders-board-card {
