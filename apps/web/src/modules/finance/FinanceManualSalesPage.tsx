@@ -7,7 +7,6 @@ import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
 import { TagInput } from '../shared/TagInput.tsx';
-import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { invalidateQueryCache } from '../shared/queryCache.ts';
 import { FinanceAccessBlocked, FinanceHeader } from './FinanceShared.tsx';
 import {
@@ -363,15 +362,23 @@ export const FinanceManualSalesPage = () => {
       ) : null}
 
       {!isCreateView && !editingRouteId ? (
-        <div className="panel">
-          <FinanceHeader title="Vendas avulsas" backTo="/app/financeiro" />
-          <ListToolbar
-            title=""
-            searchValue={searchText}
-            onSearch={setSearchText}
-            actionLabel="Nova venda"
-            onAction={() => navigate('/app/financeiro/vendas-manuais/novo')}
-          />
+        <section className="finance-list-board">
+          <header className="finance-list-board-header sale">
+            <div>
+              <span>Controle financeiro</span>
+              <h1>Vendas avulsas</h1>
+              <small>Registre vendas de balcão, feira ou feitas fora dos pedidos.</small>
+            </div>
+            <button type="button" className="finance-list-new-button" onClick={() => navigate('/app/financeiro/vendas-manuais/novo')}>
+              <span className="material-symbols-outlined" aria-hidden="true">add</span>
+              Registrar venda avulsa
+            </button>
+          </header>
+          <div className="finance-list-search">
+            <span className="material-symbols-outlined" aria-hidden="true">search</span>
+            <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Buscar venda" aria-label="Buscar venda" />
+            {searchText ? <button type="button" onClick={() => setSearchText('')} aria-label="Limpar busca"><span className="material-symbols-outlined" aria-hidden="true">close</span></button> : null}
+          </div>
           <div className="finance-filter-row">
             <div className="finance-filter-date-group">
               <label className="finance-filter-field finance-filter-field-date">
@@ -383,10 +390,6 @@ export const FinanceManualSalesPage = () => {
                 <input type="date" className="finance-date-input" value={to} onChange={(e) => setTo(e.target.value)} />
               </label>
             </div>
-            <label className="finance-filter-field">
-              <span>Buscar</span>
-              <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Descricao da venda" />
-            </label>
             <label className="finance-filter-field">
               <span>Origem ou marcador</span>
               <SelectField
@@ -425,14 +428,13 @@ export const FinanceManualSalesPage = () => {
                 <strong>{filteredSales.length}</strong>
               </div>
             </div>
-          <div className="table">
+          <div className="finance-transaction-list">
             {paginatedSales.map((item) => (
-              <div key={item.id} className="list-row">
-                <div>
-                  <strong>{item.description}</strong>
-                  <span className="muted">
-                    {new Date(item.occurredAt).toLocaleString('pt-BR')} • {methodLabels[item.paymentMethod]} • {formatCurrency(item.netAmount)}
-                  </span>
+              <article key={item.id} className="finance-transaction-card sale">
+                <span className="finance-transaction-icon material-symbols-outlined" aria-hidden="true">point_of_sale</span>
+                <div className="finance-transaction-main">
+                  <div className="finance-transaction-heading"><strong>{item.description}</strong><span className="finance-transaction-badge">Venda avulsa</span></div>
+                  <span className="finance-transaction-meta"><span className="material-symbols-outlined" aria-hidden="true">event</span>{new Date(item.occurredAt).toLocaleString('pt-BR')} <b>•</b> {methodLabels[item.paymentMethod]}</span>
                   {item.tags?.length ? (
                     <span className="finance-list-tags">
                       {item.tags.map((tag) => (isSaleOrigin(tag) ? saleOriginLabels[tag] : `#${tag}`)).join('  ')}
@@ -444,9 +446,12 @@ export const FinanceManualSalesPage = () => {
                     </span>
                   ) : null}
                 </div>
+                <div className="finance-transaction-value"><small>Valor líquido</small><strong>{formatCurrency(item.netAmount)}</strong></div>
+                <div className="finance-transaction-actions">
                 <button
                   type="button"
                   className="icon-button"
+                  aria-label={`Editar venda ${item.description}`}
                   onClick={() => navigate(`/app/financeiro/vendas-manuais/editar/${item.id}`)}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">edit</span>
@@ -459,10 +464,12 @@ export const FinanceManualSalesPage = () => {
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                 </button>
-              </div>
+                </div>
+              </article>
             ))}
             {filteredSales.length === 0 ? (
-              <div className="list-row">
+              <div className="finance-transaction-empty">
+                <span className="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
                 <div>
                   <strong>Nenhuma venda encontrada</strong>
                   <span className="muted">Ajuste os filtros para ver outros resultados.</span>
@@ -481,7 +488,7 @@ export const FinanceManualSalesPage = () => {
               </button>
             </div>
           ) : null}
-        </div>
+        </section>
       ) : null}
 
       <ConfirmDialog

@@ -6,7 +6,6 @@ import { apiFetch } from '../shared/api.ts';
 import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
 import { SelectField } from '../shared/SelectField.tsx';
-import { ListToolbar } from '../shared/ListToolbar.tsx';
 import { invalidateQueryCache } from '../shared/queryCache.ts';
 import { FinanceAccessBlocked, FinanceHeader } from './FinanceShared.tsx';
 import {
@@ -205,16 +204,23 @@ export const FinanceExpensesPage = () => {
       ) : null}
 
       {!isCreateView && !editingRouteId ? (
-        <>
-          <div className="panel finance-filter-panel">
-            <FinanceHeader title="Despesas" backTo="/app/financeiro" />
-            <ListToolbar
-              title=""
-              searchValue={search}
-              onSearch={setSearch}
-              actionLabel="Nova despesa"
-              onAction={() => navigate('/app/financeiro/despesas/novo')}
-            />
+        <section className="finance-list-board">
+          <header className="finance-list-board-header expense">
+            <div>
+              <span>Controle financeiro</span>
+              <h1>Despesas</h1>
+              <small>Registre e acompanhe todas as saídas do seu negócio.</small>
+            </div>
+            <button type="button" className="finance-list-new-button" onClick={() => navigate('/app/financeiro/despesas/novo')}>
+              <span className="material-symbols-outlined" aria-hidden="true">add</span>
+              Nova despesa
+            </button>
+          </header>
+          <div className="finance-list-search">
+            <span className="material-symbols-outlined" aria-hidden="true">search</span>
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar despesa" aria-label="Buscar despesa" />
+            {search ? <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><span className="material-symbols-outlined" aria-hidden="true">close</span></button> : null}
+          </div>
             <div className="finance-filter-grid">
               <div className="finance-filter-date-group finance-filter-field-wide">
                 <label className="finance-filter-field finance-filter-field-date">
@@ -261,22 +267,21 @@ export const FinanceExpensesPage = () => {
                 <strong>{filtered.length}</strong>
               </div>
             </div>
-          </div>
-
-          <div className="panel">
-            <div className="table">
+          <div className="finance-transaction-list">
               {filtered.map((item) => (
-                <div key={item.id} className="list-row">
-                  <div>
-                    <strong>{item.description}</strong>
-                    <span className="muted">
-                      {new Date(item.occurredAt).toLocaleString('pt-BR')} • {expenseCategoryLabels[item.category]} • {methodLabels[item.paymentMethod]} • {formatCurrency(item.netAmount)}
-                    </span>
+                <article key={item.id} className="finance-transaction-card expense">
+                  <span className="finance-transaction-icon material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                  <div className="finance-transaction-main">
+                    <div className="finance-transaction-heading"><strong>{item.description}</strong><span className="finance-transaction-badge">{expenseCategoryLabels[item.category]}</span></div>
+                    <span className="finance-transaction-meta"><span className="material-symbols-outlined" aria-hidden="true">event</span>{new Date(item.occurredAt).toLocaleString('pt-BR')} <b>•</b> {methodLabels[item.paymentMethod]}</span>
                     {item.recurring ? <span className="finance-list-tags">Recorrente</span> : null}
                   </div>
+                  <div className="finance-transaction-value"><small>Saída líquida</small><strong>{formatCurrency(item.netAmount)}</strong></div>
+                  <div className="finance-transaction-actions">
                   <button
                     type="button"
                     className="icon-button"
+                    aria-label={`Editar despesa ${item.description}`}
                     onClick={() => navigate(`/app/financeiro/despesas/editar/${item.id}`)}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">edit</span>
@@ -289,19 +294,20 @@ export const FinanceExpensesPage = () => {
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">delete</span>
                   </button>
-                </div>
+                  </div>
+                </article>
               ))}
               {filtered.length === 0 ? (
-                <div className="list-row">
+                <div className="finance-transaction-empty">
+                  <span className="material-symbols-outlined" aria-hidden="true">receipt_long</span>
                   <div>
                     <strong>Nenhuma despesa encontrada</strong>
                     <span className="muted">Ajuste os filtros para ver outros resultados.</span>
                   </div>
                 </div>
               ) : null}
-            </div>
           </div>
-        </>
+        </section>
       ) : null}
 
       <ConfirmDialog

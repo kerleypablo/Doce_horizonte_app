@@ -47,7 +47,7 @@ const expensesTabs: Array<{ id: ExpensesTab; label: string }> = [
 
 const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'sales', label: 'Vendas' },
+  { id: 'sales', label: 'Vendas avulsas' },
   { id: 'expenses', label: 'Despesas' },
   { id: 'accounts', label: 'Contas' },
   { id: 'rates', label: 'Taxas' }
@@ -774,7 +774,7 @@ export const FinanceDashboardPage = () => {
         <article className="finance-dashboard-side-card">
           <div className="finance-dashboard-list-head">
             <h4>Entradas por origem</h4>
-            <Link to="/app/financeiro/vendas-manuais">Vendas</Link>
+            <Link to="/app/financeiro/vendas-manuais">Vendas avulsas</Link>
           </div>
           {renderListRows(
             [...(data?.salesByOrigin ?? [])]
@@ -813,7 +813,7 @@ export const FinanceDashboardPage = () => {
     <>
       <div className="finance-dashboard-toolbar">
         <Link to="/app/financeiro/vendas-manuais" className="finance-dashboard-action-link">Ver vendas</Link>
-        <Link to="/app/financeiro/vendas-manuais/novo" className="finance-dashboard-action-link primary">Nova venda</Link>
+        <Link to="/app/financeiro/vendas-manuais/novo" className="finance-dashboard-action-link primary">Nova venda avulsa</Link>
       </div>
       <div className="finance-dashboard-content-grid">
         <div className="finance-dashboard-main">
@@ -1015,7 +1015,7 @@ export const FinanceDashboardPage = () => {
           <div className="finance-board-actions">
             <Link to="/app/financeiro/vendas-manuais/novo" className="finance-board-secondary-action">
               <span className="material-symbols-outlined" aria-hidden="true">add</span>
-              Nova venda
+              Nova venda avulsa
             </Link>
             <Link to="/app/financeiro/despesas/novo" className="finance-board-primary-action">
               <span className="material-symbols-outlined" aria-hidden="true">add</span>
