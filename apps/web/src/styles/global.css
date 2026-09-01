@@ -121,6 +121,41 @@
   gap: 10px;
 }
 
+.dashboard-metrics-carousel {
+  min-width: 0;
+}
+
+.dashboard-metrics-carousel-track {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.dashboard-metrics-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.dashboard-metrics-carousel-slide {
+  width: 100%;
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+}
+
+.dashboard-metrics-carousel-hint {
+  display: block;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  text-align: right;
+}
+
+.dashboard-finance-metrics .dashboard-metric-card.featured {
+  background: linear-gradient(145deg, #fffdf8, color-mix(in srgb, var(--accent-soft) 65%, white));
+}
+
 .dashboard-metric-card {
   min-width: 0;
   min-height: 118px;

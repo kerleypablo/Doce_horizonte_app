@@ -6,10 +6,12 @@ import { toDateKey } from '../shared/date.ts';
 import { prefetchWithCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { DashboardCalendar } from './DashboardCalendar.tsx';
+import { DashboardFinanceMetrics } from './DashboardFinanceMetrics.tsx';
 import { DashboardMetrics } from './DashboardMetrics.tsx';
 import { DashboardOrderList } from './DashboardOrderList.tsx';
 import { DashboardQuickActions } from './DashboardQuickActions.tsx';
 import type { CalendarCell, CompanySettings, DashboardOrder } from './dashboard-types.ts';
+import type { DashboardData } from '../finance/types.ts';
 import {
   buildWeekCells, endOfMonth, endOfWeek, getGreeting, getOrderDateKeys,
   getOrderReferenceDateKey, getOrderTotal, isConfirmedOrder, startOfMonth, startOfWeek
@@ -59,6 +61,12 @@ export const DashboardPage = () => {
     queryKeys.companySettings,
     () => apiFetch<CompanySettings>('/company/settings', { token: user?.token }),
     { staleTime: 5 * 60_000, enabled: Boolean(user?.token) }
+  );
+  const financeEnabled = Boolean(user?.modules?.includes('financeiro'));
+  const financeQuery = useCachedQuery(
+    `finance-dashboard:home:${revenueRange.from}:${revenueRange.to}`,
+    () => apiFetch<DashboardData>(`/finance/dashboard?from=${revenueRange.from}&to=${revenueRange.to}`, { token: user?.token }),
+    { staleTime: 45_000, enabled: Boolean(user?.token && financeEnabled) }
   );
 
   const orders = ordersQuery.data ?? [];
@@ -122,7 +130,25 @@ export const DashboardPage = () => {
           </div>
           <div><span>{settings?.companyName ?? 'Doce Horizonte'}</span><h1>{getGreeting(today)}, {firstName}</h1><small>Confira como está sua operação hoje.</small></div>
         </div>
-        <DashboardMetrics monthlySales={monthlySales} weekOrders={currentWeekOrders.length} todayDeliveries={todayDeliveries} confirmedOrders={confirmedOrders} loading={revenueQuery.loading || weekOrdersQuery.loading} hidden={!showRevenue} onToggleVisibility={() => setShowRevenue((current) => !current)} />
+        <div className={financeEnabled ? 'dashboard-metrics-carousel' : undefined}>
+          <div className={financeEnabled ? 'dashboard-metrics-carousel-track' : undefined}>
+            <div className={financeEnabled ? 'dashboard-metrics-carousel-slide' : undefined}>
+              <DashboardMetrics monthlySales={monthlySales} weekOrders={currentWeekOrders.length} todayDeliveries={todayDeliveries} confirmedOrders={confirmedOrders} loading={revenueQuery.loading || weekOrdersQuery.loading} hidden={!showRevenue} onToggleVisibility={() => setShowRevenue((current) => !current)} />
+            </div>
+            {financeEnabled ? (
+              <div className="dashboard-metrics-carousel-slide">
+                <DashboardFinanceMetrics
+                  entries={financeQuery.data?.totals.totalEntries ?? 0}
+                  expenses={financeQuery.data?.totals.expensesNet ?? 0}
+                  result={financeQuery.data?.totals.netResult ?? 0}
+                  appOrders={financeQuery.data?.totals.ordersTotal ?? 0}
+                  loading={financeQuery.loading}
+                />
+              </div>
+            ) : null}
+          </div>
+          {financeEnabled ? <small className="dashboard-metrics-carousel-hint">Deslize para ver o resumo financeiro</small> : null}
+        </div>
       </section>
       <div className="dashboard-content-grid">
         <div className="dashboard-primary-column">
