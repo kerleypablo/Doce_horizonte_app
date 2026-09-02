@@ -364,6 +364,9 @@ export const FinanceManualSalesPage = () => {
       {!isCreateView && !editingRouteId ? (
         <section className="finance-list-board">
           <header className="finance-list-board-header sale">
+            <button type="button" className="finance-list-back-button" onClick={() => navigate('/app/financeiro')} aria-label="Voltar para financeiro">
+              <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+            </button>
             <div>
               <span>Controle financeiro</span>
               <h1>Vendas avulsas</h1>

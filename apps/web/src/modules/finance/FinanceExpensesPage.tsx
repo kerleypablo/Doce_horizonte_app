@@ -206,6 +206,9 @@ export const FinanceExpensesPage = () => {
       {!isCreateView && !editingRouteId ? (
         <section className="finance-list-board">
           <header className="finance-list-board-header expense">
+            <button type="button" className="finance-list-back-button" onClick={() => navigate('/app/financeiro')} aria-label="Voltar para financeiro">
+              <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+            </button>
             <div>
               <span>Controle financeiro</span>
               <h1>Despesas</h1>
