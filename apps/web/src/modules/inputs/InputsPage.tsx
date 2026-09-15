@@ -16,7 +16,7 @@ export type InputItem = {
   name: string;
   brand?: string;
   category: 'embalagem' | 'producao' | 'outros';
-  unit: 'kg' | 'g' | 'l' | 'ml' | 'un';
+  unit: 'g' | 'ml' | 'un';
   packageSize: number;
   packagePrice: number;
   tags: string[];
@@ -40,9 +40,9 @@ type RecipeDependencyItem = {
   description?: string;
   prepTimeMinutes: number;
   yield: number;
-  yieldUnit: 'kg' | 'g' | 'l' | 'ml' | 'un';
+  yieldUnit: 'g' | 'ml' | 'un';
   notes?: string;
-  ingredients: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
+  ingredients: { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[];
   subRecipes: { recipeId: string; quantity: number }[];
   tags: string[];
 };
@@ -59,19 +59,11 @@ const inputUnitOptions = [
   { value: 'un', label: 'Unidade' }
 ] as const;
 const normalizeInputMeasureForForm = (unit: InputItem['unit'], packageSize: number) => {
-  if (unit === 'kg') return { unit: 'g' as const, packageSize: packageSize * 1000 };
-  if (unit === 'l') return { unit: 'ml' as const, packageSize: packageSize * 1000 };
   return { unit, packageSize };
 };
 
 const normalizeQuantity = (quantity: number, unit: string, target: string) => {
-  if (unit === 'un' || target === 'un') return quantity;
-  const weight = { kg: 1000, g: 1 } as Record<string, number>;
-  const volume = { l: 1000, ml: 1 } as Record<string, number>;
-  const isWeight = unit in weight && target in weight;
-  const isVolume = unit in volume && target in volume;
-  if (isWeight) return (quantity * weight[unit]) / weight[target];
-  if (isVolume) return (quantity * volume[unit]) / volume[target];
+  // Quantidades e embalagens usam a mesma unidade base (g, ml ou un).
   return quantity;
 };
 

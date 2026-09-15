@@ -45,7 +45,7 @@ export type Input = {
   name: string;
   brand?: string;
   category: 'embalagem' | 'producao' | 'outros';
-  unit: 'kg' | 'g' | 'l' | 'ml' | 'un';
+  unit: 'g' | 'ml' | 'un';
   packageSize: number;
   packagePrice: number;
   tags: string[];
@@ -55,7 +55,7 @@ export type Input = {
 export type RecipeIngredient = {
   inputId: string;
   quantity: number;
-  unit: 'kg' | 'g' | 'l' | 'ml' | 'un';
+  unit: 'g' | 'ml' | 'un';
 };
 
 export type Recipe = {
@@ -65,7 +65,7 @@ export type Recipe = {
   description?: string;
   prepTimeMinutes: number;
   yield: number; // number of portions/units produced
-  yieldUnit: 'kg' | 'g' | 'l' | 'ml' | 'un';
+  yieldUnit: 'g' | 'ml' | 'un';
   ingredients: RecipeIngredient[];
   subRecipes: { recipeId: string; quantity: number }[];
   tags: string[];
@@ -87,7 +87,7 @@ export type Product = {
   channelId?: string;
   extraRecipes: { recipeId: string; quantity: number }[];
   extraProducts: { productId: string; quantity: number }[];
-  packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
+  packagingInputs: { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[];
 };
 
 export const db = {

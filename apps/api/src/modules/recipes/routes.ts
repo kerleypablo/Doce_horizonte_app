@@ -6,7 +6,7 @@ import { assertCompanyOwns } from '../common/company-ownership.js';
 const ingredientSchema = z.object({
   inputId: z.string().min(1),
   quantity: z.number().positive(),
-  unit: z.enum(['kg', 'g', 'l', 'ml', 'un'])
+  unit: z.enum(['g', 'ml', 'un'])
 });
 
 const subRecipeSchema = z.object({
@@ -19,7 +19,7 @@ const recipeSchema = z.object({
   description: z.string().optional(),
   prepTimeMinutes: z.number().min(0),
   yield: z.number().positive(),
-  yieldUnit: z.enum(['kg', 'g', 'l', 'ml', 'un']),
+  yieldUnit: z.enum(['g', 'ml', 'un']),
   ingredients: z.array(ingredientSchema),
   subRecipes: z.array(subRecipeSchema).default([]),
   tags: z.array(z.string()).default([]),

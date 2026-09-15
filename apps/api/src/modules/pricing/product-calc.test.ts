@@ -116,3 +116,23 @@ test('taxa fixa por item nao e diluida pelo tamanho do lote', () => {
   assert.equal(result.totalCost, 8);
   assert.equal(result.unitCost, 2);
 });
+
+for (const unit of ['g', 'ml', 'un'] as const) {
+  test(`insumo em ${unit}: custo proporcional sem conversao por mil`, () => {
+    const input: Input = {
+      id: 'base', companyId: 'company', name: 'Insumo', category: 'producao',
+      unit, packageSize: 1000, packagePrice: 20, tags: []
+    };
+    assert.equal(preview({ inputs: [input], directInputs: [{ inputId: input.id, quantity: 250, unit }] }).directCost, 5);
+    const recipe: Recipe = {
+      id: 'base-recipe', companyId: 'company', name: 'Receita', prepTimeMinutes: 0,
+      yield: 500, yieldUnit: unit,
+      ingredients: [{ inputId: input.id, quantity: 250, unit }], subRecipes: [], tags: []
+    };
+    const parent: Recipe = {
+      ...recipe, id: 'parent', yield: 100, ingredients: [],
+      subRecipes: [{ recipeId: recipe.id, quantity: 200 }]
+    };
+    assert.equal(preview({ inputs: [input], recipes: [recipe, parent], extraRecipes: [{ recipeId: parent.id, quantity: 50 }] }).directCost, 1);
+  });
+}

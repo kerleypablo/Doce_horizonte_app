@@ -18,11 +18,7 @@ export type ProductPricePreview = {
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
 export const normalizeQuantity = (quantity: number, from: Unit, to: Unit) => {
-  if (from === to || from === 'un' || to === 'un') return quantity;
-  const weight: Partial<Record<Unit, number>> = { kg: 1000, g: 1 };
-  const volume: Partial<Record<Unit, number>> = { l: 1000, ml: 1 };
-  if (weight[from] !== undefined && weight[to] !== undefined) return quantity * weight[from]! / weight[to]!;
-  if (volume[from] !== undefined && volume[to] !== undefined) return quantity * volume[from]! / volume[to]!;
+  // Quantidades e embalagens usam a mesma unidade base (g, ml ou un).
   return quantity;
 };
 

@@ -31,8 +31,8 @@ export type ProductItem = {
   channelId?: string;
   extraRecipes: { recipeId: string; quantity: number }[];
   extraProducts: { productId: string; quantity: number }[];
-  directInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
-  packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
+  directInputs: { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[];
+  packagingInputs: { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[];
 };
 
 type ProductFormState = {
@@ -46,8 +46,8 @@ type ProductFormState = {
   channelId: string;
   extraRecipes: { recipeId: string; quantity: number }[];
   extraProducts: { productId: string; quantity: number }[];
-  directInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
-  packagingInputs: { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[];
+  directInputs: { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[];
+  packagingInputs: { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[];
 };
 
 type Settings = {
@@ -70,18 +70,14 @@ type Settings = {
 
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 const normalizeInputQuantity = (quantity: number, from: ProductItem['directInputs'][number]['unit'], to: InputItem['unit']) => {
-  if (from === to || from === 'un' || to === 'un') return quantity;
-  const weight = { kg: 1000, g: 1 } as const;
-  const volume = { l: 1000, ml: 1 } as const;
-  if (from in weight && to in weight) return quantity * weight[from as keyof typeof weight] / weight[to as keyof typeof weight];
-  if (from in volume && to in volume) return quantity * volume[from as keyof typeof volume] / volume[to as keyof typeof volume];
+  // Quantidades e embalagens usam a mesma unidade base (g, ml ou un).
   return quantity;
 };
-const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
+const units = ['g', 'ml', 'un'] as const;
 const inputUnitOptions = [
   { value: 'g', label: 'g' },
   { value: 'ml', label: 'ml' },
-  { value: 'un', label: 'un' }
+  { value: 'un', label: 'und' }
 ] as const;
 
 export const ProductsPage = () => {
@@ -144,8 +140,8 @@ export const ProductsPage = () => {
     manualUnitPrice: 0,
     extraRecipes: [] as { recipeId: string; quantity: number }[],
     extraProducts: [] as { productId: string; quantity: number }[],
-    directInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[],
-    packagingInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[]
+    directInputs: [] as { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[],
+    packagingInputs: [] as { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[]
   });
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
@@ -160,8 +156,8 @@ export const ProductsPage = () => {
     channelId: '',
     extraRecipes: [] as { recipeId: string; quantity: number }[],
     extraProducts: [] as { productId: string; quantity: number }[],
-    directInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[],
-    packagingInputs: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[]
+    directInputs: [] as { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[],
+    packagingInputs: [] as { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[]
   });
 
   const createEmptyForm = (): ProductFormState => ({
@@ -610,9 +606,9 @@ export const ProductsPage = () => {
           if (existing) return existing;
           const input = inputsById.get(id);
           if (!input) return null;
-          return { inputId: id, quantity: 0, unit: input.unit as 'kg' | 'g' | 'l' | 'ml' | 'un' };
+          return { inputId: id, quantity: 0, unit: input.unit as 'g' | 'ml' | 'un' };
         })
-        .filter((item): item is { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' } => Boolean(item));
+        .filter((item): item is { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' } => Boolean(item));
       setForm((prev) => ({ ...prev, directInputs: next }));
     } else {
       const existingById = new Map(form.packagingInputs.map((item) => [item.inputId, item] as const));
@@ -622,9 +618,9 @@ export const ProductsPage = () => {
           if (existing) return existing;
           const input = inputsById.get(id);
           if (!input) return null;
-          return { inputId: id, quantity: 0, unit: input.unit as 'kg' | 'g' | 'l' | 'ml' | 'un' };
+          return { inputId: id, quantity: 0, unit: input.unit as 'g' | 'ml' | 'un' };
         })
-        .filter((item): item is { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' } => Boolean(item));
+        .filter((item): item is { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' } => Boolean(item));
       setForm((prev) => ({ ...prev, packagingInputs: next }));
     }
     setPickerOpen(false);
@@ -848,7 +844,7 @@ export const ProductsPage = () => {
                       aria-label="Quantidade"
                     />
                   </label>
-                  <SelectField className="add-item-unit-select" value="un" onChange={() => undefined} options={[{ value: 'un', label: 'un' }]} disabled />
+                  <SelectField className="add-item-unit-select" value="un" onChange={() => undefined} options={[{ value: 'un', label: 'und' }]} disabled />
                   <button
                     type="button"
                     className="icon-button tiny"
@@ -1153,11 +1149,9 @@ export const ProductsPage = () => {
                           value={quickRecipeForm.yieldUnit}
                           onChange={(value) => setQuickRecipeForm((current) => ({ ...current, yieldUnit: value as RecipeItem['yieldUnit'] }))}
                           options={[
-                            { value: 'kg', label: 'kg' },
                             { value: 'g', label: 'g' },
-                            { value: 'l', label: 'l' },
                             { value: 'ml', label: 'ml' },
-                            { value: 'un', label: 'un' }
+                            { value: 'un', label: 'und' }
                           ]}
                         />
                       </div>
@@ -1476,7 +1470,8 @@ export const ProductsPage = () => {
                               )
                             }))
                           }
-                          options={units.map((unit) => ({ value: unit, label: unit }))}
+                          options={[{ value: item.unit, label: item.unit === 'un' ? 'und' : item.unit }]}
+                          disabled
                         />
                         <button
                           type="button"

@@ -6,16 +6,14 @@ const inputSchema = z.object({
   name: z.string().min(2),
   brand: z.string().optional(),
   category: z.enum(['embalagem', 'producao', 'outros']),
-  unit: z.enum(['kg', 'g', 'l', 'ml', 'un']),
+  unit: z.enum(['g', 'ml', 'un']),
   packageSize: z.number().positive(),
   packagePrice: z.number().positive(),
   tags: z.array(z.string()).default([]),
   notes: z.string().optional()
 });
 
-const normalizeInputMeasure = (unit: 'kg' | 'g' | 'l' | 'ml' | 'un', packageSize: number) => {
-  if (unit === 'kg') return { unit: 'g' as const, packageSize: packageSize * 1000 };
-  if (unit === 'l') return { unit: 'ml' as const, packageSize: packageSize * 1000 };
+const normalizeInputMeasure = (unit: 'g' | 'ml' | 'un', packageSize: number) => {
   return { unit, packageSize };
 };
 

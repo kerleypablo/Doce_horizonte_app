@@ -33,18 +33,12 @@ type Settings = {
   }[];
 };
 
-const units = ['kg', 'g', 'l', 'ml', 'un'] as const;
+const units = ['g', 'ml', 'un'] as const;
 const inputUnitOptions = ['g', 'ml', 'un'] as const;
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
 const normalizeQuantity = (quantity: number, unit: string, target: string) => {
-  if (unit === 'un' || target === 'un') return quantity;
-  const weight = { kg: 1000, g: 1 } as Record<string, number>;
-  const volume = { l: 1000, ml: 1 } as Record<string, number>;
-  const isWeight = unit in weight && target in weight;
-  const isVolume = unit in volume && target in volume;
-  if (isWeight) return (quantity * weight[unit]) / weight[target];
-  if (isVolume) return (quantity * volume[unit]) / volume[target];
+  // Quantidades e embalagens usam a mesma unidade base (g, ml ou un).
   return quantity;
 };
 
@@ -78,7 +72,7 @@ export const RecipesPage = () => {
     brand: '',
     category: 'producao' as 'embalagem' | 'producao' | 'outros',
     packageSize: 1,
-    unit: 'g' as 'kg' | 'g' | 'l' | 'ml' | 'un',
+    unit: 'g' as 'g' | 'ml' | 'un',
     packagePrice: 0,
     notes: '',
     tags: [] as string[]
@@ -92,8 +86,8 @@ export const RecipesPage = () => {
     description: '',
     prepTimeMinutes: 0,
     yield: 1,
-    yieldUnit: 'un' as const,
-    ingredients: [] as { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' }[],
+    yieldUnit: 'un' as RecipeItem['yieldUnit'],
+    ingredients: [] as { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[],
     subRecipes: [] as { recipeId: string; quantity: number }[],
     tags: [] as string[]
   });
@@ -267,21 +261,8 @@ export const RecipesPage = () => {
 
   const unitOptionsForInput = (inputId: string) => {
     const input = inputsMap.get(inputId);
-    if (!input) return units.map((unit) => ({ value: unit, label: unit }));
-    if (input.unit === 'un') return [{ value: 'un', label: 'un' }];
-    if (input.unit === 'kg' || input.unit === 'g') {
-      return [
-        { value: 'kg', label: 'kg' },
-        { value: 'g', label: 'g' }
-      ];
-    }
-    if (input.unit === 'l' || input.unit === 'ml') {
-      return [
-        { value: 'l', label: 'l' },
-        { value: 'ml', label: 'ml' }
-      ];
-    }
-    return units.map((unit) => ({ value: unit, label: unit }));
+    if (!input) return units.map((unit) => ({ value: unit, label: unit === 'un' ? 'und' : unit }));
+    return [{ value: input.unit, label: input.unit === 'un' ? 'und' : input.unit }];
   };
 
   const subRecipeCandidates = useMemo(
@@ -306,7 +287,7 @@ export const RecipesPage = () => {
       brand: '',
       category: 'producao',
       packageSize: 1,
-      unit: 'kg',
+      unit: 'g',
       packagePrice: 0,
       notes: '',
       tags: []
@@ -370,7 +351,7 @@ export const RecipesPage = () => {
         if (existing) return existing;
         return { inputId, quantity: 0, unit: input.unit };
       })
-      .filter((item): item is { inputId: string; quantity: number; unit: 'kg' | 'g' | 'l' | 'ml' | 'un' } => Boolean(item));
+      .filter((item): item is { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' } => Boolean(item));
 
     setForm((prev) => ({ ...prev, ingredients: nextIngredients }));
     setShowInputPicker(false);
@@ -563,7 +544,7 @@ export const RecipesPage = () => {
                     className="unit-select"
                     value={form.yieldUnit}
                     onChange={(value) => setForm({ ...form, yieldUnit: value as RecipeItem['yieldUnit'] })}
-                    options={units.map((unit) => ({ value: unit, label: unit }))}
+                    options={units.map((unit) => ({ value: unit, label: unit === 'un' ? 'und' : unit }))}
                   />
                 </div>
               </label>
@@ -850,7 +831,7 @@ export const RecipesPage = () => {
                     className="unit-select"
                     value={quickInputForm.unit}
                     onChange={(value) => setQuickInputForm((current) => ({ ...current, unit: value as InputItem['unit'] }))}
-                    options={inputUnitOptions.map((unit) => ({ value: unit, label: unit }))}
+                    options={inputUnitOptions.map((unit) => ({ value: unit, label: unit === 'un' ? 'und' : unit }))}
                   />
                 </div>
               </label>

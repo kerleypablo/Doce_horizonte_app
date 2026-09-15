@@ -16,8 +16,8 @@ const productSchema = z.object({
   channelId: z.string().optional(),
   extraRecipes: z.array(z.object({ recipeId: z.string().min(1), quantity: z.number().positive() })).default([]),
   extraProducts: z.array(z.object({ productId: z.string().min(1), quantity: z.number().positive() })).default([]),
-  directInputs: z.array(z.object({ inputId: z.string().min(1), quantity: z.number().positive(), unit: z.enum(['kg', 'g', 'l', 'ml', 'un']) })).default([]),
-  packagingInputs: z.array(z.object({ inputId: z.string().min(1), quantity: z.number().positive(), unit: z.enum(['kg', 'g', 'l', 'ml', 'un']) })).default([])
+  directInputs: z.array(z.object({ inputId: z.string().min(1), quantity: z.number().positive(), unit: z.enum(['g', 'ml', 'un']) })).default([]),
+  packagingInputs: z.array(z.object({ inputId: z.string().min(1), quantity: z.number().positive(), unit: z.enum(['g', 'ml', 'un']) })).default([])
 });
 
 const productsListQuerySchema = z.object({

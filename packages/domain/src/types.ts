@@ -1,4 +1,4 @@
-export type Unit = 'kg' | 'g' | 'l' | 'ml' | 'un';
+export type Unit = 'g' | 'ml' | 'un';
 export type OverheadMethod = 'PERCENT_DIRECT' | 'PER_UNIT';
 
 export type CostItem = {
