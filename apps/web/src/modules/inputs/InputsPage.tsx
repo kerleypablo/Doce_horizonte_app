@@ -1,3 +1,4 @@
+import type { CatalogEditorOptions } from '../shared/CatalogEditorDialog.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
@@ -67,15 +68,15 @@ const normalizeQuantity = (quantity: number, unit: string, target: string) => {
   return quantity;
 };
 
-export const InputsPage = () => {
+export const InputsPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname, state } = location;
   const params = useParams<{ inputId?: string }>();
-  const isCreateView = pathname.endsWith('/novo');
-  const editingRouteId = pathname.includes('/editar/') ? params.inputId ?? null : null;
-  const duplicateDraft = (state as { duplicateDraft?: InputFormState } | null)?.duplicateDraft ?? null;
+  const isCreateView = editor ? !editor.id : pathname.endsWith('/novo');
+  const editingRouteId = editor ? editor.id ?? null : pathname.includes('/editar/') ? params.inputId ?? null : null;
+  const duplicateDraft = (editor ? null : state as { duplicateDraft?: InputFormState } | null)?.duplicateDraft ?? null;
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [search, setSearch] = useState('');
   const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]);
@@ -89,13 +90,14 @@ export const InputsPage = () => {
   const [deleteActionLoading, setDeleteActionLoading] = useState(false);
   const [deleteActionError, setDeleteActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'name' | 'packageSize' | 'packagePrice', string>>>({});
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [form, setForm] = useState({
     name: '',
     brand: '',
-    category: 'producao',
+    category: editor?.category ?? 'producao',
     unit: 'g',
     packageSize: 1,
     packagePrice: 0,
@@ -106,7 +108,7 @@ export const InputsPage = () => {
   const createEmptyForm = (): InputFormState => ({
     name: '',
     brand: '',
-    category: 'producao',
+    category: editor?.category ?? 'producao',
     unit: 'g',
     packageSize: 1,
     packagePrice: 0,
@@ -139,8 +141,12 @@ export const InputsPage = () => {
     inputsQuery.refetch().catch(() => undefined);
   }, [pathname]);
 
+  const initializedForm = useRef<string | null>(null);
+  const formKey = editor ? `embedded:${editingRouteId ?? 'new'}` : `${location.key}:${editingRouteId ?? 'new'}`;
   useEffect(() => {
+    if (initializedForm.current === formKey) return;
     if (isCreateView) {
+      initializedForm.current = formKey;
       setForm(duplicateDraft ? { ...duplicateDraft, tags: [...duplicateDraft.tags] } : createEmptyForm());
       setTagDraft('');
       setFieldErrors({});
@@ -151,6 +157,7 @@ export const InputsPage = () => {
     if (editingRouteId) {
       const current = (inputsQuery.data ?? []).find((item) => item.id === editingRouteId);
       if (!current) return;
+      initializedForm.current = formKey;
       const normalized = normalizeInputMeasureForForm(current.unit, current.packageSize);
       setEditingId(current.id);
       setForm({
@@ -168,10 +175,11 @@ export const InputsPage = () => {
     }
     setEditingId(null);
     setShowForm(false);
-  }, [isCreateView, editingRouteId, inputsQuery.data, duplicateDraft]);
+  }, [formKey, isCreateView, editingRouteId, inputsQuery.data, duplicateDraft]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     const validationErrors: Partial<Record<'name' | 'packageSize' | 'packagePrice', string>> = {};
     if (!form.name.trim()) validationErrors.name = 'Nome e obrigatorio.';
     if (Number(form.packageSize) <= 0) validationErrors.packageSize = 'Informe um tamanho maior que zero.';
@@ -183,6 +191,7 @@ export const InputsPage = () => {
 
     setFieldErrors({});
     setSaving(true);
+    setSaveError(null);
     const payload = {
       ...form,
       packageSize: Number(form.packageSize),
@@ -190,25 +199,19 @@ export const InputsPage = () => {
     };
 
     try {
-      if (editingId) {
-        await apiFetch<InputItem>(`/inputs/${editingId}`, {
-          method: 'PUT',
-          token: user?.token,
-          body: JSON.stringify(payload)
-        });
-      } else {
-        await apiFetch<InputItem>('/inputs', {
-          method: 'POST',
-          token: user?.token,
-          body: JSON.stringify(payload)
-        });
-      }
+      const saved = await apiFetch<InputItem>(editingId ? `/inputs/${editingId}` : '/inputs', {
+        method: editingId ? 'PUT' : 'POST', token: user?.token, body: JSON.stringify(payload)
+      });
+      invalidateQueryCache(queryKeys.inputs);
+      if (editor) { await editor.onSaved(saved.id); return; }
 
       resetForm();
       setShowForm(false);
       invalidateQueryCache(queryKeys.inputs);
       await inputsQuery.refetch();
       navigate('/app/insumos');
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Nao foi possivel salvar.');
     } finally {
       setSaving(false);
     }
@@ -245,7 +248,7 @@ export const InputsPage = () => {
       await inputsQuery.refetch();
       if (editingId === input.id) {
         resetForm();
-        navigate('/app/insumos');
+        if (editor) editor.onClose(); else navigate('/app/insumos');
       }
       setDeleteConfirmOpen(false);
       setLinkedModalOpen(false);
@@ -435,6 +438,7 @@ export const InputsPage = () => {
 
   return (
     <div className="page">
+      {saveError ? <p className="error" role="alert">{saveError}</p> : null}
       {!isCreateView && !editingRouteId ? (
       <CatalogListPanel title="Insumos" eyebrow="Estoque e custos" description="Cadastre matérias-primas e embalagens para calcular suas receitas." icon="inventory_2" singularLabel="insumo" actionLabel="Novo insumo" search={search} loading={inputsQuery.loading} items={filtered.map((input) => ({ ...input, subtitle: `${input.category} · ${input.packageSize} ${input.unit} · ${formatCurrency(input.packagePrice)}`, badge: input.brand || undefined }))} onSearch={setSearch} onNew={handleNew} onOpen={(input) => navigate(`/app/insumos/editar/${input.id}`)} onDuplicate={(input) => { const normalized = normalizeInputMeasureForForm(input.unit, input.packageSize); navigate('/app/insumos/novo', { state: { duplicateDraft: { name: `${input.name} copia`, brand: input.brand ?? '', category: input.category, unit: normalized.unit, packageSize: normalized.packageSize, packagePrice: input.packagePrice, notes: input.notes ?? '', tags: [...(input.tags ?? [])] } satisfies InputFormState } }); }} onDelete={askDeleteInput}
         filtersSlot={listTagOptions.length > 0 ? (
@@ -463,10 +467,11 @@ export const InputsPage = () => {
       />
       ) : null}
 
-      {showForm && (
+      {editor && initializedForm.current !== formKey ? <p role="status">{inputsQuery.error ? 'Nao foi possivel carregar o cadastro. Feche e tente novamente.' : 'Carregando cadastro...'}</p> : null}
+      {showForm && initializedForm.current === formKey && (
         <section className="catalog-editor input-editor">
           <header className="catalog-editor-hero">
-            <button type="button" className="catalog-editor-back" onClick={() => navigate('/app/insumos')} aria-label="Voltar para insumos"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
+            <button type="button" className="catalog-editor-back" onClick={() => editor ? editor.onClose() : navigate('/app/insumos')} aria-label="Voltar para insumos"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
             <div className="catalog-editor-hero-copy"><span>Estoque e custos</span><h1>{editingId ? 'Editar insumo' : 'Novo insumo'}</h1><small>Informe o pacote comprado para o custo ser calculado corretamente.</small></div>
             <div className="catalog-editor-total"><span>Custo por unidade</span><strong>{formatCurrency(form.packageSize > 0 ? form.packagePrice / form.packageSize : 0)}</strong></div>
           </header>
@@ -604,7 +609,7 @@ export const InputsPage = () => {
               </div>
             </label>
             <FormActions
-              onCancel={() => navigate('/app/insumos')}
+              onCancel={() => editor ? editor.onClose() : navigate('/app/insumos')}
               submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar insumo'}
             />
           </form>

@@ -1,0 +1,22 @@
+.catalog-editor-dialog {
+  width: min(1100px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 20px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 20px;
+  color: var(--text, #302a28);
+  background: var(--bg, #faf8f5);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.catalog-editor-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.catalog-editor-dialog-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+.catalog-editor-dialog-header p { margin: 4px 0 0; font-size: 13px; }
+.catalog-editor-dialog-content > .page { padding: 0; min-width: 0; }
+.catalog-item-edit { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 4px 8px; margin-top: 4px; font-size: 12px; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 8px; }
+.catalog-item-edit .material-symbols-outlined { font-size: 16px; }
+@media (max-width: 600px) {
+  .catalog-editor-dialog { width: calc(100vw - 12px); max-height: calc(100dvh - 12px); padding: 12px; border-radius: 12px; }
+}

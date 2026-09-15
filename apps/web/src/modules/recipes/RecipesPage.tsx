@@ -1,3 +1,4 @@
+import { CatalogEditorDialog, EditCatalogItem, type CatalogEditorOptions, type CatalogEditorTarget } from '../shared/CatalogEditorDialog.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
@@ -34,7 +35,6 @@ type Settings = {
 };
 
 const units = ['g', 'ml', 'un'] as const;
-const inputUnitOptions = ['g', 'ml', 'un'] as const;
 const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
 
 const normalizeQuantity = (quantity: number, unit: string, target: string) => {
@@ -42,15 +42,15 @@ const normalizeQuantity = (quantity: number, unit: string, target: string) => {
   return quantity;
 };
 
-export const RecipesPage = () => {
+export const RecipesPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname, state } = location;
   const params = useParams<{ recipeId?: string }>();
-  const isCreateView = pathname.endsWith('/novo');
-  const editingRouteId = pathname.includes('/editar/') ? params.recipeId ?? null : null;
-  const duplicateDraft = (state as { duplicateDraft?: RecipeFormState } | null)?.duplicateDraft ?? null;
+  const isCreateView = editor ? !editor.id : pathname.endsWith('/novo');
+  const editingRouteId = editor ? editor.id ?? null : pathname.includes('/editar/') ? params.recipeId ?? null : null;
+  const duplicateDraft = (editor ? null : state as { duplicateDraft?: RecipeFormState } | null)?.duplicateDraft ?? null;
   const [inputs, setInputs] = useState<InputItem[]>([]);
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -59,24 +59,13 @@ export const RecipesPage = () => {
   const [editingId, setEditingId] = useState<string | null>(editingRouteId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RecipeItem | null>(null);
   const [showInputPicker, setShowInputPicker] = useState(false);
   const [inputPickerSearch, setInputPickerSearch] = useState('');
   const [inputPickerSelectedIds, setInputPickerSelectedIds] = useState<string[]>([]);
-  const [showQuickInputCreate, setShowQuickInputCreate] = useState(false);
-  const [quickInputSaving, setQuickInputSaving] = useState(false);
-  const [quickInputError, setQuickInputError] = useState<string | null>(null);
-  const [quickInputForm, setQuickInputForm] = useState({
-    name: '',
-    brand: '',
-    category: 'producao' as 'embalagem' | 'producao' | 'outros',
-    packageSize: 1,
-    unit: 'g' as 'g' | 'ml' | 'un',
-    packagePrice: 0,
-    notes: '',
-    tags: [] as string[]
-  });
+  const [catalogEditor, setCatalogEditor] = useState<CatalogEditorTarget | null>(null);
   const [showSubRecipePicker, setShowSubRecipePicker] = useState(false);
   const [subRecipePickerSearch, setSubRecipePickerSearch] = useState('');
   const [subRecipePickerSelectedIds, setSubRecipePickerSelectedIds] = useState<string[]>([]);
@@ -136,8 +125,12 @@ export const RecipesPage = () => {
     if (settingsQuery.data) setSettings(settingsQuery.data);
   }, [settingsQuery.data]);
 
+  const initializedForm = useRef<string | null>(null);
+  const formKey = editor ? `embedded:${editingRouteId ?? 'new'}` : `${location.key}:${editingRouteId ?? 'new'}`;
   useEffect(() => {
+    if (initializedForm.current === formKey) return;
     if (isCreateView) {
+      initializedForm.current = formKey;
       setForm(
         duplicateDraft
           ? {
@@ -155,6 +148,7 @@ export const RecipesPage = () => {
     if (editingRouteId) {
       const current = (recipesQuery.data ?? []).find((item) => item.id === editingRouteId);
       if (!current) return;
+      initializedForm.current = formKey;
       setEditingId(current.id);
       setForm({
         name: current.name,
@@ -171,7 +165,7 @@ export const RecipesPage = () => {
     }
     setEditingId(null);
     setShowForm(false);
-  }, [isCreateView, editingRouteId, recipesQuery.data, duplicateDraft]);
+  }, [formKey, isCreateView, editingRouteId, recipesQuery.data, duplicateDraft]);
 
   const resetForm = () => {
     setForm(createEmptyForm());
@@ -208,7 +202,9 @@ export const RecipesPage = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     setSaving(true);
+    setSaveError(null);
     const payload = {
       name: form.name,
       description: form.description,
@@ -218,7 +214,7 @@ export const RecipesPage = () => {
       ingredients: form.ingredients.map((item) => ({
         inputId: item.inputId,
         quantity: Number(item.quantity),
-        unit: item.unit
+        unit: inputs.find((input) => input.id === item.inputId)?.unit ?? item.unit
       })),
       subRecipes: form.subRecipes.map((item) => ({
         recipeId: item.recipeId,
@@ -228,25 +224,19 @@ export const RecipesPage = () => {
     };
 
     try {
-      if (editingId) {
-        await apiFetch<RecipeItem>(`/recipes/${editingId}`, {
-          method: 'PUT',
-          token: user?.token,
-          body: JSON.stringify(payload)
-        });
-      } else {
-        await apiFetch<RecipeItem>('/recipes', {
-          method: 'POST',
-          token: user?.token,
-          body: JSON.stringify(payload)
-        });
-      }
+      const saved = await apiFetch<RecipeItem>(editingId ? `/recipes/${editingId}` : '/recipes', {
+        method: editingId ? 'PUT' : 'POST', token: user?.token, body: JSON.stringify(payload)
+      });
+      invalidateQueryCache(queryKeys.recipes);
+      if (editor) { await editor.onSaved(saved.id); return; }
 
       resetForm();
       setShowForm(false);
       invalidateQueryCache(queryKeys.recipes);
       await recipesQuery.refetch();
       navigate('/app/receitas');
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Nao foi possivel salvar.');
     } finally {
       setSaving(false);
     }
@@ -280,53 +270,15 @@ export const RecipesPage = () => {
     setShowInputPicker(true);
   };
 
-  const openQuickInputCreate = () => {
-    setQuickInputError(null);
-    setQuickInputForm({
-      name: '',
-      brand: '',
-      category: 'producao',
-      packageSize: 1,
-      unit: 'g',
-      packagePrice: 0,
-      notes: '',
-      tags: []
-    });
-    setShowQuickInputCreate(true);
-  };
-
-  const saveQuickInput = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!quickInputForm.name.trim() || quickInputForm.packageSize <= 0 || quickInputForm.packagePrice <= 0) {
-      setQuickInputError('Preencha nome, tamanho e preco do pacote.');
-      return;
+  const openQuickInputCreate = () => setCatalogEditor({ kind: 'input' });
+  const handleCatalogSaved = async (id: string) => {
+    if (!catalogEditor?.id) {
+      const select = catalogEditor?.kind === 'recipe' ? setSubRecipePickerSelectedIds : setInputPickerSelectedIds;
+      select((current) => current.includes(id) ? current : [...current, id]);
     }
-    setQuickInputSaving(true);
-    setQuickInputError(null);
-    try {
-      const created = await apiFetch<InputItem>('/inputs', {
-        method: 'POST',
-        token: user?.token,
-        body: JSON.stringify({
-          name: quickInputForm.name.trim(),
-          brand: quickInputForm.brand.trim() || undefined,
-          category: quickInputForm.category,
-          unit: quickInputForm.unit,
-          packageSize: Number(quickInputForm.packageSize),
-          packagePrice: Number(quickInputForm.packagePrice),
-          notes: quickInputForm.notes.trim() || undefined,
-          tags: quickInputForm.tags
-        })
-      });
-      invalidateQueryCache(queryKeys.inputs);
-      await inputsQuery.refetch();
-      setInputPickerSelectedIds((current) => (current.includes(created.id) ? current : [...current, created.id]));
-      setShowQuickInputCreate(false);
-    } catch (error) {
-      setQuickInputError(error instanceof Error ? error.message : 'Nao foi possivel criar o insumo.');
-    } finally {
-      setQuickInputSaving(false);
-    }
+    await Promise.all([inputsQuery.refetch(), recipesQuery.refetch()])
+      .catch(() => setSaveError('O item foi salvo, mas nao foi possivel atualizar os dados. Tente novamente.'));
+    setCatalogEditor(null);
   };
 
   const toggleInputPickerItem = (inputId: string, checked: boolean) => {
@@ -504,13 +456,15 @@ export const RecipesPage = () => {
 
   return (
     <div className="page recipes-page">
+      {saveError ? <p className="error" role="alert">{saveError}</p> : null}
       {!isCreateView && !editingRouteId ? <RecipesListPanel recipes={filtered} search={search} loading={recipesQuery.loading} onSearch={setSearch} onNew={handleNew} onOpen={(id) => navigate(`/app/receitas/editar/${id}`)} onDuplicate={(recipe) => navigate('/app/receitas/novo', { state: { duplicateDraft: { name: `${recipe.name} copia`, description: recipe.description ?? '', prepTimeMinutes: recipe.prepTimeMinutes ?? 0, yield: recipe.yield, yieldUnit: recipe.yieldUnit ?? 'un', ingredients: (recipe.ingredients ?? []).map((item) => ({ ...item })), subRecipes: (recipe.subRecipes ?? []).map((item) => ({ ...item })), tags: [...(recipe.tags ?? [])] } satisfies RecipeFormState } })} onDelete={setDeleteTarget} /> : null}
 
-      {showForm && (
+      {editor && initializedForm.current !== formKey ? <p role="status">{recipesQuery.error ? 'Nao foi possivel carregar o cadastro. Feche e tente novamente.' : 'Carregando cadastro...'}</p> : null}
+      {showForm && initializedForm.current === formKey && (
         <>
           <section className="recipe-editor">
             <header className="recipe-editor-hero">
-              <button type="button" className="recipe-editor-back" onClick={() => navigate('/app/receitas')} aria-label="Voltar para receitas"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
+              <button type="button" className="recipe-editor-back" onClick={() => editor ? editor.onClose() : navigate('/app/receitas')} aria-label="Voltar para receitas"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
               <div className="recipe-editor-hero-copy"><span>Ficha técnica</span><h1>{editingId ? 'Editar receita' : 'Nova receita'}</h1><small>Defina o rendimento, os insumos e o custo deste preparo.</small></div>
               <div className="recipe-editor-total"><span>Custo atual</span><strong>{formatCurrency(costSummary.total)}</strong></div>
             </header>
@@ -561,7 +515,7 @@ export const RecipesPage = () => {
                 <TagInput value={form.tags} onChange={(tags) => setForm({ ...form, tags })} placeholder="Ex: doce, natal" />
               </label>
               <FormActions
-                onCancel={() => navigate('/app/receitas')}
+                onCancel={() => editor ? editor.onClose() : navigate('/app/receitas')}
                 submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar receita'}
               />
             </form>
@@ -575,6 +529,7 @@ export const RecipesPage = () => {
                 <div key={`${ingredient.inputId}-${index}`} className="add-item-row recipe-add-item-row">
                   <div className="order-product-label">
                     <span>{inputsMap.get(ingredient.inputId)?.name ?? 'Insumo nao encontrado'}</span>
+                    <EditCatalogItem label="Editar insumo" onClick={() => setCatalogEditor({ kind: 'input', id: ingredient.inputId })} />
                     <small className="order-product-meta">
                       {inputsMap.get(ingredient.inputId)?.packageSize ?? 0} {inputsMap.get(ingredient.inputId)?.unit ?? '-'}
                     </small>
@@ -593,7 +548,7 @@ export const RecipesPage = () => {
                   </label>
                   <SelectField
                     className="add-item-unit-select"
-                    value={ingredient.unit}
+                    value={inputsMap.get(ingredient.inputId)?.unit ?? ingredient.unit}
                     onChange={(value) => handleIngredientChange(index, 'unit', value)}
                     options={unitOptionsForInput(ingredient.inputId)}
                   />
@@ -625,6 +580,7 @@ export const RecipesPage = () => {
                 <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-sub-item-row">
                   <div className="order-product-label">
                     <span>{subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
+                    <EditCatalogItem label="Editar receita" onClick={() => setCatalogEditor({ kind: 'recipe', id: item.recipeId })} />
                     <small className="order-product-meta">
                       {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.yield ?? 0} {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.yieldUnit ?? '-'} 
                     </small>
@@ -757,118 +713,14 @@ export const RecipesPage = () => {
         </div>
       ) : null}
 
-      {showQuickInputCreate ? (
-        <div className="modal-backdrop quick-input-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal quick-input-modal">
-            <div className="modal-header">
-              <div className="modal-icon">
-                <span className="material-symbols-outlined" aria-hidden="true">inventory_2</span>
-              </div>
-              <div>
-                <h4>Novo insumo</h4>
-                <p>Cadastre sem sair da selecao de insumos.</p>
-              </div>
-            </div>
-            <form className="form" onSubmit={saveQuickInput}>
-              <label>
-                Nome
-                <input
-                  value={quickInputForm.name}
-                  onChange={(event) => setQuickInputForm((current) => ({ ...current, name: event.target.value }))}
-                  required
-                />
-              </label>
-              <label>
-                Marca
-                <input
-                  value={quickInputForm.brand}
-                  onChange={(event) => setQuickInputForm((current) => ({ ...current, brand: event.target.value }))}
-                />
-              </label>
-              <div className="grid-2">
-                <label>
-                  Categoria
-                  <SelectField
-                    value={quickInputForm.category}
-                    onChange={(value) =>
-                      setQuickInputForm((current) => ({ ...current, category: value as 'embalagem' | 'producao' | 'outros' }))
-                    }
-                    options={[
-                      { value: 'producao', label: 'Producao' },
-                      { value: 'embalagem', label: 'Embalagem' },
-                      { value: 'outros', label: 'Outros' }
-                    ]}
-                  />
-                </label>
-                <label>
-                  Preco pacote
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={quickInputForm.packagePrice === 0 ? '' : quickInputForm.packagePrice}
-                    onChange={(event) =>
-                      setQuickInputForm((current) => ({ ...current, packagePrice: Number(event.target.value || 0) }))
-                    }
-                    required
-                  />
-                </label>
-              </div>
-              <label>
-                Tamanho pacote
-                <div className="inline-field">
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={quickInputForm.packageSize === 0 ? '' : quickInputForm.packageSize}
-                    onChange={(event) =>
-                      setQuickInputForm((current) => ({ ...current, packageSize: Number(event.target.value || 0) }))
-                    }
-                    required
-                  />
-                  <SelectField
-                    className="unit-select"
-                    value={quickInputForm.unit}
-                    onChange={(value) => setQuickInputForm((current) => ({ ...current, unit: value as InputItem['unit'] }))}
-                    options={inputUnitOptions.map((unit) => ({ value: unit, label: unit === 'un' ? 'und' : unit }))}
-                  />
-                </div>
-              </label>
-              <label>
-                Observacoes
-                <input
-                  value={quickInputForm.notes}
-                  onChange={(event) => setQuickInputForm((current) => ({ ...current, notes: event.target.value }))}
-                />
-              </label>
-              <label>
-                Tags
-                <TagInput
-                  value={quickInputForm.tags}
-                  onChange={(tags) => setQuickInputForm((current) => ({ ...current, tags }))}
-                  placeholder="Ex: doce, natal"
-                />
-              </label>
-              {quickInputError ? <p className="error">{quickInputError}</p> : null}
-              <div className="modal-actions">
-                <button type="button" className="ghost" onClick={() => setShowQuickInputCreate(false)} disabled={quickInputSaving}>
-                  Cancelar
-                </button>
-                <button type="submit" disabled={quickInputSaving}>
-                  {quickInputSaving ? 'Salvando...' : 'Salvar insumo'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+      {catalogEditor ? <CatalogEditorDialog target={catalogEditor} onClose={() => setCatalogEditor(null)} onSaved={handleCatalogSaved} /> : null}
 
       {showSubRecipePicker ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal product-picker-modal">
             <div className="product-picker-head">
               <h4>Selecionar receitas</h4>
+              <button type="button" className="ghost" onClick={() => setCatalogEditor({ kind: 'recipe' })}>+ Nova receita</button>
               <div className="product-picker-head-right">
                 <strong className="product-picker-count">{subRecipePickerSelectedIds.length} selecionado(s)</strong>
                 <button type="button" className="icon-button small" onClick={() => setShowSubRecipePicker(false)} aria-label="Fechar">

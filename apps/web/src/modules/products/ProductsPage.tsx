@@ -1,3 +1,4 @@
+import { CatalogEditorDialog, EditCatalogItem, type CatalogEditorOptions, type CatalogEditorTarget } from '../shared/CatalogEditorDialog.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
@@ -8,7 +9,6 @@ import { ConfirmDialog } from '../shared/ConfirmDialog.tsx';
 import type { InputItem } from '../inputs/InputsPage.tsx';
 import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { MoneyInput } from '../shared/MoneyInput.tsx';
-import { TagInput } from '../shared/TagInput.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { FormActions } from '../shared/FormActions.tsx';
@@ -73,24 +73,19 @@ const normalizeInputQuantity = (quantity: number, from: ProductItem['directInput
   // Quantidades e embalagens usam a mesma unidade base (g, ml ou un).
   return quantity;
 };
-const units = ['g', 'ml', 'un'] as const;
-const inputUnitOptions = [
-  { value: 'g', label: 'g' },
-  { value: 'ml', label: 'ml' },
-  { value: 'un', label: 'und' }
-] as const;
 
-export const ProductsPage = () => {
+
+export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname, state } = location;
   const params = useParams<{ productId?: string }>();
-  const isCreateView = pathname.endsWith('/novo');
-  const editingRouteId = pathname.includes('/editar/') ? params.productId ?? null : null;
+  const isCreateView = editor ? !editor.id : pathname.endsWith('/novo');
+  const editingRouteId = editor ? editor.id ?? null : pathname.includes('/editar/') ? params.productId ?? null : null;
   const isListView = !isCreateView && !editingRouteId;
   const formDataEnabled = Boolean(user?.token) && !isListView;
-  const duplicateState = (state as { duplicateDraft?: ProductFormState; unitPriceInput?: number } | null) ?? null;
+  const duplicateState = (editor ? null : state as { duplicateDraft?: ProductFormState; unitPriceInput?: number } | null) ?? null;
   const duplicateDraft = duplicateState?.duplicateDraft ?? null;
   const duplicateUnitPriceInput = duplicateState?.unitPriceInput ?? 0;
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
@@ -109,40 +104,7 @@ export const ProductsPage = () => {
   const [pickerType, setPickerType] = useState<ProductPickerType>('EXTRA_RECIPE');
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
-  const [showQuickCreate, setShowQuickCreate] = useState(false);
-  const [quickCreateSaving, setQuickCreateSaving] = useState(false);
-  const [quickCreateError, setQuickCreateError] = useState<string | null>(null);
-  const [quickRecipeForm, setQuickRecipeForm] = useState({
-    name: '',
-    prepTimeMinutes: 0,
-    yield: 1,
-    yieldUnit: 'un' as RecipeItem['yieldUnit'],
-    description: '',
-    tags: [] as string[]
-  });
-  const [quickInputForm, setQuickInputForm] = useState({
-    name: '',
-    brand: '',
-    packageSize: 1,
-    unit: 'g' as InputItem['unit'],
-    packagePrice: 0,
-    notes: '',
-    tags: [] as string[]
-  });
-  const [quickProductForm, setQuickProductForm] = useState({
-    name: '',
-    prepTimeMinutes: 0,
-    notes: '',
-    channelId: '',
-    unitsCount: 1,
-    targetProfitPercent: settings?.defaultProfitPercent ?? 0,
-    extraPercent: 0,
-    manualUnitPrice: 0,
-    extraRecipes: [] as { recipeId: string; quantity: number }[],
-    extraProducts: [] as { productId: string; quantity: number }[],
-    directInputs: [] as { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[],
-    packagingInputs: [] as { inputId: string; quantity: number; unit: 'g' | 'ml' | 'un' }[]
-  });
+  const [catalogEditor, setCatalogEditor] = useState<CatalogEditorTarget | null>(null);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
   const [form, setForm] = useState({
@@ -232,16 +194,20 @@ export const ProductsPage = () => {
   }, [inputsQuery.data]);
 
   useEffect(() => {
-    if (!pickerOpen && !showQuickCreate) return;
+    if (!pickerOpen && !catalogEditor) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [pickerOpen, showQuickCreate]);
+  }, [pickerOpen, catalogEditor]);
 
+  const initializedForm = useRef<string | null>(null);
+  const formKey = editor ? `embedded:${editingRouteId ?? 'new'}` : `${location.key}:${editingRouteId ?? 'new'}`;
   useEffect(() => {
+    if (initializedForm.current === formKey) return;
     if (isCreateView) {
+      initializedForm.current = formKey;
       setForm(
         duplicateDraft
           ? {
@@ -262,6 +228,7 @@ export const ProductsPage = () => {
     if (editingRouteId) {
       const current = (productsQuery.data ?? []).find((item) => item.id === editingRouteId);
       if (!current) return;
+      initializedForm.current = formKey;
       setEditingId(current.id);
       setForm({
         name: current.name,
@@ -284,7 +251,7 @@ export const ProductsPage = () => {
     }
     setEditingId(null);
     setShowForm(false);
-  }, [isCreateView, editingRouteId, productsQuery.data, duplicateDraft, duplicateUnitPriceInput]);
+  }, [formKey, isCreateView, editingRouteId, productsQuery.data, duplicateDraft, duplicateUnitPriceInput]);
 
   const resetForm = () => {
     setForm(createEmptyForm());
@@ -307,6 +274,7 @@ export const ProductsPage = () => {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     setSaving(true);
     setSaveError(null);
 
@@ -351,6 +319,7 @@ export const ProductsPage = () => {
         return prev.map((item) => (item.id === response.product.id ? response.product : item));
       });
       invalidateQueryCache(queryKeys.products);
+      if (editor) { await editor.onSaved(response.product.id); return; }
 
       resetForm();
       setShowForm(false);
@@ -409,143 +378,20 @@ export const ProductsPage = () => {
     setPickerOpen(true);
   };
 
-  const openQuickCreate = () => {
-    setQuickCreateError(null);
-    if (pickerType === 'EXTRA_RECIPE') {
-      setQuickRecipeForm({
-        name: '',
-        prepTimeMinutes: 0,
-        yield: 1,
-        yieldUnit: 'un',
-        description: '',
-        tags: []
-      });
-    } else if (pickerType === 'PACKAGING' || pickerType === 'DIRECT_INPUT') {
-      setQuickInputForm({
-        name: '',
-        brand: '',
-        packageSize: 1,
-        unit: 'g',
-        packagePrice: 0,
-        notes: '',
-        tags: []
-      });
-    } else {
-      setQuickProductForm({
-        name: '',
-        prepTimeMinutes: 0,
-        notes: '',
-        channelId: form.channelId || settings?.salesChannels.find((channel) => channel.active)?.id || '',
-        unitsCount: 1,
-        targetProfitPercent: settings?.defaultProfitPercent ?? 0,
-        extraPercent: 0,
-        manualUnitPrice: 0,
-        extraRecipes: [],
-        extraProducts: [],
-        packagingInputs: []
-      });
-    }
-    setShowQuickCreate(true);
-  };
+  const openQuickCreate = () => setCatalogEditor({
+    kind: pickerType === 'EXTRA_RECIPE' ? 'recipe' : pickerType === 'EXTRA_PRODUCT' ? 'product' : 'input',
+    category: pickerType === 'PACKAGING' ? 'embalagem' : 'producao'
+  });
 
-  const saveQuickCreate = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setQuickCreateError(null);
-    setQuickCreateSaving(true);
-    try {
-      if (pickerType === 'EXTRA_RECIPE') {
-        if (!quickRecipeForm.name.trim() || Number(quickRecipeForm.yield) <= 0) {
-          setQuickCreateError('Preencha nome e rendimento da receita.');
-          return;
-        }
-        const created = await apiFetch<RecipeItem>('/recipes', {
-          method: 'POST',
-          token: user?.token,
-          body: JSON.stringify({
-            name: quickRecipeForm.name.trim(),
-            description: quickRecipeForm.description.trim() || undefined,
-            prepTimeMinutes: Number(quickRecipeForm.prepTimeMinutes || 0),
-            yield: Number(quickRecipeForm.yield),
-            yieldUnit: quickRecipeForm.yieldUnit,
-            ingredients: [],
-            subRecipes: [],
-            tags: quickRecipeForm.tags
-          })
-        });
-        invalidateQueryCache(queryKeys.recipes);
-        await recipesQuery.refetch();
-        setPickerSelectedIds((current) => (current.includes(created.id) ? current : [...current, created.id]));
-      } else if (pickerType === 'PACKAGING' || pickerType === 'DIRECT_INPUT') {
-        if (!quickInputForm.name.trim() || Number(quickInputForm.packageSize) <= 0 || Number(quickInputForm.packagePrice) <= 0) {
-          setQuickCreateError('Preencha nome, tamanho e preco da embalagem.');
-          return;
-        }
-        const created = await apiFetch<InputItem>('/inputs', {
-          method: 'POST',
-          token: user?.token,
-          body: JSON.stringify({
-            name: quickInputForm.name.trim(),
-            brand: quickInputForm.brand.trim() || undefined,
-            category: pickerType === 'DIRECT_INPUT' ? 'producao' : 'embalagem',
-            unit: quickInputForm.unit,
-            packageSize: Number(quickInputForm.packageSize),
-            packagePrice: Number(quickInputForm.packagePrice),
-            notes: quickInputForm.notes.trim() || undefined,
-            tags: quickInputForm.tags
-          })
-        });
-        invalidateQueryCache(queryKeys.inputs);
-        await inputsQuery.refetch();
-        setPickerSelectedIds((current) => (current.includes(created.id) ? current : [...current, created.id]));
-      } else {
-        if (!quickProductForm.name.trim() || Number(quickProductForm.unitsCount) <= 0) {
-          setQuickCreateError('Preencha nome e unidades do produto.');
-          return;
-        }
-        const response = await apiFetch<{ product: ProductItem }>('/products', {
-          method: 'POST',
-          token: user?.token,
-          body: JSON.stringify({
-            name: quickProductForm.name.trim(),
-            prepTimeMinutes: Number(quickProductForm.prepTimeMinutes || 0),
-            notes: quickProductForm.notes.trim() || undefined,
-            unitsCount: Number(quickProductForm.unitsCount || 1),
-            targetProfitPercent: Number(quickProductForm.targetProfitPercent || 0),
-            extraPercent: Number(quickProductForm.extraPercent || 0),
-            manualUnitPrice: Number(quickProductForm.manualUnitPrice || 0),
-            channelId: quickProductForm.channelId || form.channelId || settings?.salesChannels[0]?.id,
-            extraRecipes: quickProductForm.extraRecipes.map((item) => ({
-              recipeId: item.recipeId,
-              quantity: Number(item.quantity || 0)
-            })),
-            extraProducts: quickProductForm.extraProducts.map((item) => ({
-              productId: item.productId,
-              quantity: Number(item.quantity || 0)
-            })),
-            packagingInputs: quickProductForm.packagingInputs.map((item) => ({
-              inputId: item.inputId,
-              quantity: Number(item.quantity || 0),
-              unit: item.unit
-            }))
-          })
-        });
-        invalidateQueryCache(queryKeys.products);
-        await productsQuery.refetch();
-        setPickerSelectedIds((current) => (current.includes(response.product.id) ? current : [...current, response.product.id]));
-      }
-      setShowQuickCreate(false);
-    } catch (error) {
-      setQuickCreateError(error instanceof Error ? error.message : 'Nao foi possivel salvar.');
-    } finally {
-      setQuickCreateSaving(false);
-    }
+  const handleCatalogSaved = async (id: string) => {
+    if (!catalogEditor?.id) setPickerSelectedIds((current) => current.includes(id) ? current : [...current, id]);
+    await Promise.all([inputsQuery.refetch(), recipesQuery.refetch(), productsQuery.refetch()])
+      .catch(() => setSaveError('O item foi salvo, mas nao foi possivel atualizar os dados. Tente novamente.'));
+    setCatalogEditor(null);
   };
 
   const togglePickerItem = (id: string, checked: boolean) => {
-    setPickerSelectedIds((current) => {
-      if (checked) return current.includes(id) ? current : [...current, id];
-      return current.filter((itemId) => itemId !== id);
-    });
+    setPickerSelectedIds((current) => checked ? (current.includes(id) ? current : [...current, id]) : current.filter((itemId) => itemId !== id));
   };
 
   const pickerAllItems = useMemo(() => {
@@ -669,11 +515,12 @@ export const ProductsPage = () => {
       <CatalogListPanel className="products-catalog" title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={listedProductsQuery.loading} hasMore={listedProductsQuery.hasMore} loadingMore={listedProductsQuery.loadingMore} items={listedProductsQuery.items.map((product) => ({ ...product, subtitle: `Venda ${formatCurrency(product.unitPrice)}`, badge: `Lucro: ${product.targetProfitPercent || 0}%` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} onLoadMore={listedProductsQuery.loadMore} />
       ) : null}
 
-      {showForm && (
+      {editor && initializedForm.current !== formKey ? <p role="status">{productsQuery.error ? 'Nao foi possivel carregar o cadastro. Feche e tente novamente.' : 'Carregando cadastro...'}</p> : null}
+      {showForm && initializedForm.current === formKey && (
         <>
           <section className="catalog-editor product-editor">
             <header className="catalog-editor-hero">
-              <button type="button" className="catalog-editor-back" onClick={() => navigate('/app/produtos')} aria-label="Voltar para produtos"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
+              <button type="button" className="catalog-editor-back" onClick={() => editor ? editor.onClose() : navigate('/app/produtos')} aria-label="Voltar para produtos"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button>
               <div className="catalog-editor-hero-copy"><span>Produto para venda</span><h1>{editingId ? 'Editar produto' : 'Novo produto'}</h1><small>Combine receitas e embalagens para chegar ao preço correto.</small></div>
               <div className="catalog-editor-total"><span>Preço por unidade</span><strong>{formatCurrency(costSummary.unitPrice)}</strong></div>
             </header>
@@ -702,7 +549,7 @@ export const ProductsPage = () => {
               </label>
               {saveError ? <p className="error" role="alert">{saveError}</p> : null}
               <FormActions
-                onCancel={() => navigate('/app/produtos')}
+                onCancel={() => editor ? editor.onClose() : navigate('/app/produtos')}
                 submitLabel={editingId ? 'Salvar alteracoes' : 'Salvar produto'}
               />
             </form>
@@ -777,6 +624,7 @@ export const ProductsPage = () => {
                 <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-add-item-row">
                   <div className="order-product-label">
                   <span>{recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
+                    <EditCatalogItem label="Editar receita" onClick={() => setCatalogEditor({ kind: 'recipe', id: item.recipeId })} />
                   <small className="order-product-meta">
                     {recipesById.get(item.recipeId)?.yield ?? 0} {recipesById.get(item.recipeId)?.yieldUnit ?? '-'}
                   </small>
@@ -827,6 +675,7 @@ export const ProductsPage = () => {
                 <div key={`${item.productId}-${index}`} className="add-item-row recipe-add-item-row">
                   <span className="order-product-label">
                     {productsById.get(item.productId)?.name ?? 'Produto nao encontrado'}
+                    <EditCatalogItem label="Editar produto" onClick={() => setCatalogEditor({ kind: 'product', id: item.productId })} />
                   </span>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
@@ -872,7 +721,8 @@ export const ProductsPage = () => {
               {form.directInputs.map((item, index) => (
                 <div key={`${item.inputId}-${index}`} className="add-item-row recipe-add-item-row">
                   <div className="order-product-label">
-                    <span>{inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'}</span>
+                    <span>{inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'}
+                    <EditCatalogItem label="Editar insumo" onClick={() => setCatalogEditor({ kind: 'input', id: item.inputId })} /></span>
                     <small className="order-product-meta">
                       {item.quantity} {inputsById.get(item.inputId)?.unit ?? item.unit} · {formatCurrency((inputsById.get(item.inputId)?.packagePrice ?? 0) / Math.max(inputsById.get(item.inputId)?.packageSize ?? 1, 1) * normalizeInputQuantity(item.quantity, inputsById.get(item.inputId)?.unit ?? item.unit, inputsById.get(item.inputId)?.unit ?? 'un'))}
                     </small>
@@ -903,6 +753,7 @@ export const ProductsPage = () => {
                 <div key={`${item.inputId}-${index}`} className="add-item-row recipe-add-item-row">
                   <span className="order-product-label">
                     {inputsById.get(item.inputId)?.name ?? 'Embalagem nao encontrada'}
+                    <EditCatalogItem label="Editar embalagem" onClick={() => setCatalogEditor({ kind: 'input', id: item.inputId })} />
                   </span>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
@@ -1085,426 +936,7 @@ export const ProductsPage = () => {
         </div>
       ) : null}
 
-      {showQuickCreate ? (
-        <div className="modal-backdrop quick-input-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal quick-input-modal">
-            <div className="modal-header">
-              <div className="modal-icon">
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {pickerType === 'EXTRA_RECIPE' ? 'menu_book' : pickerType === 'EXTRA_PRODUCT' ? 'shopping_bag' : 'inventory_2'}
-                </span>
-              </div>
-              <div>
-                <h4>
-                  {pickerType === 'EXTRA_RECIPE'
-                    ? 'Nova receita'
-                    : pickerType === 'EXTRA_PRODUCT'
-                      ? 'Novo produto'
-                      : pickerType === 'DIRECT_INPUT'
-                        ? 'Novo insumo'
-                        : 'Nova embalagem'
-                  }
-                </h4>
-                <p>Cadastre sem sair da selecao.</p>
-              </div>
-            </div>
-            <form className="form" onSubmit={saveQuickCreate}>
-              {pickerType === 'EXTRA_RECIPE' ? (
-                <>
-                  <label>
-                    Nome
-                    <input
-                      value={quickRecipeForm.name}
-                      onChange={(event) => setQuickRecipeForm((current) => ({ ...current, name: event.target.value }))}
-                      required
-                    />
-                  </label>
-                  <div className="grid-2">
-                    <label>
-                      Tempo preparo (min)
-                      <input
-                        type="number"
-                        min={0}
-                        value={quickRecipeForm.prepTimeMinutes === 0 ? '' : quickRecipeForm.prepTimeMinutes}
-                        onChange={(event) =>
-                          setQuickRecipeForm((current) => ({ ...current, prepTimeMinutes: Number(event.target.value || 0) }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Rendimento
-                      <div className="inline-field">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={quickRecipeForm.yield === 0 ? '' : quickRecipeForm.yield}
-                          onChange={(event) =>
-                            setQuickRecipeForm((current) => ({ ...current, yield: Number(event.target.value || 0) }))
-                          }
-                          required
-                        />
-                        <SelectField
-                          className="unit-select"
-                          value={quickRecipeForm.yieldUnit}
-                          onChange={(value) => setQuickRecipeForm((current) => ({ ...current, yieldUnit: value as RecipeItem['yieldUnit'] }))}
-                          options={[
-                            { value: 'g', label: 'g' },
-                            { value: 'ml', label: 'ml' },
-                            { value: 'un', label: 'und' }
-                          ]}
-                        />
-                      </div>
-                    </label>
-                  </div>
-                  <label>
-                    Modo de preparo
-                    <textarea
-                      rows={3}
-                      value={quickRecipeForm.description}
-                      onChange={(event) => setQuickRecipeForm((current) => ({ ...current, description: event.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Tags
-                    <TagInput
-                      value={quickRecipeForm.tags}
-                      onChange={(tags) => setQuickRecipeForm((current) => ({ ...current, tags }))}
-                      placeholder="Ex: doce, natal"
-                    />
-                  </label>
-                </>
-              ) : null}
-
-              {pickerType === 'PACKAGING' || pickerType === 'DIRECT_INPUT' ? (
-                <>
-                  <label>
-                    Nome
-                    <input
-                      value={quickInputForm.name}
-                      onChange={(event) => setQuickInputForm((current) => ({ ...current, name: event.target.value }))}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Marca
-                    <input
-                      value={quickInputForm.brand}
-                      onChange={(event) => setQuickInputForm((current) => ({ ...current, brand: event.target.value }))}
-                    />
-                  </label>
-                  <div className="grid-2">
-                    <label>
-                      Tamanho pacote
-                      <div className="inline-field">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={quickInputForm.packageSize === 0 ? '' : quickInputForm.packageSize}
-                          onChange={(event) =>
-                            setQuickInputForm((current) => ({ ...current, packageSize: Number(event.target.value || 0) }))
-                          }
-                          required
-                        />
-                        <SelectField
-                          className="unit-select"
-                          value={quickInputForm.unit}
-                          onChange={(value) => setQuickInputForm((current) => ({ ...current, unit: value as InputItem['unit'] }))}
-                          options={[...inputUnitOptions]}
-                        />
-                      </div>
-                    </label>
-                    <label>
-                      Preco pacote
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={quickInputForm.packagePrice === 0 ? '' : quickInputForm.packagePrice}
-                        onChange={(event) =>
-                          setQuickInputForm((current) => ({ ...current, packagePrice: Number(event.target.value || 0) }))
-                        }
-                        required
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    Observacoes
-                    <input
-                      value={quickInputForm.notes}
-                      onChange={(event) => setQuickInputForm((current) => ({ ...current, notes: event.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Tags
-                    <TagInput
-                      value={quickInputForm.tags}
-                      onChange={(tags) => setQuickInputForm((current) => ({ ...current, tags }))}
-                      placeholder="Ex: caixa, premium"
-                    />
-                  </label>
-                </>
-              ) : null}
-
-              {pickerType === 'EXTRA_PRODUCT' ? (
-                <>
-                  <label>
-                    Nome
-                    <input
-                      value={quickProductForm.name}
-                      onChange={(event) => setQuickProductForm((current) => ({ ...current, name: event.target.value }))}
-                      required
-                    />
-                  </label>
-                  <div className="grid-2">
-                    <label>
-                      Tempo preparo (min)
-                      <input
-                        type="number"
-                        min={0}
-                        value={quickProductForm.prepTimeMinutes === 0 ? '' : quickProductForm.prepTimeMinutes}
-                        onChange={(event) =>
-                          setQuickProductForm((current) => ({ ...current, prepTimeMinutes: Number(event.target.value || 0) }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Unidades
-                      <input
-                        type="number"
-                        min={1}
-                        value={quickProductForm.unitsCount === 0 ? '' : quickProductForm.unitsCount}
-                        onChange={(event) =>
-                          setQuickProductForm((current) => ({ ...current, unitsCount: Number(event.target.value || 0) }))
-                        }
-                        required
-                      />
-                    </label>
-                  </div>
-                  <div className="grid-2">
-                    <label>
-                      Canal
-                      <SelectField
-                        value={quickProductForm.channelId}
-                        onChange={(value) => setQuickProductForm((current) => ({ ...current, channelId: value }))}
-                        options={(settings?.salesChannels ?? []).map((channel) => ({
-                          value: channel.id,
-                          label: channel.name
-                        }))}
-                      />
-                    </label>
-                    <label>
-                      % lucro
-                      <input
-                        type="number"
-                        min={0}
-                        value={quickProductForm.targetProfitPercent === 0 ? '' : quickProductForm.targetProfitPercent}
-                        onChange={(event) =>
-                          setQuickProductForm((current) => ({ ...current, targetProfitPercent: Number(event.target.value || 0) }))
-                        }
-                      />
-                    </label>
-                  <label>
-                    Valor unitario
-                    <input
-                      type="number"
-                        min={0}
-                        step="0.01"
-                        value={quickProductForm.manualUnitPrice === 0 ? '' : quickProductForm.manualUnitPrice}
-                        onChange={(event) =>
-                          setQuickProductForm((current) => ({ ...current, manualUnitPrice: Number(event.target.value || 0) }))
-                        }
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    Observacoes
-                    <input
-                      value={quickProductForm.notes}
-                      onChange={(event) => setQuickProductForm((current) => ({ ...current, notes: event.target.value }))}
-                    />
-                  </label>
-                  <div className="quick-create-advanced">
-                    <h5>Adicionar receitas</h5>
-                    <div className="quick-create-add-row">
-                      <SelectField
-                        value=""
-                        placeholder="Selecionar receita"
-                        onChange={(value) =>
-                          setQuickProductForm((current) => ({
-                            ...current,
-                            extraRecipes: current.extraRecipes.some((item) => item.recipeId === value)
-                              ? current.extraRecipes
-                              : [...current.extraRecipes, { recipeId: value, quantity: recipesById.get(value)?.yield ?? 0 }]
-                          }))
-                        }
-                        options={recipes.map((recipe) => ({ value: recipe.id, label: recipe.name }))}
-                      />
-                    </div>
-                    {quickProductForm.extraRecipes.map((item) => (
-                      <div key={item.recipeId} className="quick-create-item-row">
-                        <span>{recipesById.get(item.recipeId)?.name ?? 'Receita'} ({recipesById.get(item.recipeId)?.yieldUnit ?? '-'})</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.quantity === 0 ? '' : item.quantity}
-                          onChange={(event) =>
-                            setQuickProductForm((current) => ({
-                              ...current,
-                              extraRecipes: current.extraRecipes.map((row) =>
-                                row.recipeId === item.recipeId ? { ...row, quantity: Number(event.target.value || 0) } : row
-                              )
-                            }))
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="icon-button tiny"
-                          onClick={() =>
-                            setQuickProductForm((current) => ({
-                              ...current,
-                              extraRecipes: current.extraRecipes.filter((row) => row.recipeId !== item.recipeId)
-                            }))
-                          }
-                          aria-label="Remover receita"
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                        </button>
-                      </div>
-                    ))}
-
-                    <h5>Adicionar produtos</h5>
-                    <div className="quick-create-add-row">
-                      <SelectField
-                        value=""
-                        placeholder="Selecionar produto"
-                        onChange={(value) =>
-                          setQuickProductForm((current) => ({
-                            ...current,
-                            extraProducts: current.extraProducts.some((item) => item.productId === value)
-                              ? current.extraProducts
-                              : [...current.extraProducts, { productId: value, quantity: 0 }]
-                          }))
-                        }
-                        options={productCandidates.map((product) => ({ value: product.id, label: product.name }))}
-                      />
-                    </div>
-                    {quickProductForm.extraProducts.map((item) => (
-                      <div key={item.productId} className="quick-create-item-row">
-                        <span>{productsById.get(item.productId)?.name ?? 'Produto'}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.quantity === 0 ? '' : item.quantity}
-                          onChange={(event) =>
-                            setQuickProductForm((current) => ({
-                              ...current,
-                              extraProducts: current.extraProducts.map((row) =>
-                                row.productId === item.productId ? { ...row, quantity: Number(event.target.value || 0) } : row
-                              )
-                            }))
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="icon-button tiny"
-                          onClick={() =>
-                            setQuickProductForm((current) => ({
-                              ...current,
-                              extraProducts: current.extraProducts.filter((row) => row.productId !== item.productId)
-                            }))
-                          }
-                          aria-label="Remover produto"
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                        </button>
-                      </div>
-                    ))}
-
-                    <h5>Adicionar embalagens</h5>
-                    <div className="quick-create-add-row">
-                      <SelectField
-                        value=""
-                        placeholder="Selecionar embalagem"
-                        onChange={(value) =>
-                          setQuickProductForm((current) => {
-                            if (current.packagingInputs.some((item) => item.inputId === value)) return current;
-                            const input = inputsById.get(value);
-                            return {
-                              ...current,
-                              packagingInputs: [...current.packagingInputs, { inputId: value, quantity: 0, unit: input?.unit ?? 'un' }]
-                            };
-                          })
-                        }
-                        options={packagingCandidates.map((input) => ({ value: input.id, label: input.name }))}
-                      />
-                    </div>
-                    {quickProductForm.packagingInputs.map((item) => (
-                      <div key={item.inputId} className="quick-create-item-row">
-                        <span>{inputsById.get(item.inputId)?.name ?? 'Embalagem'}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.quantity === 0 ? '' : item.quantity}
-                          onChange={(event) =>
-                            setQuickProductForm((current) => ({
-                              ...current,
-                              packagingInputs: current.packagingInputs.map((row) =>
-                                row.inputId === item.inputId ? { ...row, quantity: Number(event.target.value || 0) } : row
-                              )
-                            }))
-                          }
-                        />
-                        <SelectField
-                          className="unit-select"
-                          value={item.unit}
-                          onChange={(value) =>
-                            setQuickProductForm((current) => ({
-                              ...current,
-                              packagingInputs: current.packagingInputs.map((row) =>
-                                row.inputId === item.inputId ? { ...row, unit: value as ProductItem['packagingInputs'][number]['unit'] } : row
-                              )
-                            }))
-                          }
-                          options={[{ value: item.unit, label: item.unit === 'un' ? 'und' : item.unit }]}
-                          disabled
-                        />
-                        <button
-                          type="button"
-                          className="icon-button tiny"
-                          onClick={() =>
-                            setQuickProductForm((current) => ({
-                              ...current,
-                              packagingInputs: current.packagingInputs.filter((row) => row.inputId !== item.inputId)
-                            }))
-                          }
-                          aria-label="Remover embalagem"
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">delete_outline</span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-
-              {quickCreateError ? <p className="error">{quickCreateError}</p> : null}
-              <div className="modal-actions">
-                <button type="button" className="ghost" onClick={() => setShowQuickCreate(false)} disabled={quickCreateSaving}>
-                  Cancelar
-                </button>
-                <button type="submit" disabled={quickCreateSaving}>
-                  {quickCreateSaving ? 'Salvando...' : 'Salvar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+      {catalogEditor ? <CatalogEditorDialog target={catalogEditor} onClose={() => setCatalogEditor(null)} onSaved={handleCatalogSaved} /> : null}
 
       <ConfirmDialog
         open={confirmOpen}
