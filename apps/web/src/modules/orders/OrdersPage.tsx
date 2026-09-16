@@ -75,6 +75,7 @@ export const OrdersPage = () => {
   const createRouteInitRef = useRef<string>('');
   const detailRouteInitRef = useRef<string>('');
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
+  const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: '',
     phone: '',
@@ -339,28 +340,13 @@ export const OrdersPage = () => {
   };
 
   const handlePrintPdfPreview = () => {
-    if (!pdfPreviewHtml) return;
-    const popup = window.open('', '_blank', 'width=980,height=720');
-    if (!popup) {
-      setSubmitError('Não foi possível abrir a janela de impressão. Libere os pop-ups do navegador e tente novamente.');
+    const previewWindow = pdfPreviewRef.current?.contentWindow;
+    if (!previewWindow) {
+      setSubmitError('A pré-visualização ainda está carregando. Aguarde um instante e tente novamente.');
       return;
     }
-    let printed = false;
-    const printPopup = () => {
-      if (printed || popup.closed) return;
-      printed = true;
-      popup.focus();
-      popup.print();
-    };
-    popup.addEventListener('load', () => {
-      window.setTimeout(() => {
-        printPopup();
-      }, 100);
-    }, { once: true });
-    popup.document.open();
-    popup.document.write(pdfPreviewHtml);
-    popup.document.close();
-    window.setTimeout(printPopup, 600);
+    previewWindow.focus();
+    previewWindow.print();
   };
 
   const handleDeleteOrder = async () => {
@@ -632,7 +618,7 @@ export const OrdersPage = () => {
               </button>
             </div>
             <div className="tasks-modal-content">
-              <iframe title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
+              <iframe ref={pdfPreviewRef} title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
             </div>
             <div className="modal-actions">
               <button type="button" onClick={handlePrintPdfPreview}>Imprimir / Salvar PDF</button>
