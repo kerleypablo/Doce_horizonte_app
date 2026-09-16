@@ -133,3 +133,21 @@ export const buildOrderPdfBlob = (order: OrderItem, settings?: CompanySettings) 
 
   return document.output('blob');
 };
+
+export const buildOrderPdfBlobFromPreview = (preview: HTMLElement) => new Promise<Blob>((resolve, reject) => {
+  const document = new jsPDF({ unit: 'mm', format: 'a4' });
+  document.html(preview, {
+    x: 0,
+    y: 0,
+    width: 210,
+    windowWidth: preview.scrollWidth,
+    autoPaging: 'slice',
+    html2canvas: {
+      scale: 0.8,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true
+    },
+    callback: (pdf) => resolve(pdf.output('blob'))
+  }).catch(reject);
+});

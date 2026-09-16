@@ -7,7 +7,7 @@ import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { fetchWithCache, invalidateQueryCache, prefetchWithCache } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { orderTabs } from './order-tabs.ts';
-import { buildOrderPdfBlob, buildOrderPdfHtml } from './order-pdf.ts';
+import { buildOrderPdfBlobFromPreview, buildOrderPdfHtml } from './order-pdf.ts';
 import { calculateOrderTotals } from './order-totals.ts';
 import { OrderTotalsSummary } from './OrderTotalsSummary.tsx';
 import { OrderValuesSection } from './OrderValuesSection.tsx';
@@ -74,9 +74,11 @@ export const OrdersPage = () => {
   const [pdfPreviewHtml, setPdfPreviewHtml] = useState<string | null>(null);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfFileName, setPdfFileName] = useState('pedido.pdf');
+  const [generatingPdfFile, setGeneratingPdfFile] = useState(false);
   const createRouteInitRef = useRef<string>('');
   const detailRouteInitRef = useRef<string>('');
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
+  const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: '',
     phone: '',
@@ -335,11 +337,21 @@ export const OrdersPage = () => {
         { staleTime: 60_000 }
       );
       setPdfPreviewHtml(buildOrderPdfHtml(order, settingsQuery.data));
-      setPdfBlob(buildOrderPdfBlob(order, settingsQuery.data));
+      setPdfBlob(null);
       setPdfFileName(`${order.type === 'ORCAMENTO' ? 'orcamento' : 'pedido'}-${order.number}.pdf`);
     } catch {
       setSubmitError('Não foi possível gerar a pré-visualização para impressão. Tente novamente.');
     }
+  };
+
+  const handlePdfPreviewLoad = () => {
+    const preview = pdfPreviewRef.current?.contentDocument?.querySelector<HTMLElement>('.sheet');
+    if (!preview) return;
+    setGeneratingPdfFile(true);
+    buildOrderPdfBlobFromPreview(preview)
+      .then(setPdfBlob)
+      .catch(() => setSubmitError('Não foi possível preparar o PDF para compartilhamento. Tente novamente.'))
+      .finally(() => setGeneratingPdfFile(false));
   };
 
   const handlePrintPdfPreview = () => {
@@ -635,10 +647,10 @@ export const OrdersPage = () => {
               </button>
             </div>
             <div className="tasks-modal-content">
-              <iframe title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
+              <iframe ref={pdfPreviewRef} title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" onLoad={handlePdfPreviewLoad} />
             </div>
             <div className="modal-actions">
-              <button type="button" onClick={handlePrintPdfPreview}>Compartilhar / imprimir PDF</button>
+              <button type="button" onClick={handlePrintPdfPreview} disabled={!pdfBlob || generatingPdfFile}>{generatingPdfFile ? 'Preparando PDF...' : 'Compartilhar / imprimir PDF'}</button>
               <button type="button" className="ghost" onClick={() => setPdfPreviewHtml(null)}>Fechar</button>
             </div>
           </div>
