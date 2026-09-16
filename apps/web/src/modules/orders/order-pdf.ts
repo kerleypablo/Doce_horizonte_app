@@ -1,4 +1,5 @@
 import { formatDateBr } from '../shared/date.ts';
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import type { CompanySettings, OrderItem } from './order-types.ts';
 
@@ -134,20 +135,43 @@ export const buildOrderPdfBlob = (order: OrderItem, settings?: CompanySettings) 
   return document.output('blob');
 };
 
-export const buildOrderPdfBlobFromPreview = (preview: HTMLElement) => new Promise<Blob>((resolve, reject) => {
-  const document = new jsPDF({ unit: 'mm', format: 'a4' });
-  document.html(preview, {
-    x: 0,
-    y: 0,
-    width: 210,
-    windowWidth: preview.scrollWidth,
-    autoPaging: 'slice',
-    html2canvas: {
-      scale: 0.8,
-      backgroundColor: '#ffffff',
-      logging: false,
-      useCORS: true
-    },
-    callback: (pdf) => resolve(pdf.output('blob'))
-  }).catch(reject);
-});
+export const buildOrderPdfBlobFromPreview = async (preview: HTMLElement) => {
+  const previewCanvas = await html2canvas(preview, {
+    backgroundColor: '#ffffff',
+    logging: false,
+    scale: 2,
+    useCORS: true
+  });
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const pageHeightInPixels = Math.floor(previewCanvas.width * pageHeight / pageWidth);
+  let sourceY = 0;
+  let pageNumber = 0;
+
+  while (sourceY < previewCanvas.height) {
+    const sliceHeight = Math.min(pageHeightInPixels, previewCanvas.height - sourceY);
+    const pageCanvas = globalThis.document.createElement('canvas');
+    pageCanvas.width = previewCanvas.width;
+    pageCanvas.height = sliceHeight;
+    const context = pageCanvas.getContext('2d');
+    if (!context) throw new Error('Não foi possível preparar a página do PDF.');
+    context.drawImage(
+      previewCanvas,
+      0,
+      sourceY,
+      previewCanvas.width,
+      sliceHeight,
+      0,
+      0,
+      pageCanvas.width,
+      pageCanvas.height
+    );
+    if (pageNumber > 0) pdf.addPage();
+    pdf.addImage(pageCanvas, 'PNG', 0, 0, pageWidth, sliceHeight * pageWidth / pageCanvas.width, undefined, 'FAST');
+    sourceY += sliceHeight;
+    pageNumber += 1;
+  }
+
+  return pdf.output('blob');
+};
