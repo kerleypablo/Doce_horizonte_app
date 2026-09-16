@@ -7,7 +7,7 @@ import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { fetchWithCache, invalidateQueryCache, prefetchWithCache } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 import { orderTabs } from './order-tabs.ts';
-import { buildOrderPdfHtml } from './order-pdf.ts';
+import { buildOrderPdfBlob, buildOrderPdfHtml } from './order-pdf.ts';
 import { calculateOrderTotals } from './order-totals.ts';
 import { OrderTotalsSummary } from './OrderTotalsSummary.tsx';
 import { OrderValuesSection } from './OrderValuesSection.tsx';
@@ -72,10 +72,11 @@ export const OrdersPage = () => {
   const [form, setForm] = useState(createOrderForm(orderDefaults));
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [pdfPreviewHtml, setPdfPreviewHtml] = useState<string | null>(null);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfFileName, setPdfFileName] = useState('pedido.pdf');
   const createRouteInitRef = useRef<string>('');
   const detailRouteInitRef = useRef<string>('');
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
-  const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: '',
     phone: '',
@@ -334,19 +335,35 @@ export const OrdersPage = () => {
         { staleTime: 60_000 }
       );
       setPdfPreviewHtml(buildOrderPdfHtml(order, settingsQuery.data));
+      setPdfBlob(buildOrderPdfBlob(order, settingsQuery.data));
+      setPdfFileName(`${order.type === 'ORCAMENTO' ? 'orcamento' : 'pedido'}-${order.number}.pdf`);
     } catch {
       setSubmitError('Não foi possível gerar a pré-visualização para impressão. Tente novamente.');
     }
   };
 
   const handlePrintPdfPreview = () => {
-    const previewWindow = pdfPreviewRef.current?.contentWindow;
-    if (!previewWindow) {
-      setSubmitError('A pré-visualização ainda está carregando. Aguarde um instante e tente novamente.');
+    if (!pdfBlob) return;
+    const file = new File([pdfBlob], pdfFileName, { type: 'application/pdf' });
+    const shareNavigator = navigator as Navigator & {
+      canShare?: (data: ShareData) => boolean;
+      share?: (data: ShareData) => Promise<void>;
+    };
+    if (shareNavigator.canShare?.({ files: [file] }) && shareNavigator.share) {
+      shareNavigator.share({ title: 'Pedido', files: [file] }).catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setSubmitError('Não foi possível abrir o compartilhamento do PDF. Tente novamente.');
+      });
       return;
     }
-    previewWindow.focus();
-    previewWindow.print();
+    const url = URL.createObjectURL(pdfBlob);
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = pdfFileName;
+    document.body.appendChild(download);
+    download.click();
+    download.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
   };
 
   const handleDeleteOrder = async () => {
@@ -618,10 +635,10 @@ export const OrdersPage = () => {
               </button>
             </div>
             <div className="tasks-modal-content">
-              <iframe ref={pdfPreviewRef} title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
+              <iframe title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
             </div>
             <div className="modal-actions">
-              <button type="button" onClick={handlePrintPdfPreview}>Imprimir / Salvar PDF</button>
+              <button type="button" onClick={handlePrintPdfPreview}>Compartilhar / imprimir PDF</button>
               <button type="button" className="ghost" onClick={() => setPdfPreviewHtml(null)}>Fechar</button>
             </div>
           </div>

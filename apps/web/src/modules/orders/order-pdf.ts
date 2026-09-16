@@ -1,4 +1,5 @@
 import { formatDateBr } from '../shared/date.ts';
+import { jsPDF } from 'jspdf';
 import type { CompanySettings, OrderItem } from './order-types.ts';
 
 const currency = (value: number) => `R$ ${value.toFixed(2)}`;
@@ -52,4 +53,83 @@ export const buildOrderPdfHtml = (order: OrderItem, settings?: CompanySettings) 
     <div class="summary">${additionsHtml}<div class="summary-line"><span>Desconto${order.discountMode === 'PERCENT' ? ` (${order.discountValue}%)` : ''}</span><strong>- ${currency(discountTotal)}</strong></div><div class="summary-line"><span>Frete</span><strong>${currency(order.shippingValue)}</strong></div><div class="total-row"><div class="label">TOTAL</div><div class="value">${currency(total)}</div></div></div>
     <div class="section-grid"><div class="box"><h4>Observacoes gerais</h4><p>${escapeHtml(note(order.notesGeneral))}</p></div><div class="box-row"><div class="box"><h4>Pagamento</h4><p>${escapeHtml(note(order.notesPayment))}</p><p class="pix">PIX: ${escapeHtml(pixKey || order.pix || '-')}</p></div><div class="box"><h4>${deliveryTitle}</h4><p>${escapeHtml(deliveryContent)}</p></div></div>${order.terms?.trim() ? `<div class="box"><h4>Termos</h4><p>${escapeHtml(order.terms)}</p></div>` : ''}<div class="box"><h4>Contato</h4><p class="contact-line">☎ ${escapeHtml(companyPhone || '-')}</p><p class="contact-line">✉ ${escapeHtml(companyEmail || '-')}</p></div></div>
   </div>${imagesHtml}</div></body></html>`;
+};
+
+export const buildOrderPdfBlob = (order: OrderItem, settings?: CompanySettings) => {
+  const document = new jsPDF({ unit: 'mm', format: 'a4' });
+  const companyName = settings?.companyName || 'Controle Precificacao';
+  const customer = order.customerSnapshot;
+  const productsTotal = order.products.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const additionsTotal = order.additions.reduce((sum, item) => sum + (item.mode === 'FIXED' ? item.value : productsTotal * item.value / 100), 0);
+  const discountTotal = order.discountMode === 'FIXED' ? order.discountValue : (productsTotal + additionsTotal) * order.discountValue / 100;
+  const total = productsTotal + additionsTotal - discountTotal + order.shippingValue;
+  const margin = 15;
+  const pageWidth = 210;
+  const bottom = 280;
+  let y = 18;
+
+  const nextPage = (height = 7) => {
+    if (y + height <= bottom) return;
+    document.addPage();
+    y = 18;
+  };
+  const addLine = (text: string, options: { bold?: boolean; size?: number; indent?: number } = {}) => {
+    const size = options.size ?? 10;
+    const x = margin + (options.indent ?? 0);
+    const lines = document.splitTextToSize(text, pageWidth - margin - x);
+    nextPage(lines.length * (size * 0.45) + 4);
+    document.setFont('helvetica', options.bold ? 'bold' : 'normal');
+    document.setFontSize(size);
+    document.text(lines, x, y);
+    y += lines.length * (size * 0.45) + 3;
+  };
+  const separator = () => {
+    nextPage(5);
+    document.setDrawColor(210, 214, 220);
+    document.line(margin, y, pageWidth - margin, y);
+    y += 5;
+  };
+
+  document.setFillColor(31, 35, 40);
+  document.rect(0, 0, pageWidth, 11, 'F');
+  document.setTextColor(255, 255, 255);
+  document.setFont('helvetica', 'bold');
+  document.setFontSize(17);
+  document.text(order.type === 'ORCAMENTO' ? 'ORCAMENTO' : 'PEDIDO', margin, 8);
+  document.setTextColor(31, 35, 40);
+  y = 20;
+  addLine(companyName, { bold: true, size: 15 });
+  addLine(`${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'} #${order.number} · Data: ${formatDateBr(order.orderDateTime)}`, { size: 10 });
+  separator();
+  addLine(`Cliente: ${customer?.name || '-'}`, { bold: true, size: 11 });
+  addLine(`Telefone: ${customer?.phone || '-'} · ${order.deliveryType === 'ENTREGA' ? 'Entrega' : 'Retirada'}`);
+  addLine(`Data de entrega: ${order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'}`);
+  if (order.deliveryType === 'ENTREGA') addLine(`Endereco: ${order.deliveryAddress || customer?.deliveryAddress || '-'}`);
+  separator();
+  addLine('PRODUTOS', { bold: true, size: 12 });
+  order.products.forEach((item, index) => addLine(`${index + 1}. ${item.name} — ${item.quantity} x ${currency(item.unitPrice)} = ${currency(item.unitPrice * item.quantity)}`));
+  separator();
+  if (order.additions.length) {
+    order.additions.forEach((item) => {
+      const value = item.mode === 'FIXED' ? item.value : productsTotal * item.value / 100;
+      addLine(`${item.label}${item.mode === 'PERCENT' ? ` (${item.value}%)` : ''}: ${currency(value)}`);
+    });
+  }
+  addLine(`Desconto: - ${currency(discountTotal)}`);
+  addLine(`Frete: ${currency(order.shippingValue)}`);
+  addLine(`TOTAL: ${currency(total)}`, { bold: true, size: 14 });
+  separator();
+  addLine(`Observacoes gerais: ${note(order.notesGeneral)}`);
+  addLine(`Pagamento: ${note(order.notesPayment)}`);
+  addLine(`PIX: ${settings?.pixKey || order.pix || '-'}`);
+  if (order.notesDelivery?.trim()) addLine(`Orientacoes de entrega: ${order.notesDelivery}`);
+  if (order.terms?.trim()) addLine(`Termos: ${order.terms}`);
+  if (settings?.companyPhone || settings?.companyEmail) {
+    separator();
+    addLine('CONTATO', { bold: true, size: 11 });
+    if (settings.companyPhone) addLine(settings.companyPhone);
+    if (settings.companyEmail) addLine(settings.companyEmail);
+  }
+
+  return document.output('blob');
 };
