@@ -1,5 +1,10 @@
 import type { OrderItem } from './order-types.ts';
 
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL'
+}).format(Number.isFinite(value) ? value : 0);
+
 export const OrderProductsSection = ({
   products,
   onAdd,
@@ -20,9 +25,12 @@ export const OrderProductsSection = ({
     <div className="ingredients">
       {products.map((item, index) => (
         <div key={`${item.productId}-${index}`} className="order-product-row">
-          <span className="order-product-label">{item.name || 'Produto sem nome'}</span>
+          <div className="order-product-label">
+            <strong>{item.name || 'Produto sem nome'}</strong>
+            <small className="order-product-meta">{formatCurrency(item.unitPrice)} un. · Total {formatCurrency(item.unitPrice * item.quantity)}</small>
+          </div>
           <label className="add-item-qty-field">
-            <span>Quantidade</span>
+            <span>Qtd.</span>
             <input
               className="order-product-qty"
               type="number"

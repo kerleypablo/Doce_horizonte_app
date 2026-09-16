@@ -1,4 +1,5 @@
-import { CatalogEditorDialog, EditCatalogItem, type CatalogEditorOptions, type CatalogEditorTarget } from '../shared/CatalogEditorDialog.tsx';
+import { useCatalogCosts } from '../shared/useCatalogCosts.ts';
+import { CatalogEditorDialog, CatalogItemName, type CatalogEditorOptions, type CatalogEditorTarget } from '../shared/CatalogEditorDialog.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
@@ -35,12 +36,12 @@ type Settings = {
 };
 
 const units = ['g', 'ml', 'un'] as const;
-const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL'
+}).format(value);
 
-const normalizeQuantity = (quantity: number, unit: string, target: string) => {
-  // Quantidades e embalagens usam a mesma unidade base (g, ml ou un).
-  return quantity;
-};
+
 
 export const RecipesPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) => {
   const { user } = useAuth();
@@ -385,45 +386,10 @@ export const RecipesPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) 
     [subRecipeFilteredItems, subRecipePickerSelectedIds]
   );
 
+  const { inputCost, recipeCost } = useCatalogCosts(inputs, recipes, settings);
   const costSummary = useMemo(() => {
-    const inputsMap = new Map(inputs.map((input) => [input.id, input]));
-    const recipesMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
-
-    const calcRecipeCost = (recipe: RecipeItem, visited = new Set<string>()) => {
-      if (visited.has(recipe.id)) return 0;
-      visited.add(recipe.id);
-
-      const ingredientsCost = recipe.ingredients.reduce((sum, item) => {
-        const input = inputsMap.get(item.inputId);
-        if (!input) return sum;
-        const unitCost = input.packagePrice / input.packageSize;
-        const normalized = normalizeQuantity(item.quantity, item.unit, input.unit);
-        return sum + unitCost * normalized;
-      }, 0);
-
-      const subCost = recipe.subRecipes.reduce((sum, item) => {
-        const sub = recipesMap.get(item.recipeId);
-        if (!sub || sub.yield <= 0) return sum;
-        const total = calcRecipeCost(sub, visited);
-        return sum + (total / sub.yield) * item.quantity;
-      }, 0);
-
-      return ingredientsCost + subCost;
-    };
-
-    const currentRecipe: RecipeItem = {
-      id: editingId ?? 'draft',
-      name: form.name,
-      description: form.description,
-      prepTimeMinutes: form.prepTimeMinutes,
-      yield: form.yield,
-      yieldUnit: form.yieldUnit,
-      ingredients: form.ingredients,
-      subRecipes: form.subRecipes,
-      tags: form.tags
-    };
-
-    const ingredientsTotal = calcRecipeCost(currentRecipe);
+    const ingredientsTotal = form.ingredients.reduce((sum, item) => sum + inputCost(item.inputId, item.quantity), 0)
+      + form.subRecipes.reduce((sum, item) => sum + recipeCost(item.recipeId, item.quantity), 0);
     const hours = (form.prepTimeMinutes ?? 0) / 60;
     const laborTotal = (settings?.laborCostPerHour ?? 0) * hours;
     const fixedTotal = (settings?.fixedCostPerHour ?? 0) * hours;
@@ -435,7 +401,7 @@ export const RecipesPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) 
       fixedTotal,
       total
     };
-  }, [form, inputs, recipes, settings, editingId]);
+  }, [form, inputCost, recipeCost, settings]);
 
   const handleDeleteRecipe = async () => {
     if (!deleteTarget) return;
@@ -528,11 +494,8 @@ export const RecipesPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) 
               {form.ingredients.map((ingredient, index) => (
                 <div key={`${ingredient.inputId}-${index}`} className="add-item-row recipe-add-item-row">
                   <div className="order-product-label">
-                    <span>{inputsMap.get(ingredient.inputId)?.name ?? 'Insumo nao encontrado'}</span>
-                    <EditCatalogItem label="Editar insumo" onClick={() => setCatalogEditor({ kind: 'input', id: ingredient.inputId })} />
-                    <small className="order-product-meta">
-                      {inputsMap.get(ingredient.inputId)?.packageSize ?? 0} {inputsMap.get(ingredient.inputId)?.unit ?? '-'}
-                    </small>
+                    <CatalogItemName name={inputsMap.get(ingredient.inputId)?.name ?? 'Insumo nao encontrado'} editLabel="Editar insumo" onEdit={() => setCatalogEditor({ kind: 'input', id: ingredient.inputId })} />
+                    <small className="order-product-meta">{ingredient.quantity} {inputsMap.get(ingredient.inputId)?.unit ?? ingredient.unit} · {formatCurrency(inputCost(ingredient.inputId, ingredient.quantity))}</small>
                   </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
@@ -579,11 +542,8 @@ export const RecipesPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) 
               {form.subRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-sub-item-row">
                   <div className="order-product-label">
-                    <span>{subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
-                    <EditCatalogItem label="Editar receita" onClick={() => setCatalogEditor({ kind: 'recipe', id: item.recipeId })} />
-                    <small className="order-product-meta">
-                      {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.yield ?? 0} {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.yieldUnit ?? '-'} 
-                    </small>
+                    <CatalogItemName name={subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.name ?? 'Receita nao encontrada'} editLabel="Editar receita" onEdit={() => setCatalogEditor({ kind: 'recipe', id: item.recipeId })} />
+                    <small className="order-product-meta">{item.quantity} {subRecipeCandidates.find((recipe) => recipe.id === item.recipeId)?.yieldUnit ?? '-'} · {formatCurrency(recipeCost(item.recipeId, item.quantity))}</small>
                   </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>

@@ -24,12 +24,12 @@ export const OrderPaymentModal = ({
   const canSave = Boolean(date) && Number.isFinite(amount) && amount > 0;
   return (
   <div className="modal-backdrop" role="dialog" aria-modal="true">
-    <div className="modal">
+    <div className="modal order-quick-modal">
       <div className="modal-header">
         <div className="modal-icon"><span className="material-symbols-outlined" aria-hidden="true">payments</span></div>
         <div><h4>{editing ? 'Editar pagamento' : 'Adicionar pagamento'}</h4><p>Defina os dados do pagamento do pedido.</p></div>
       </div>
-      <div className="form">
+      <div className="form order-quick-form">
         <label>Data<input type="date" value={date} onChange={(event) => onDateChange(event.target.value)} /></label>
         <label>Valor<MoneyInput value={amount} onChange={onAmountChange} /></label>
         <label>Observacao<input value={note} onChange={(event) => onNoteChange(event.target.value)} /></label>

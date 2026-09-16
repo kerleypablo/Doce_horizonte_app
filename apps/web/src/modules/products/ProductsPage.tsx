@@ -1,4 +1,5 @@
-import { CatalogEditorDialog, EditCatalogItem, type CatalogEditorOptions, type CatalogEditorTarget } from '../shared/CatalogEditorDialog.tsx';
+import { useCatalogCosts } from '../shared/useCatalogCosts.ts';
+import { CatalogEditorDialog, CatalogItemName, type CatalogEditorOptions, type CatalogEditorTarget } from '../shared/CatalogEditorDialog.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
@@ -68,11 +69,10 @@ type Settings = {
   }[];
 };
 
-const formatCurrency = (value: number) => `R$ ${value.toFixed(2)}`;
-const normalizeInputQuantity = (quantity: number, from: ProductItem['directInputs'][number]['unit'], to: InputItem['unit']) => {
-  // Quantidades e embalagens usam a mesma unidade base (g, ml ou un).
-  return quantity;
-};
+const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL'
+}).format(value);
 
 
 export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) => {
@@ -107,6 +107,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
   const [catalogEditor, setCatalogEditor] = useState<CatalogEditorTarget | null>(null);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
+  const [priceSource, setPriceSource] = useState<'markup' | 'price'>('markup');
   const [form, setForm] = useState({
     name: '',
     prepTimeMinutes: 0,
@@ -221,6 +222,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
       );
       setEditingId(null);
       setUnitPriceInput(duplicateDraft ? duplicateUnitPriceInput : 0);
+      setPriceSource('markup');
       setSaveError(null);
       setShowForm(true);
       return;
@@ -245,6 +247,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
         packagingInputs: current.packagingInputs ?? []
       });
       setUnitPriceInput(current.unitPrice ?? 0);
+      setPriceSource('markup');
       setSaveError(null);
       setShowForm(true);
       return;
@@ -257,6 +260,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
     setForm(createEmptyForm());
     setEditingId(null);
     setUnitPriceInput(0);
+    setPriceSource('markup');
     setSaveError(null);
   };
 
@@ -275,6 +279,10 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    if (priceSource === 'price' && unitPriceInput <= 0) {
+      setSaveError('Informe um valor de venda maior que zero.');
+      return;
+    }
     setSaving(true);
     setSaveError(null);
 
@@ -283,7 +291,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
       prepTimeMinutes: Number(form.prepTimeMinutes),
       notes: form.notes,
       unitsCount: Number(form.unitsCount),
-      targetProfitPercent: Number(form.targetProfitPercent),
+      targetProfitPercent: priceSource === 'price' ? Math.max(costSummary.profitPercent - form.extraPercent, 0) : Number(form.targetProfitPercent),
       extraPercent: Number(form.extraPercent),
       manualUnitPrice: Number(unitPriceInput || 0),
       channelId: form.channelId,
@@ -472,24 +480,20 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
     setPickerOpen(false);
   };
 
-  const costSummary = useProductPricing({ form, inputs, recipes, products, settings });
+  const { inputCost, recipeCost } = useCatalogCosts(inputs, recipes, settings);
+  const costSummary = useProductPricing({ form, inputs, recipes, products, settings, manualUnitPrice: priceSource === 'price' ? unitPriceInput : undefined });
 
   useEffect(() => {
-    setUnitPriceInput(Number(costSummary.unitPrice.toFixed(2)));
-  }, [costSummary.unitPrice]);
+    if (priceSource === 'markup') setUnitPriceInput(costSummary.unitPrice);
+  }, [costSummary.unitPrice, priceSource]);
+
+  const displayedProfitPercent = priceSource === 'price'
+    ? Number((costSummary.profitPercent - form.extraPercent).toFixed(2))
+    : form.targetProfitPercent;
 
   const handleUnitPriceChange = (value: number) => {
+    setPriceSource('price');
     setUnitPriceInput(value);
-
-    const totalPrice = value * (form.unitsCount || 1);
-    if (totalPrice <= 0) return;
-
-    const netRevenueAfterTaxesAndFees = totalPrice * (1 - costSummary.variablePercentBase / 100);
-    const totalMarkupPercent = costSummary.baseCost > 0
-      ? ((netRevenueAfterTaxesAndFees - costSummary.baseCost) / costSummary.baseCost) * 100
-      : 0;
-    const profitPercent = totalMarkupPercent - form.extraPercent;
-    setForm({ ...form, targetProfitPercent: Number(Math.max(profitPercent, 0).toFixed(2)) });
   };
 
   const handleDeleteProduct = async () => {
@@ -596,8 +600,9 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                 Lucro sobre o custo (%)
                 <input
                   type="number"
-                  value={form.targetProfitPercent === 0 ? '' : form.targetProfitPercent}
+                  value={displayedProfitPercent === 0 ? '' : displayedProfitPercent}
                   onChange={(e) => {
+                    setPriceSource('markup');
                     setForm({ ...form, targetProfitPercent: Number(e.target.value || 0) });
                   }}
                   min={0}
@@ -623,12 +628,9 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
               {form.extraRecipes.map((item, index) => (
                 <div key={`${item.recipeId}-${index}`} className="add-item-row recipe-add-item-row">
                   <div className="order-product-label">
-                  <span>{recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'}</span>
-                    <EditCatalogItem label="Editar receita" onClick={() => setCatalogEditor({ kind: 'recipe', id: item.recipeId })} />
-                  <small className="order-product-meta">
-                    {recipesById.get(item.recipeId)?.yield ?? 0} {recipesById.get(item.recipeId)?.yieldUnit ?? '-'}
-                  </small>
-                </div>
+                    <CatalogItemName name={recipesById.get(item.recipeId)?.name ?? 'Receita nao encontrada'} editLabel="Editar receita" onEdit={() => setCatalogEditor({ kind: 'recipe', id: item.recipeId })} />
+                    <small className="order-product-meta">{item.quantity} {recipesById.get(item.recipeId)?.yieldUnit ?? '-'} · {formatCurrency(recipeCost(item.recipeId, item.quantity))}</small>
+                  </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade usada ({recipesById.get(item.recipeId)?.yieldUnit ?? '-'})</span>
                     <input
@@ -673,10 +675,9 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
             <div className="ingredients">
               {form.extraProducts.map((item, index) => (
                 <div key={`${item.productId}-${index}`} className="add-item-row recipe-add-item-row">
-                  <span className="order-product-label">
-                    {productsById.get(item.productId)?.name ?? 'Produto nao encontrado'}
-                    <EditCatalogItem label="Editar produto" onClick={() => setCatalogEditor({ kind: 'product', id: item.productId })} />
-                  </span>
+                  <div className="order-product-label">
+                    <CatalogItemName name={productsById.get(item.productId)?.name ?? 'Produto nao encontrado'} editLabel="Editar produto" onEdit={() => setCatalogEditor({ kind: 'product', id: item.productId })} />
+                  </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
                     <input
@@ -721,11 +722,8 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
               {form.directInputs.map((item, index) => (
                 <div key={`${item.inputId}-${index}`} className="add-item-row recipe-add-item-row">
                   <div className="order-product-label">
-                    <span>{inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'}
-                    <EditCatalogItem label="Editar insumo" onClick={() => setCatalogEditor({ kind: 'input', id: item.inputId })} /></span>
-                    <small className="order-product-meta">
-                      {item.quantity} {inputsById.get(item.inputId)?.unit ?? item.unit} · {formatCurrency((inputsById.get(item.inputId)?.packagePrice ?? 0) / Math.max(inputsById.get(item.inputId)?.packageSize ?? 1, 1) * normalizeInputQuantity(item.quantity, inputsById.get(item.inputId)?.unit ?? item.unit, inputsById.get(item.inputId)?.unit ?? 'un'))}
-                    </small>
+                    <CatalogItemName name={inputsById.get(item.inputId)?.name ?? 'Insumo nao encontrado'} editLabel="Editar insumo" onEdit={() => setCatalogEditor({ kind: 'input', id: item.inputId })} />
+                    <small className="order-product-meta">{item.quantity} {inputsById.get(item.inputId)?.unit ?? item.unit} · {formatCurrency(inputCost(item.inputId, item.quantity))}</small>
                   </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
@@ -751,10 +749,10 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
             <div className="ingredients">
               {form.packagingInputs.map((item, index) => (
                 <div key={`${item.inputId}-${index}`} className="add-item-row recipe-add-item-row">
-                  <span className="order-product-label">
-                    {inputsById.get(item.inputId)?.name ?? 'Embalagem nao encontrada'}
-                    <EditCatalogItem label="Editar embalagem" onClick={() => setCatalogEditor({ kind: 'input', id: item.inputId })} />
-                  </span>
+                  <div className="order-product-label">
+                    <CatalogItemName name={inputsById.get(item.inputId)?.name ?? 'Embalagem nao encontrada'} editLabel="Editar embalagem" onEdit={() => setCatalogEditor({ kind: 'input', id: item.inputId })} />
+                    <small className="order-product-meta">{item.quantity} {inputsById.get(item.inputId)?.unit ?? item.unit} · {formatCurrency(inputCost(item.inputId, item.quantity))}</small>
+                  </div>
                   <label className="add-item-qty-field">
                     <span>Quantidade</span>
                     <input

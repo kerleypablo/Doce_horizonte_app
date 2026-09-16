@@ -93,7 +93,7 @@ const calcProductCompositionCost = (product: Product, inputs: Input[], recipes: 
   return directCost + overhead + settings.laborCostPerHour * hours + settings.fixedCostPerHour * hours;
 };
 
-export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPercent, extraPercent, extraRecipes, extraProducts, directInputs = [], packagingInputs, settings, inputs, recipes, products, feePercent, paymentFeePercent, feeFixed }: {
+export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPercent, extraPercent, extraRecipes, extraProducts, directInputs = [], packagingInputs, settings, inputs, recipes, products, feePercent, paymentFeePercent, feeFixed, manualUnitPrice }: {
   unitsCount: number;
   prepTimeMinutes: number;
   targetProfitPercent: number;
@@ -109,6 +109,7 @@ export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPe
   feePercent: number;
   paymentFeePercent: number;
   feeFixed: number;
+  manualUnitPrice?: number;
 }): ProductPricePreview => {
   const safeUnits = Math.max(unitsCount, 1);
   const recipesCost = extraRecipes.reduce((sum, item) => {
@@ -131,7 +132,10 @@ export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPe
   const variablePercent = settings.taxesPercent + feePercent + paymentFeePercent;
   const baseCost = directCost + overheadCost + feeFixed * safeUnits;
   const pricingError = variablePercent >= 100 ? 'A soma dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.' : undefined;
-  const totalPrice = pricingError ? 0 : calcSalePriceFromMarkup(baseCost, variablePercent, targetProfitPercent + extraPercent);
+  // A manually entered price is authoritative; never derive it back from rounded markup.
+  const totalPrice = pricingError ? 0 : manualUnitPrice !== undefined
+    ? manualUnitPrice * safeUnits
+    : calcSalePriceFromMarkup(baseCost, variablePercent, targetProfitPercent + extraPercent);
   const profitValue = pricingError ? 0 : totalPrice - baseCost - totalPrice * variablePercent / 100;
   return {
     directCost: round2(directCost), overheadCost: round2(overheadCost), totalCost: round2(baseCost), variablePercent: round2(variablePercent), feeFixed: round2(feeFixed), unitsCount: round2(safeUnits), unitCost: round2(baseCost / safeUnits), unitPrice: round2(totalPrice / safeUnits), totalPrice: round2(totalPrice), profitValue: round2(profitValue), profitPercent: round2(baseCost > 0 ? profitValue / baseCost * 100 : 0), pricingError

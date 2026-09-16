@@ -51,7 +51,14 @@ export function CatalogEditorDialog({ target, onSaved, onClose }: {
 }
 
 export function EditCatalogItem({ label, onClick }: { label: string; onClick: () => void }) {
-  return <button type="button" className="catalog-item-edit" onClick={onClick} aria-label={label}>
-    <span className="material-symbols-outlined" aria-hidden="true">edit</span>Editar
+  return <button type="button" className="catalog-item-edit" onClick={onClick} aria-label={label} title={label}>
+    <span className="material-symbols-outlined" aria-hidden="true">edit</span>
   </button>;
+}
+
+export function CatalogItemName({ name, editLabel, onEdit }: { name: string; editLabel: string; onEdit: () => void }) {
+  return <span className="catalog-item-name">
+    <span className="catalog-item-name-text" title={name}>{name}</span>
+    <EditCatalogItem label={editLabel} onClick={onEdit} />
+  </span>;
 }

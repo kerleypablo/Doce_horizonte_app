@@ -4,10 +4,10 @@ import type { CustomerForm } from './order-types.ts';
 import { formatPhoneBR } from './order-formatters.ts';
 
 export const OrderCustomerModal = ({ form, onChange, onCancel, onSubmit }: { form: CustomerForm; onChange: (form: CustomerForm) => void; onCancel: () => void; onSubmit: (event: FormEvent) => void }) => (
-  <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal"><div className="modal-header"><div><h4>Novo cliente</h4><p>Cadastro rapido sem sair do pedido</p></div></div><form className="form" onSubmit={onSubmit}>
+  <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal order-quick-modal"><div className="modal-header"><div className="modal-icon"><span className="material-symbols-outlined" aria-hidden="true">person_add</span></div><div><h4>Novo cliente</h4><p>Cadastro rapido sem sair do pedido</p></div></div><form className="form order-quick-form" onSubmit={onSubmit}>
     <label>Nome<input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} required /></label>
     <label>Telefone<input value={form.phone} onChange={(event) => onChange({ ...form, phone: formatPhoneBR(event.target.value) })} required /></label>
     <label>Tipo pessoa<SelectField value={form.personType} onChange={(value) => onChange({ ...form, personType: value as 'PF' | 'PJ' })} options={[{ value: 'PF', label: 'Pessoa fisica' }, { value: 'PJ', label: 'Pessoa juridica' }]} /></label>
-    <div className="modal-actions"><button type="button" className="ghost" onClick={onCancel}>Cancelar</button><button type="submit">Salvar cliente</button></div>
+    <div className="modal-actions order-quick-full"><button type="button" className="ghost" onClick={onCancel}>Cancelar</button><button type="submit">Salvar cliente</button></div>
   </form></div></div>
 );

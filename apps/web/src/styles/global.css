@@ -4099,11 +4099,9 @@ button:disabled {
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.order-product-label > span {
+.order-product-label > strong {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -5064,6 +5062,49 @@ button:disabled {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   padding: 20px;
+}
+
+.order-quick-modal {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+
+.order-quick-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.order-quick-form label {
+  min-width: 0;
+}
+
+.order-quick-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 560px) {
+  .order-quick-modal {
+    padding: 16px;
+  }
+
+  .order-quick-form {
+    grid-template-columns: 1fr;
+  }
+
+  .order-quick-full {
+    grid-column: auto;
+  }
+
+  .order-editor .order-product-row {
+    grid-template-columns: minmax(0, 1fr) 50px auto;
+  }
+
+  .order-editor .order-product-meta {
+    font-size: 9px;
+    white-space: nowrap;
+  }
 }
 
 .modal-header {

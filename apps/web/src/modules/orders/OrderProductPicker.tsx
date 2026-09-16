@@ -1,6 +1,6 @@
 import type { ProductItem } from './order-types.ts';
 
-const currency = (value: number) => `R$ ${value.toFixed(2)}`;
+const currency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const ProductRow = ({ product, checked, onToggle }: { product: ProductItem; checked: boolean; onToggle: (checked: boolean) => void }) => <label className="product-picker-row"><div className="product-picker-main"><strong>{product.name}</strong><span className="muted">{currency(product.unitPrice || product.salePrice || 0)}</span></div><input className="pretty-checkbox" type="checkbox" checked={checked} onChange={(event) => onToggle(event.target.checked)} /></label>;
 
 export const OrderProductPicker = ({ selectedProducts, unselectedProducts, selectedIds, search, onSearch, onToggle, onCancel, onSave }: { selectedProducts: ProductItem[]; unselectedProducts: ProductItem[]; selectedIds: string[]; search: string; onSearch: (value: string) => void; onToggle: (id: string, checked: boolean) => void; onCancel: () => void; onSave: () => void }) => (

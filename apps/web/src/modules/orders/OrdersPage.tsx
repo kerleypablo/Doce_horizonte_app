@@ -75,7 +75,6 @@ export const OrdersPage = () => {
   const createRouteInitRef = useRef<string>('');
   const detailRouteInitRef = useRef<string>('');
   const latestOrderDefaultsRef = useRef<CompanySettings>({});
-  const pdfPreviewRef = useRef<HTMLIFrameElement | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: '',
     phone: '',
@@ -146,9 +145,10 @@ export const OrdersPage = () => {
 
       return {
         ...current,
-        notesDelivery: settingsQuery.data.defaultNotesDelivery ?? '',
-        notesGeneral: settingsQuery.data.defaultNotesGeneral ?? '',
-        notesPayment: settingsQuery.data.defaultNotesPayment ?? ''
+        notesDelivery: current.notesDelivery || settingsQuery.data.defaultNotesDelivery || '',
+        notesGeneral: current.notesGeneral || settingsQuery.data.defaultNotesGeneral || '',
+        notesPayment: current.notesPayment || settingsQuery.data.defaultNotesPayment || '',
+        pix: current.pix || settingsQuery.data.pixKey || ''
       };
     });
   }, [isCreateView, settingsQuery.data]);
@@ -189,7 +189,7 @@ export const OrdersPage = () => {
       const initialDeliveryDate = deliveryDateFromQuery || deliveryDateFromState;
       const initKey = `${pathname}|${initialDeliveryDate || ''}`;
       if (createRouteInitRef.current !== initKey) {
-        const next = createOrderForm(latestOrderDefaultsRef.current);
+        const next = createOrderForm(settingsQuery.data ?? latestOrderDefaultsRef.current);
         if (initialDeliveryDate) next.deliveryDate = initialDeliveryDate;
         setForm(next);
         setEditingId(null);
@@ -326,35 +326,41 @@ export const OrdersPage = () => {
   };
 
   const handleGeneratePdf = async (orderIdToPrint: string) => {
-    const order = await fetchWithCache<OrderItem>(
-      `order-detail:${orderIdToPrint}`,
-      () => orderService.detail(orderIdToPrint, user?.token),
-      { staleTime: 60_000 }
-    );
-    setPdfPreviewHtml(buildOrderPdfHtml(order, settingsQuery.data));
+    try {
+      const order = await fetchWithCache<OrderItem>(
+        `order-detail:${orderIdToPrint}`,
+        () => orderService.detail(orderIdToPrint, user?.token),
+        { staleTime: 60_000 }
+      );
+      setPdfPreviewHtml(buildOrderPdfHtml(order, settingsQuery.data));
+    } catch {
+      setSubmitError('Não foi possível gerar a pré-visualização para impressão. Tente novamente.');
+    }
   };
 
   const handlePrintPdfPreview = () => {
-    const frameWindow = pdfPreviewRef.current?.contentWindow;
-    if (frameWindow) {
-      try {
-        frameWindow.focus();
-        frameWindow.print();
-        return;
-      } catch {
-        // fallback below
-      }
-    }
     if (!pdfPreviewHtml) return;
-    const popup = window.open('', '_blank', 'noopener,noreferrer,width=980,height=720');
-    if (!popup) return;
+    const popup = window.open('', '_blank', 'width=980,height=720');
+    if (!popup) {
+      setSubmitError('Não foi possível abrir a janela de impressão. Libere os pop-ups do navegador e tente novamente.');
+      return;
+    }
+    let printed = false;
+    const printPopup = () => {
+      if (printed || popup.closed) return;
+      printed = true;
+      popup.focus();
+      popup.print();
+    };
+    popup.addEventListener('load', () => {
+      window.setTimeout(() => {
+        printPopup();
+      }, 100);
+    }, { once: true });
     popup.document.open();
     popup.document.write(pdfPreviewHtml);
     popup.document.close();
-    popup.focus();
-    setTimeout(() => {
-      popup.print();
-    }, 250);
+    window.setTimeout(printPopup, 600);
   };
 
   const handleDeleteOrder = async () => {
@@ -626,7 +632,7 @@ export const OrdersPage = () => {
               </button>
             </div>
             <div className="tasks-modal-content">
-              <iframe ref={pdfPreviewRef} title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
+              <iframe title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" />
             </div>
             <div className="modal-actions">
               <button type="button" onClick={handlePrintPdfPreview}>Imprimir / Salvar PDF</button>

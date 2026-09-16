@@ -15,8 +15,12 @@
 .catalog-editor-dialog-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
 .catalog-editor-dialog-header p { margin: 4px 0 0; font-size: 13px; }
 .catalog-editor-dialog-content > .page { padding: 0; min-width: 0; }
-.catalog-item-edit { display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 4px 8px; margin-top: 4px; font-size: 12px; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 8px; }
-.catalog-item-edit .material-symbols-outlined { font-size: 16px; }
+.order-product-label > .catalog-item-name { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: visible; }
+.catalog-item-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-item-edit { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; min-height: 28px; padding: 4px; margin: 0; background: transparent; color: var(--text); border: 0; border-radius: 6px; }
+.catalog-item-edit:hover { background: var(--surface-alt); }
+.catalog-item-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.catalog-item-edit .material-symbols-outlined { font-size: 18px; }
 @media (max-width: 600px) {
   .catalog-editor-dialog { width: calc(100vw - 12px); max-height: calc(100dvh - 12px); padding: 12px; border-radius: 12px; }
 }

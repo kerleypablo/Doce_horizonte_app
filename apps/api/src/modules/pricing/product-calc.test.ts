@@ -117,6 +117,21 @@ test('taxa fixa por item nao e diluida pelo tamanho do lote', () => {
   assert.equal(result.unitCost, 2);
 });
 
+test('preco informado manualmente permanece exato enquanto o lucro e recalculado', () => {
+  const input: Input = {
+    id: 'input', companyId: 'company', name: 'Insumo', category: 'producao',
+    unit: 'un', packageSize: 1, packagePrice: 14.26, tags: []
+  };
+  const result = preview({
+    inputs: [input],
+    directInputs: [{ inputId: 'input', quantity: 1, unit: 'un' }],
+    manualUnitPrice: 19
+  });
+  assert.equal(result.unitPrice, 19);
+  assert.equal(result.totalPrice, 19);
+  assert.equal(result.profitPercent, 33.24);
+});
+
 for (const unit of ['g', 'ml', 'un'] as const) {
   test(`insumo em ${unit}: custo proporcional sem conversao por mil`, () => {
     const input: Input = {

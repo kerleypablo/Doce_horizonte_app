@@ -10,11 +10,13 @@ export const useProductPricing = (params: {
   recipes: RecipeItem[];
   products: ProductItem[];
   settings: Settings | null;
+  manualUnitPrice?: number;
 }) => useMemo(() => {
   const activeChannels = params.settings?.salesChannels.filter((channel) => channel.active) ?? [];
   const channel = activeChannels.find((candidate) => candidate.id === params.form.channelId) ?? activeChannels[0];
   const preview = calcProductPreview({
     ...params.form,
+    manualUnitPrice: params.manualUnitPrice,
     settings: params.settings ?? { overheadMethod: 'PERCENT_DIRECT', overheadPercent: 0, overheadPerUnit: 0, laborCostPerHour: 0, fixedCostPerHour: 0, taxesPercent: 0, defaultProfitPercent: 0, salesChannels: [] },
     inputs: params.inputs.map((input) => ({ ...input, companyId: '' })),
     recipes: params.recipes.map((recipe) => ({ ...recipe, companyId: '' })),
@@ -30,8 +32,8 @@ export const useProductPricing = (params: {
     total: preview.totalCost - (channel?.feeFixed ?? 0) * Math.max(params.form.unitsCount, 1),
     baseCost: preview.totalCost,
     unitPrice: preview.unitPrice,
-    profitPercent: params.form.targetProfitPercent,
+    profitPercent: preview.profitPercent,
     variablePercentBase: preview.variablePercent,
     pricingError: preview.pricingError ?? ''
   };
-}, [params.form, params.inputs, params.products, params.recipes, params.settings]);
+}, [params.form, params.inputs, params.products, params.recipes, params.settings, params.manualUnitPrice]);

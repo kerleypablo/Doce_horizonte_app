@@ -12,7 +12,7 @@ export const createOrderForm = (defaults?: CompanySettings) => ({
   orderDateTime: toDateTimeLocal(new Date().toISOString()),
   customerId: '', deliveryAddress: '', deliveryType: 'ENTREGA' as OrderItem['deliveryType'], deliveryDate: '', status: 'AGUARDANDO_RETORNO' as OrderItem['status'],
   products: [] as OrderItem['products'], additions: [] as OrderItem['additions'], discountMode: 'FIXED' as OrderItem['discountMode'], discountValue: 0, shippingValue: 0,
-  notesDelivery: defaults?.defaultNotesDelivery ?? '', notesGeneral: defaults?.defaultNotesGeneral ?? '', notesPayment: defaults?.defaultNotesPayment ?? '', pix: '', terms: '',
+  notesDelivery: defaults?.defaultNotesDelivery ?? '', notesGeneral: defaults?.defaultNotesGeneral ?? '', notesPayment: defaults?.defaultNotesPayment ?? '', pix: defaults?.pixKey ?? '', terms: '',
   payments: [] as OrderItem['payments'], images: [] as OrderItem['images'], alerts: [{ label: 'Lembrar 3 dias antes da entrega', enabled: false }, { label: 'Lembrar 1 dia antes da entrega', enabled: false }] as OrderItem['alerts']
 });
 
