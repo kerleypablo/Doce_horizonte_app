@@ -113,12 +113,15 @@
 .product-pricing-field {
   display: grid;
   gap: 7px;
+  min-width: 0;
   padding: 13px;
   border-radius: 14px;
   background: var(--surface-alt);
 }
 
 .product-pricing-field input {
+  width: 100%;
+  min-width: 0;
   border-color: transparent;
   background: transparent;
   box-shadow: none;
