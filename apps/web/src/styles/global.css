@@ -182,7 +182,6 @@
 .product-cost-group > small b { color: var(--text); font-weight: 700; }
 
 @media (max-width: 560px) {
-  .product-pricing-grid,
   .product-cost-summary { grid-template-columns: 1fr; }
   .product-cost-summary .summary-total { grid-column: auto; }
   .product-panel-heading { align-items: flex-start; }
