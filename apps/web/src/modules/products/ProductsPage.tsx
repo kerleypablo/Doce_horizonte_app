@@ -653,7 +653,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                     <small className="order-product-meta">{item.quantity} {recipesById.get(item.recipeId)?.yieldUnit ?? '-'} · {formatCurrency(recipeCost(item.recipeId, item.quantity))}</small>
                   </div>
                   <label className="add-item-qty-field">
-                    <span>Quantidade usada ({recipesById.get(item.recipeId)?.yieldUnit ?? '-'})</span>
+                    <span>Qtd.</span>
                     <input
                       className="add-item-qty-input"
                       type="number"
@@ -700,7 +700,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                     <CatalogItemName name={productsById.get(item.productId)?.name ?? 'Produto nao encontrado'} editLabel="Editar produto" onEdit={() => setCatalogEditor({ kind: 'product', id: item.productId })} />
                   </div>
                   <label className="add-item-qty-field">
-                    <span>Quantidade</span>
+                    <span>Qtd.</span>
                     <input
                       className="add-item-qty-input"
                       type="number"
@@ -747,7 +747,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                     <small className="order-product-meta">{item.quantity} {inputsById.get(item.inputId)?.unit ?? item.unit} · {formatCurrency(inputCost(item.inputId, item.quantity))}</small>
                   </div>
                   <label className="add-item-qty-field">
-                    <span>Quantidade</span>
+                    <span>Qtd.</span>
                     <input className="add-item-qty-input" type="number" min={0} step="0.01" value={item.quantity === 0 ? '' : item.quantity} onChange={(e) => {
                       const next = [...form.directInputs];
                       next[index] = { ...next[index], quantity: Number(e.target.value || 0) };
@@ -775,7 +775,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                     <small className="order-product-meta">{item.quantity} {inputsById.get(item.inputId)?.unit ?? item.unit} · {formatCurrency(inputCost(item.inputId, item.quantity))}</small>
                   </div>
                   <label className="add-item-qty-field">
-                    <span>Quantidade</span>
+                    <span>Qtd.</span>
                     <input
                       className="add-item-qty-input"
                       type="number"

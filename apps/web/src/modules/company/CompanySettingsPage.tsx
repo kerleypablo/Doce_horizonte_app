@@ -568,7 +568,7 @@ export const CompanySettingsPage = () => {
               ) : null}
               <div className="company-settings-cost-list">
                 {settings.laborCostItems.map((item, index) => (
-                  <div key={item.id ?? `${item.name}-${index}`} className="company-settings-cost-row compact">
+                  <div key={item.id ?? `${item.name}-${index}`} className={editingCost?.kind === 'laborCostItems' && editingCost.index === index ? 'company-settings-cost-row compact editing' : 'company-settings-cost-row compact'}>
                     {editingCost?.kind === 'laborCostItems' && editingCost.index === index ? (
                       <>
                         <label>
@@ -676,7 +676,7 @@ export const CompanySettingsPage = () => {
               ) : null}
               <div className="company-settings-cost-list">
                 {settings.fixedCostItems.map((item, index) => (
-                  <div key={item.id ?? `${item.name}-${index}`} className="company-settings-cost-row compact">
+                  <div key={item.id ?? `${item.name}-${index}`} className={editingCost?.kind === 'fixedCostItems' && editingCost.index === index ? 'company-settings-cost-row compact editing' : 'company-settings-cost-row compact'}>
                     {editingCost?.kind === 'fixedCostItems' && editingCost.index === index ? (
                       <>
                         <label>

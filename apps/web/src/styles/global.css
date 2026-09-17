@@ -4135,6 +4135,20 @@ button:disabled {
   flex-wrap: nowrap;
 }
 
+.company-settings-cost-row.compact.editing {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto;
+  align-items: end;
+}
+
+.company-settings-cost-row.compact.editing .company-settings-cost-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.company-settings-cost-row.compact.editing .company-settings-cost-actions button {
+  white-space: nowrap;
+}
+
 .company-settings-cost-row.compact .icon-button.small {
   width: 30px;
   height: 30px;
@@ -5661,6 +5675,14 @@ button:disabled {
   .company-settings-cost-create,
   .company-settings-cost-row {
     grid-template-columns: 1fr;
+  }
+
+  .company-settings-cost-row.compact.editing {
+    grid-template-columns: 1fr;
+  }
+
+  .company-settings-cost-row.compact.editing .company-settings-cost-actions {
+    justify-content: flex-start;
   }
 
   .company-settings-cost-summary {
