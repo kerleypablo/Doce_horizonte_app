@@ -116,6 +116,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
   const [catalogEditor, setCatalogEditor] = useState<CatalogEditorTarget | null>(null);
+  const [costDetailsOpen, setCostDetailsOpen] = useState(false);
   const confirmActionRef = useRef<null | (() => void)>(null);
   const [unitPriceInput, setUnitPriceInput] = useState(0);
   const [priceSource, setPriceSource] = useState<'markup' | 'price'>('markup');
@@ -501,6 +502,13 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
   const displayedProfitPercent = priceSource === 'price'
     ? Number((costSummary.profitPercent - form.extraPercent).toFixed(2))
     : form.targetProfitPercent;
+  const actualProfitPercent = costSummary.profitPercent;
+  const currentProfitTone = profitTone(actualProfitPercent);
+  const profitFeedback = currentProfitTone === 'high'
+    ? { icon: 'sentiment_very_satisfied', title: 'Margem excelente', message: 'Seu produto tem uma boa sobra em cada unidade vendida.' }
+    : currentProfitTone === 'medium'
+      ? { icon: 'sentiment_satisfied', title: 'Margem equilibrada', message: 'A margem está saudável, mas ainda pode melhorar.' }
+      : { icon: 'sentiment_dissatisfied', title: 'Margem baixa', message: 'Revise os custos ou o preço para aumentar sua sobra.' };
 
   const handleUnitPriceChange = (value: number) => {
     setPriceSource('price');
@@ -571,8 +579,8 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
             </div>
           </section>
 
-          <div className="panel">
-            <h3>Calculo por unidade</h3>
+          <div className="panel product-pricing-panel">
+            <div className="product-panel-heading"><div><span className="material-symbols-outlined" aria-hidden="true">calculate</span><h3>Calculo por unidade</h3></div></div>
             <div className="grid-2">
               <label>
                 Canal de venda
@@ -586,8 +594,8 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                 />
               </label>
             </div>
-            <div className="grid-2 compact-grid">
-              <label>
+            <div className="product-pricing-grid">
+              <label className="product-pricing-field">
                 Unidades produzidas
                 <input
                   type="number"
@@ -598,16 +606,14 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                   min={1}
                 />
               </label>
-              <label>
-                Valor por unidade (calculado ou ajustado)
+              <label className="product-pricing-field">
+                Valor de venda
                 <MoneyInput
                   value={unitPriceInput}
                   onChange={handleUnitPriceChange}
                 />
               </label>
-            </div>
-            <div className="grid-2 compact-grid">
-              <label>
+              <label className="product-pricing-field">
                 Lucro sobre o custo (%)
                 <input
                   type="number"
@@ -619,7 +625,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                   min={0}
                 />
               </label>
-              <label>
+              <label className="product-pricing-field">
                 Taxa adicional (%)
                 <input
                   type="number"
@@ -630,6 +636,10 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
                   min={0}
                 />
               </label>
+            </div>
+            <div className={`product-profit-feedback ${currentProfitTone}`}>
+              <span className="material-symbols-outlined" aria-hidden="true">{profitFeedback.icon}</span>
+              <div><small>Custo unitário: {formatCurrency(costSummary.unitCost)}</small><strong>{profitFeedback.title}</strong><b>{formatCurrency(costSummary.profitValue)} <em>({formatPercent(actualProfitPercent)}%)</em></b><p>{profitFeedback.message}</p></div>
             </div>
           </div>
 
@@ -803,26 +813,21 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
             </div>
           </div>
 
-          <div className="panel">
-            <h3>Resumo</h3>
-            <div className="summary">
-              <div>
-                <span>Valor total de mao de obra</span>
-                <strong>R$ {costSummary.labor.toFixed(2)}</strong>
-              </div>
-              <div>
-                <span>Valor total de custos fixos</span>
-                <strong>R$ {costSummary.fixed.toFixed(2)}</strong>
-              </div>
-              <div>
-                <span>Composicao, receitas, insumos e embalagens</span>
-                <strong>R$ {costSummary.inputs.toFixed(2)}</strong>
-              </div>
-              <div className="summary-total">
-                <span>Valor total</span>
-                <strong>R$ {costSummary.total.toFixed(2)}</strong>
-              </div>
+          <div className="panel product-cost-panel">
+            <div className="product-panel-heading"><div><span className="material-symbols-outlined" aria-hidden="true">content_paste</span><h3>Custos</h3></div><button type="button" className="product-cost-toggle" onClick={() => setCostDetailsOpen((open) => !open)}><span className="material-symbols-outlined" aria-hidden="true">{costDetailsOpen ? 'visibility_off' : 'visibility'}</span>{costDetailsOpen ? 'Ocultar detalhes' : 'Ver detalhes'}</button></div>
+            <div className="summary product-cost-summary">
+              <div><span>Mão de obra</span><strong>{formatCurrency(costSummary.labor)}</strong></div>
+              <div><span>Custos fixos</span><strong>{formatCurrency(costSummary.fixed)}</strong></div>
+              <div><span>Receitas, insumos e embalagens</span><strong>{formatCurrency(costSummary.inputs)}</strong></div>
+              <div className="summary-total"><span>Custo total</span><strong>{formatCurrency(costSummary.total)}</strong></div>
             </div>
+            {costDetailsOpen ? <div className="product-cost-details">
+              <div className="product-cost-group"><strong>Montagem <span>{formatCurrency(costSummary.labor + costSummary.fixed)}</span></strong><small>Mão de obra <b>{formatCurrency(costSummary.labor)}</b></small><small>Custos fixos <b>{formatCurrency(costSummary.fixed)}</b></small></div>
+              <div className="product-cost-group"><strong>Receitas <span>{formatCurrency(form.extraRecipes.reduce((total, item) => total + recipeCost(item.recipeId, item.quantity), 0))}</span></strong>{form.extraRecipes.length ? form.extraRecipes.map((item, index) => <small key={`${item.recipeId}-${index}`}>{recipesById.get(item.recipeId)?.name ?? 'Receita'} <b>{formatCurrency(recipeCost(item.recipeId, item.quantity))}</b></small>) : <small>Nenhuma receita cadastrada.</small>}</div>
+              <div className="product-cost-group"><strong>Insumos <span>{formatCurrency(form.directInputs.reduce((total, item) => total + inputCost(item.inputId, item.quantity), 0))}</span></strong>{form.directInputs.length ? form.directInputs.map((item, index) => <small key={`${item.inputId}-${index}`}>{inputsById.get(item.inputId)?.name ?? 'Insumo'} <b>{formatCurrency(inputCost(item.inputId, item.quantity))}</b></small>) : <small>Nenhum insumo cadastrado.</small>}</div>
+              <div className="product-cost-group"><strong>Embalagem <span>{formatCurrency(form.packagingInputs.reduce((total, item) => total + inputCost(item.inputId, item.quantity), 0))}</span></strong>{form.packagingInputs.length ? form.packagingInputs.map((item, index) => <small key={`${item.inputId}-${index}`}>{inputsById.get(item.inputId)?.name ?? 'Embalagem'} <b>{formatCurrency(inputCost(item.inputId, item.quantity))}</b></small>) : <small>Nenhuma embalagem cadastrada.</small>}</div>
+              {form.extraProducts.length ? <div className="product-cost-group"><strong>Outros produtos</strong>{form.extraProducts.map((item, index) => <small key={`${item.productId}-${index}`}>{productsById.get(item.productId)?.name ?? 'Produto'} <b>{item.quantity} un.</b></small>)}</div> : null}
+            </div> : null}
             {costSummary.pricingError ? <p className="error">{costSummary.pricingError}</p> : null}
           </div>
         </>
