@@ -4747,6 +4747,21 @@ button:disabled {
   background: #fffdfb;
 }
 
+/* Valores monetários nunca devem separar o "R$" do número em cartões estreitos. */
+.summary strong,
+.company-settings-cost-summary strong,
+.catalog-editor-total strong,
+.recipe-editor-total strong,
+.order-editor-total strong,
+.finance-transaction-value strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.summary div > span:first-child {
+  min-width: 0;
+}
+
 .summary-total {
   background: var(--surface-alt);
   font-weight: 600;
