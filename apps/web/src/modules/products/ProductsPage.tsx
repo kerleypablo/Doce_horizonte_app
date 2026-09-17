@@ -74,6 +74,17 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
   currency: 'BRL'
 }).format(value);
 
+const formatPercent = (value: number) => new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2
+}).format(value);
+
+const profitTone = (profitPercent: number): 'low' | 'medium' | 'high' => {
+  if (profitPercent < 30) return 'low';
+  if (profitPercent < 50) return 'medium';
+  return 'high';
+};
+
 
 export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {}) => {
   const { user } = useAuth();
@@ -516,7 +527,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
   return (
     <div className="page">
       {!isCreateView && !editingRouteId ? (
-      <CatalogListPanel className="products-catalog" title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={listedProductsQuery.loading} hasMore={listedProductsQuery.hasMore} loadingMore={listedProductsQuery.loadingMore} items={listedProductsQuery.items.map((product) => ({ ...product, subtitle: `Venda ${formatCurrency(product.unitPrice)}`, badge: `Lucro: ${product.targetProfitPercent || 0}%` }))} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} onLoadMore={listedProductsQuery.loadMore} />
+      <CatalogListPanel className="products-catalog" title="Produtos" eyebrow="Catálogo" description="Defina o preço, o rendimento e os componentes de cada item vendido." icon="shopping_bag" singularLabel="produto" actionLabel="Novo produto" search={search} loading={listedProductsQuery.loading} hasMore={listedProductsQuery.hasMore} loadingMore={listedProductsQuery.loadingMore} items={listedProductsQuery.items.map((product) => { const profitPercent = (product.targetProfitPercent || 0) + (product.extraPercent || 0); return { ...product, subtitle: formatCurrency(product.unitPrice), inlineBadge: `${formatPercent(profitPercent)}%`, inlineBadgeTone: profitTone(profitPercent) }; })} onSearch={setSearch} onNew={handleNew} onOpen={(product) => navigate(`/app/produtos/editar/${product.id}`)} onDuplicate={(product) => navigate('/app/produtos/novo', { state: { duplicateDraft: { name: `${product.name} copia`, prepTimeMinutes: product.prepTimeMinutes ?? 0, notes: product.notes ?? '', unitsCount: product.unitsCount ?? 1, targetProfitPercent: product.targetProfitPercent ?? 0, extraPercent: product.extraPercent ?? 0, unitPrice: product.unitPrice ?? 0, channelId: product.channelId ?? settings?.salesChannels[0]?.id ?? '', extraRecipes: (product.extraRecipes ?? []).map((item) => ({ ...item })), extraProducts: (product.extraProducts ?? []).map((item) => ({ ...item })), directInputs: (product.directInputs ?? []).map((item) => ({ ...item })), packagingInputs: (product.packagingInputs ?? []).map((item) => ({ ...item })) } satisfies ProductFormState, unitPriceInput: product.unitPrice ?? 0 } })} onDelete={setDeleteTarget} onLoadMore={listedProductsQuery.loadMore} />
       ) : null}
 
       {editor && initializedForm.current !== formKey ? <p role="status">{productsQuery.error ? 'Nao foi possivel carregar o cadastro. Feche e tente novamente.' : 'Carregando cadastro...'}</p> : null}

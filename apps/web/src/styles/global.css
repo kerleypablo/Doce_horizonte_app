@@ -52,6 +52,34 @@
   font-size: .74rem;
 }
 
+.products-catalog .catalog-board-card-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.products-catalog .catalog-board-card-details > span {
+  color: #27853d;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.catalog-inline-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.catalog-inline-badge.low { color: #c83e36; background: #fdebea; }
+.catalog-inline-badge.medium { color: #b67800; background: #fff4df; }
+.catalog-inline-badge.high { color: #27853d; background: #e8f5ea; }
+
 /* Home redesign */
 .dashboard-page {
   display: grid;
