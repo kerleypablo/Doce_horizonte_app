@@ -73,6 +73,7 @@ export const OrdersPage = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [pdfPreviewHtml, setPdfPreviewHtml] = useState<string | null>(null);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfPages, setPdfPages] = useState<string[]>([]);
   const [pdfFileName, setPdfFileName] = useState('pedido.pdf');
   const [generatingPdfFile, setGeneratingPdfFile] = useState(false);
   const createRouteInitRef = useRef<string>('');
@@ -338,6 +339,7 @@ export const OrdersPage = () => {
       );
       setPdfPreviewHtml(buildOrderPdfHtml(order, settingsQuery.data));
       setPdfBlob(null);
+      setPdfPages([]);
       setPdfFileName(`${order.type === 'ORCAMENTO' ? 'orcamento' : 'pedido'}-${order.number}.pdf`);
     } catch {
       setSubmitError('Não foi possível gerar a pré-visualização para impressão. Tente novamente.');
@@ -349,9 +351,18 @@ export const OrdersPage = () => {
     if (!preview) return;
     setGeneratingPdfFile(true);
     buildOrderPdfBlobFromPreview(preview)
-      .then(setPdfBlob)
-      .catch(() => setSubmitError('Não foi possível preparar o PDF para compartilhamento. Tente novamente.'))
-      .finally(() => setGeneratingPdfFile(false));
+      .then(({ blob, pages }) => {
+        if (pdfPreviewRef.current?.contentDocument?.querySelector('.sheet') !== preview) return;
+        setPdfBlob(blob);
+        setPdfPages(pages);
+      })
+      .catch(() => {
+        if (pdfPreviewRef.current?.contentDocument?.querySelector('.sheet') !== preview) return;
+        setSubmitError('Não foi possível preparar o PDF para compartilhamento. Tente novamente.');
+      })
+      .finally(() => {
+        if (pdfPreviewRef.current?.contentDocument?.querySelector('.sheet') === preview) setGeneratingPdfFile(false);
+      });
   };
 
   const handlePrintPdfPreview = () => {
@@ -647,7 +658,10 @@ export const OrdersPage = () => {
               </button>
             </div>
             <div className="tasks-modal-content">
-              <iframe ref={pdfPreviewRef} title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" onLoad={handlePdfPreviewLoad} />
+              <iframe hidden={pdfPages.length > 0} ref={pdfPreviewRef} title="PDF preview" srcDoc={pdfPreviewHtml} className="pdf-preview-frame" onLoad={handlePdfPreviewLoad} />
+              {pdfPages.map((page, index) => (
+                <img key={index} src={page} alt={`Página ${index + 1} do PDF`} style={{ display: 'block', width: '100%', height: 'auto', marginBottom: 12 }} />
+              ))}
             </div>
             <div className="modal-actions">
               <button type="button" onClick={handlePrintPdfPreview} disabled={!pdfBlob || generatingPdfFile}>{generatingPdfFile ? 'Preparando PDF...' : 'Compartilhar / imprimir PDF'}</button>

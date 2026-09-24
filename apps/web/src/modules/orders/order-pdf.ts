@@ -43,9 +43,11 @@ export const buildOrderPdfHtml = (order: OrderItem, settings?: CompanySettings) 
     `<div class="photo"><img src="${image.dataUrl}" alt="Foto de referencia"/><span>${escapeHtml(image.name || 'Imagem')}</span></div>`
   ).join('')}</div></div>` : '';
 
+  // Use the same available font in the iframe and the canvas. App-only web fonts
+  // otherwise change glyph widths during capture and overlap the measured text.
   return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${order.type} ${escapeHtml(order.number)}</title>
   <style>
-    @page{size:A4;margin:12mm}*{box-sizing:border-box;-webkit-text-size-adjust:100%}body{font-family:Manrope,Arial,sans-serif;margin:0;padding:10px;color:#1f2328;background:#e8edf3;overflow:auto}.sheet{width:210mm;min-height:297mm;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 10px 32px rgba(17,24,39,.12);padding:20px}.wrap{max-width:100%;margin:0 auto}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}h1{font-family:"Space Grotesk",Arial,sans-serif;font-size:54px;line-height:1;margin:0 0 8px}.subtitle{font-size:22px;color:#4c5158}.logo{width:130px;height:90px;object-fit:contain}.order-meta{margin-top:8px;font-size:18px;font-weight:700;display:flex;gap:18px;flex-wrap:wrap}.cards{display:grid;grid-template-columns:minmax(220px,320px);gap:12px;margin-top:20px}.card{border:1px solid #1f2328;padding:12px;position:relative;background:#f8f9fb;min-height:86px}.card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:9px;background:#1f2328}.card span{display:block;font-size:13px;color:#5a6068;margin-left:10px}.card strong{display:block;font-size:30px;line-height:1.1;margin-left:10px}.meta{margin-top:12px;font-size:14px}table{width:100%;border-collapse:collapse;margin-top:18px}th{background:#1f2328;color:#fff;padding:10px 8px;text-align:left;font-size:13px}th:nth-child(4),th:nth-child(5),td:nth-child(4),td:nth-child(5){text-align:right}td{padding:10px 8px;border-bottom:1px solid #dde1e6;font-size:14px}td:nth-child(1),td:nth-child(3){text-align:center}.summary{margin-top:14px;display:grid;gap:6px;justify-items:end}.summary-line{display:flex;justify-content:space-between;gap:14px;width:320px;font-size:14px}.total-row{margin-top:8px;display:flex;width:320px}.total-row .label{background:#1f2328;color:#fff;padding:12px 16px;font-weight:700}.total-row .value{border:1px solid #1f2328;border-left:0;padding:12px 16px;font-weight:800;font-size:24px;flex:1;text-align:right}.section-grid{margin-top:24px;display:grid;gap:12px}.box-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #d7dce2;padding:12px;min-height:110px}.box h4{margin:0 0 8px;font-size:14px;color:#5a6068;text-transform:uppercase}.box p{margin:0;font-size:15px;line-height:1.45;white-space:pre-wrap}.contact-line{font-size:13px;margin:0 0 6px}.pix{font-weight:800;margin-top:8px}.page-break{break-before:page;page-break-before:always}.photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.photo{border:1px solid #d7dce2;border-radius:10px;padding:8px}.photo img{width:100%;height:280px;object-fit:contain}.photo span{display:block;margin-top:6px;font-size:12px;color:#5a6068;word-break:break-word}@media print{body{padding:0;background:#fff;overflow:visible}.sheet{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none;border-radius:0}}
+    @page{size:A4;margin:12mm}*{box-sizing:border-box;-webkit-text-size-adjust:100%}body{font-family:Arial,sans-serif;margin:0;padding:10px;color:#1f2328;background:#e8edf3;overflow:auto}.sheet{width:210mm;min-height:297mm;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 10px 32px rgba(17,24,39,.12);padding:20px}.wrap{max-width:100%;margin:0 auto}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}h1{font-family:Arial,sans-serif;font-size:54px;line-height:1;margin:0 0 8px}.subtitle{font-size:22px;color:#4c5158}.logo{width:130px;height:90px;object-fit:contain}.order-meta{margin-top:8px;font-size:18px;font-weight:700;display:flex;gap:18px;flex-wrap:wrap}.cards{display:grid;grid-template-columns:minmax(220px,320px);gap:12px;margin-top:20px}.card{border:1px solid #1f2328;padding:12px;position:relative;background:#f8f9fb;min-height:86px}.card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:9px;background:#1f2328}.card span{display:block;font-size:13px;color:#5a6068;margin-left:10px}.card strong{display:block;font-size:30px;line-height:1.1;margin-left:10px}.meta{margin-top:12px;font-size:14px}table{width:100%;border-collapse:collapse;margin-top:18px}th{background:#1f2328;color:#fff;padding:10px 8px;text-align:left;font-size:13px}th:nth-child(4),th:nth-child(5),td:nth-child(4),td:nth-child(5){text-align:right}td{padding:10px 8px;border-bottom:1px solid #dde1e6;font-size:14px}td:nth-child(1),td:nth-child(3){text-align:center}.summary{margin-top:14px;display:grid;gap:6px;justify-items:end}.summary-line{display:flex;justify-content:space-between;gap:14px;width:320px;font-size:14px}.total-row{margin-top:8px;display:flex;width:320px}.total-row .label{background:#1f2328;color:#fff;padding:12px 16px;font-weight:700}.total-row .value{border:1px solid #1f2328;border-left:0;padding:12px 16px;font-weight:800;font-size:24px;flex:1;text-align:right}.section-grid{margin-top:24px;display:grid;gap:12px}.box-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #d7dce2;padding:12px;min-height:110px}.box h4{margin:0 0 8px;font-size:14px;color:#5a6068;text-transform:uppercase}.box p{margin:0;font-size:15px;line-height:1.45;white-space:pre-wrap}.contact-line{font-size:13px;margin:0 0 6px}.pix{font-weight:800;margin-top:8px}.page-break{break-before:page;page-break-before:always}.photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.photo{border:1px solid #d7dce2;border-radius:10px;padding:8px}.photo img{width:100%;height:280px;object-fit:contain}.photo span{display:block;margin-top:6px;font-size:12px;color:#5a6068;word-break:break-word}@media print{body{padding:0;background:#fff;overflow:visible}.sheet{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none;border-radius:0}}
   </style></head><body><div class="sheet"><div class="wrap">
     <div class="top"><div><h1>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}</h1><div class="subtitle">${escapeHtml(companyName)}</div><div class="order-meta"><span>${order.type === 'ORCAMENTO' ? 'Orcamento' : 'Pedido'}: #${escapeHtml(order.number)}</span><span>Data: ${formatDateBr(order.orderDateTime)}</span></div></div>${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" alt="Logo"/>` : ''}</div>
     <div class="cards"><div class="card"><span>Entrega:</span><strong>${order.deliveryDate ? formatDateBr(order.deliveryDate) : '-'}</strong></div></div>
@@ -136,16 +138,29 @@ export const buildOrderPdfBlob = (order: OrderItem, settings?: CompanySettings) 
 };
 
 export const buildOrderPdfBlobFromPreview = async (preview: HTMLElement) => {
+  // Wait for the resources in the iframe, not those of the surrounding app.
+  await preview.ownerDocument.fonts.ready;
+  await Promise.all(Array.from(preview.querySelectorAll('img')).map(async (image) => {
+    await image.decode();
+  }));
   const previewCanvas = await html2canvas(preview, {
     backgroundColor: '#ffffff',
     logging: false,
     scale: 2,
-    useCORS: true
+    useCORS: true,
+    windowWidth: Math.ceil(preview.scrollWidth) + 20,
+    scrollX: 0,
+    scrollY: 0,
+    onclone: (_document, sheet) => {
+      // The shadow belongs to the viewer, not to the printed page.
+      sheet.style.boxShadow = 'none';
+    }
   });
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = 210;
   const pageHeight = 297;
-  const pageHeightInPixels = Math.floor(previewCanvas.width * pageHeight / pageWidth);
+  const pageHeightInPixels = Math.ceil(previewCanvas.width * pageHeight / pageWidth);
+  const pages: string[] = [];
   let sourceY = 0;
   let pageNumber = 0;
 
@@ -153,9 +168,11 @@ export const buildOrderPdfBlobFromPreview = async (preview: HTMLElement) => {
     const sliceHeight = Math.min(pageHeightInPixels, previewCanvas.height - sourceY);
     const pageCanvas = globalThis.document.createElement('canvas');
     pageCanvas.width = previewCanvas.width;
-    pageCanvas.height = sliceHeight;
+    pageCanvas.height = pageHeightInPixels;
     const context = pageCanvas.getContext('2d');
     if (!context) throw new Error('Não foi possível preparar a página do PDF.');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
     context.drawImage(
       previewCanvas,
       0,
@@ -165,13 +182,15 @@ export const buildOrderPdfBlobFromPreview = async (preview: HTMLElement) => {
       0,
       0,
       pageCanvas.width,
-      pageCanvas.height
+      sliceHeight
     );
     if (pageNumber > 0) pdf.addPage();
-    pdf.addImage(pageCanvas, 'PNG', 0, 0, pageWidth, sliceHeight * pageWidth / pageCanvas.width, undefined, 'FAST');
+    const pageImage = pageCanvas.toDataURL('image/png');
+    pages.push(pageImage);
+    pdf.addImage(pageImage, 'PNG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
     sourceY += sliceHeight;
     pageNumber += 1;
   }
 
-  return pdf.output('blob');
+  return { blob: pdf.output('blob'), pages };
 };
