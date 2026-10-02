@@ -6125,7 +6125,7 @@ button:disabled {
   gap: 10px;
   width: min(100%, 420px);
   max-width: 100%;
-  padding: 18px;
+  padding: 14px;
   border-radius: 22px;
   background: color-mix(in srgb, var(--surface-alt) 78%, white);
   border: 1px solid var(--border);
@@ -6140,8 +6140,8 @@ button:disabled {
 
 .finance-dashboard-date-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   width: 100%;
 }
 
@@ -6154,7 +6154,7 @@ button:disabled {
 
 .finance-dashboard-date-fields label span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -6163,14 +6163,23 @@ button:disabled {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 8px 5px;
+  border-radius: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
-  font: inherit;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.2;
   color-scheme: light;
   box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.finance-dashboard-date-fields input::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
 }
 
 .finance-dashboard-tabs {
