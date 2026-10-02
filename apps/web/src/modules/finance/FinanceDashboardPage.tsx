@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
@@ -21,7 +21,7 @@ import {
   useFinanceRange,
   useManualSales
 } from './hooks.ts';
-import { formatCompactCurrency, formatCurrency, today, todayDate } from './utils.ts';
+import { formatCompactCurrency, formatCurrency, monthStart, todayDate } from './utils.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
 type SalesTab = 'general' | 'byMethod';
@@ -292,9 +292,6 @@ const renderListRows = (
 export const FinanceDashboardPage = () => {
   const { user } = useAuth();
   const { from, to, setFrom, setTo } = useFinanceRange();
-  const fromPickerRef = useRef<HTMLInputElement | null>(null);
-  const toPickerRef = useRef<HTMLInputElement | null>(null);
-  const [referenceDate, setReferenceDate] = useState(todayDate);
   const [activeDashboardTab, setActiveDashboardTab] = useState<DashboardTab>('overview');
   const [activeHomeTab, setActiveHomeTab] = useState<FinanceHomeTab>('dashboard');
   const [activeSalesTab, setActiveSalesTab] = useState<SalesTab>('general');
@@ -309,17 +306,6 @@ export const FinanceDashboardPage = () => {
   const data = dashboardQuery.data;
   const theme = getThemeTokens();
 
-  const openPicker = (ref: React.RefObject<HTMLInputElement>) => {
-    const input = ref.current;
-    if (!input) return;
-    const picker = input as HTMLInputElement & { showPicker?: () => void };
-    if (typeof picker.showPicker === 'function') {
-      picker.showPicker();
-      return;
-    }
-    input.click();
-  };
-
   const formatRangeDate = (value: string) => {
     if (!value) return '--';
     const parsed = new Date(`${value}T00:00:00`);
@@ -330,51 +316,41 @@ export const FinanceDashboardPage = () => {
   const toLocalDateKey = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-  const getReferenceDate = () => new Date(`${referenceDate}T12:00:00`);
-
-  const setDayRange = (date = referenceDate) => {
-    setFrom(date);
-    setTo(date);
+  const setTodayRange = () => {
+    setFrom(todayDate);
+    setTo(todayDate);
   };
 
   const setLast7DaysRange = () => {
-    const end = getReferenceDate();
-    const start = new Date(end);
+    const start = new Date();
     start.setDate(start.getDate() - 6);
     setFrom(toLocalDateKey(start));
-    setTo(toLocalDateKey(end));
+    setTo(todayDate);
   };
 
   const setMonthRange = () => {
-    const selected = getReferenceDate();
-    const start = new Date(selected.getFullYear(), selected.getMonth(), 1);
-    const end = new Date(selected.getFullYear(), selected.getMonth() + 1, 0);
-    const isCurrentMonth = selected.getFullYear() === today.getFullYear() && selected.getMonth() === today.getMonth();
-    setFrom(toLocalDateKey(start));
-    setTo(isCurrentMonth ? todayDate : toLocalDateKey(end));
+    setFrom(monthStart);
+    setTo(todayDate);
   };
 
-  const setRangeFromReference = (date: string) => {
-    if (!date) return;
-    setReferenceDate(date);
+  const setCustomFrom = (date: string) => {
     setFrom(date);
+    if (date > to) setTo(date);
+  };
+
+  const setCustomTo = (date: string) => {
     setTo(date);
+    if (date < from) setFrom(date);
   };
 
   const activeRangePreset: RangePreset = useMemo(() => {
-    if (from === referenceDate && to === referenceDate) return 'today';
-
-    const selected = new Date(`${referenceDate}T12:00:00`);
-    const monthFrom = toLocalDateKey(new Date(selected.getFullYear(), selected.getMonth(), 1));
-    const monthEnd = toLocalDateKey(new Date(selected.getFullYear(), selected.getMonth() + 1, 0));
-    const isCurrentMonth = selected.getFullYear() === today.getFullYear() && selected.getMonth() === today.getMonth();
-    if (from === monthFrom && to === (isCurrentMonth ? todayDate : monthEnd)) return 'month';
-
-    const start = new Date(selected);
+    if (from === todayDate && to === todayDate) return 'today';
+    if (from === monthStart && to === todayDate) return 'month';
+    const start = new Date();
     start.setDate(start.getDate() - 6);
-    if (from === toLocalDateKey(start) && to === referenceDate) return 'week';
+    if (from === toLocalDateKey(start) && to === todayDate) return 'week';
     return 'custom';
-  }, [from, referenceDate, to]);
+  }, [from, to]);
 
   const headlineCards = [
     {
@@ -1071,34 +1047,24 @@ export const FinanceDashboardPage = () => {
             ) : <div />}
 
             <div className="finance-dashboard-period">
-              <label className="finance-dashboard-reference-date">
-                <span>Data de referencia</span>
-                <input
-                  type="date"
-                  value={referenceDate}
-                  onChange={(event) => setRangeFromReference(event.target.value)}
-                />
-              </label>
-
               <div className="finance-dashboard-pill-row">
-                <button type="button" className={activeRangePreset === 'today' ? 'active' : 'ghost'} onClick={() => setDayRange()}>Dia</button>
+                <button type="button" className={activeRangePreset === 'today' ? 'active' : 'ghost'} onClick={setTodayRange}>Hoje</button>
                 <button type="button" className={activeRangePreset === 'week' ? 'active' : 'ghost'} onClick={setLast7DaysRange}>7 dias</button>
                 <button type="button" className={activeRangePreset === 'month' ? 'active' : 'ghost'} onClick={setMonthRange}>Mes</button>
               </div>
 
               <div className="finance-dashboard-date-card">
-                <span>Periodo analisado</span>
-                <div className="finance-range-display">
-                  <button type="button" className="finance-range-date-button" onClick={() => openPicker(fromPickerRef)}>
-                    {formatRangeDate(from)}
-                  </button>
-                  <span className="finance-range-divider">-</span>
-                  <button type="button" className="finance-range-date-button" onClick={() => openPicker(toPickerRef)}>
-                    {formatRangeDate(to)}
-                  </button>
+                <span>Escolha o periodo</span>
+                <div className="finance-dashboard-date-fields">
+                  <label>
+                    <span>Data inicial</span>
+                    <input type="date" value={from} onChange={(event) => setCustomFrom(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Data final</span>
+                    <input type="date" value={to} onChange={(event) => setCustomTo(event.target.value)} />
+                  </label>
                 </div>
-                <input ref={fromPickerRef} className="finance-date-hidden" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-                <input ref={toPickerRef} className="finance-date-hidden" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
               </div>
             </div>
           </div>
