@@ -28,6 +28,7 @@ import { formatCompactCurrency, formatCurrency, monthStart, todayDate } from './
 import type { PaymentMethod, SaleOrigin } from './types.ts';
 
 type DashboardTab = 'overview' | 'cashflow' | 'sources';
+type DetailChartTab = 'general' | 'byMethod';
 type FinanceHomeTab = 'dashboard' | 'sales' | 'expenses' | 'accounts' | 'rates';
 type RangePreset = 'today' | 'week' | 'month' | 'custom';
 
@@ -35,6 +36,11 @@ const dashboardTabs: Array<{ id: DashboardTab; label: string }> = [
   { id: 'overview', label: 'Visao geral' },
   { id: 'cashflow', label: 'Fluxo' },
   { id: 'sources', label: 'Origens' }
+];
+
+const detailChartTabs: Array<{ id: DetailChartTab; label: string }> = [
+  { id: 'general', label: 'Geral' },
+  { id: 'byMethod', label: 'Por tipo' }
 ];
 
 const financeHomeTabs: Array<{ id: FinanceHomeTab; label: string }> = [
@@ -282,10 +288,10 @@ const renderListRows = (
 );
 
 const paymentDotClass: Record<PaymentMethod, string> = {
-  PIX: 'pix',
-  DINHEIRO: 'cash',
-  CARTAO: 'card',
-  VOUCHER: 'voucher'
+  PIX: 'payment-dot-pix',
+  DINHEIRO: 'payment-dot-cash',
+  CARTAO: 'payment-dot-card',
+  VOUCHER: 'payment-dot-voucher'
 };
 
 const FinanceMovementCalendar = ({
@@ -342,7 +348,7 @@ const FinanceMovementCalendar = ({
         })}
       </div>
       <div className="finance-movement-calendar-legend">
-        <span><i className="pix" /> Pix</span><span><i className="card" /> Cartão</span><span><i className="voucher" /> Voucher</span><span><i className="cash" /> Dinheiro</span>
+        <span><i className="payment-dot-pix" /> Pix</span><span><i className="payment-dot-card" /> Cartão</span><span><i className="payment-dot-voucher" /> Voucher</span><span><i className="payment-dot-cash" /> Dinheiro</span>
       </div>
     </article>
   );
@@ -353,6 +359,8 @@ export const FinanceDashboardPage = () => {
   const { from, to, setFrom, setTo } = useFinanceRange();
   const [activeDashboardTab, setActiveDashboardTab] = useState<DashboardTab>('overview');
   const [activeHomeTab, setActiveHomeTab] = useState<FinanceHomeTab>('dashboard');
+  const [activeSalesChartTab, setActiveSalesChartTab] = useState<DetailChartTab>('general');
+  const [activeExpensesChartTab, setActiveExpensesChartTab] = useState<DetailChartTab>('general');
   const [salesOriginFilter, setSalesOriginFilter] = useState<'ALL' | SaleOrigin>('ALL');
   const [salesMethodFilter, setSalesMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<'ALL' | string>('ALL');
@@ -878,12 +886,21 @@ export const FinanceDashboardPage = () => {
           <div><span>Vendas encontradas</span><strong>{filteredSales.length}</strong></div>
         </div>
       </article>
-      <div className="finance-analytics-chart-grid">
-        <article className="finance-dashboard-panel"><div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Visão geral</span><h3>Vendas por dia</h3></div></div><HighchartsReact highcharts={Highcharts} options={salesDailyChartOptions} /></article>
-        <article className="finance-dashboard-panel"><div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Por tipo</span><h3>Pagamento por dia</h3></div></div><HighchartsReact highcharts={Highcharts} options={salesByMethodDailyChartOptions} /></article>
-      </div>
+      <article className="finance-dashboard-panel finance-dashboard-chart-panel finance-analytics-chart-full">
+        <div className="finance-dashboard-tabs finance-dashboard-tabs-inner">
+          {detailChartTabs.map((tab) => <button key={tab.id} type="button" className={activeSalesChartTab === tab.id ? 'active' : ''} onClick={() => setActiveSalesChartTab(tab.id)}>{tab.label}</button>)}
+        </div>
+        <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">{activeSalesChartTab === 'general' ? 'Visão geral' : 'Por tipo'}</span><h3>{activeSalesChartTab === 'general' ? 'Vendas por dia' : 'Pagamento por dia'}</h3></div></div>
+        <HighchartsReact highcharts={Highcharts} options={activeSalesChartTab === 'general' ? salesDailyChartOptions : salesByMethodDailyChartOptions} />
+      </article>
       <FinanceMovementCalendar title="Dias com registros de venda" month={to} movements={filteredSales} />
-      <div className="finance-dashboard-toolbar finance-dashboard-toolbar-below"><Link to="/app/financeiro/vendas-manuais" className="finance-dashboard-action-link">Ver vendas</Link></div>
+      <article className="finance-dashboard-panel finance-embedded-transactions">
+        <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Lançamentos</span><h3>Vendas registradas</h3></div></div>
+        <div className="finance-dashboard-list">
+          {filteredSales.map((item) => <div key={item.id} className="finance-dashboard-list-row"><div><strong>{item.description}</strong><span>{new Date(item.occurredAt).toLocaleString('pt-BR')} • {methodLabels[item.paymentMethod]}</span></div><strong>{formatCurrency(item.netAmount)}</strong></div>)}
+          {filteredSales.length === 0 ? <span className="muted">Nenhuma venda encontrada para os filtros selecionados.</span> : null}
+        </div>
+      </article>
     </>
   );
 
@@ -905,12 +922,21 @@ export const FinanceDashboardPage = () => {
           <div><span>Despesas encontradas</span><strong>{filteredExpenses.length}</strong></div>
         </div>
       </article>
-      <div className="finance-analytics-chart-grid">
-        <article className="finance-dashboard-panel"><div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Visão geral</span><h3>Despesas por dia</h3></div></div><HighchartsReact highcharts={Highcharts} options={expensesDailyChartOptions} /></article>
-        <article className="finance-dashboard-panel"><div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Por tipo</span><h3>Pagamento por dia</h3></div></div><HighchartsReact highcharts={Highcharts} options={expensesByMethodDailyChartOptions} /></article>
-      </div>
+      <article className="finance-dashboard-panel finance-dashboard-chart-panel finance-analytics-chart-full">
+        <div className="finance-dashboard-tabs finance-dashboard-tabs-inner">
+          {detailChartTabs.map((tab) => <button key={tab.id} type="button" className={activeExpensesChartTab === tab.id ? 'active' : ''} onClick={() => setActiveExpensesChartTab(tab.id)}>{tab.label}</button>)}
+        </div>
+        <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">{activeExpensesChartTab === 'general' ? 'Visão geral' : 'Por tipo'}</span><h3>{activeExpensesChartTab === 'general' ? 'Despesas por dia' : 'Pagamento por dia'}</h3></div></div>
+        <HighchartsReact highcharts={Highcharts} options={activeExpensesChartTab === 'general' ? expensesDailyChartOptions : expensesByMethodDailyChartOptions} />
+      </article>
       <FinanceMovementCalendar title="Dias com lançamentos de despesa" month={to} movements={filteredExpenses} />
-      <div className="finance-dashboard-toolbar finance-dashboard-toolbar-below"><Link to="/app/financeiro/despesas" className="finance-dashboard-action-link">Ver despesas</Link></div>
+      <article className="finance-dashboard-panel finance-embedded-transactions">
+        <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Lançamentos</span><h3>Despesas registradas</h3></div></div>
+        <div className="finance-dashboard-list">
+          {filteredExpenses.map((item) => <div key={item.id} className="finance-dashboard-list-row"><div><strong>{item.description}</strong><span>{new Date(item.occurredAt).toLocaleString('pt-BR')} • {expenseCategoryLabels[item.category]} • {methodLabels[item.paymentMethod]}</span></div><strong>{formatCurrency(item.netAmount)}</strong></div>)}
+          {filteredExpenses.length === 0 ? <span className="muted">Nenhuma despesa encontrada para os filtros selecionados.</span> : null}
+        </div>
+      </article>
     </>
   );
 
