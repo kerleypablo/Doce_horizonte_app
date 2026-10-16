@@ -8,6 +8,7 @@ export type ProductPricePreview = {
   feeFixed: number;
   unitsCount: number;
   unitCost: number;
+  baseUnitPrice: number;
   unitPrice: number;
   totalPrice: number;
   profitValue: number;
@@ -132,12 +133,13 @@ export const calcProductPreview = ({ unitsCount, prepTimeMinutes, targetProfitPe
   const variablePercent = settings.taxesPercent + feePercent + paymentFeePercent;
   const baseCost = directCost + overheadCost + feeFixed * safeUnits;
   const pricingError = variablePercent >= 100 ? 'A soma dos impostos e das taxas precisa ser menor que 100% para calcular o valor de venda.' : undefined;
-  // A manually entered price is authoritative; never derive it back from rounded markup.
-  const totalPrice = pricingError ? 0 : manualUnitPrice !== undefined
+  // The additional rate is added to the final sale price; it does not alter the target profit.
+  const baseTotalPrice = pricingError ? 0 : manualUnitPrice !== undefined
     ? manualUnitPrice * safeUnits
-    : calcSalePriceFromMarkup(baseCost, variablePercent, targetProfitPercent + extraPercent);
-  const profitValue = pricingError ? 0 : totalPrice - baseCost - totalPrice * variablePercent / 100;
+    : calcSalePriceFromMarkup(baseCost, variablePercent, targetProfitPercent);
+  const totalPrice = round2(baseTotalPrice * (1 + Math.max(extraPercent, 0) / 100));
+  const profitValue = pricingError ? 0 : baseTotalPrice - baseCost - baseTotalPrice * variablePercent / 100;
   return {
-    directCost: round2(directCost), overheadCost: round2(overheadCost), totalCost: round2(baseCost), variablePercent: round2(variablePercent), feeFixed: round2(feeFixed), unitsCount: round2(safeUnits), unitCost: round2(baseCost / safeUnits), unitPrice: round2(totalPrice / safeUnits), totalPrice: round2(totalPrice), profitValue: round2(profitValue), profitPercent: round2(baseCost > 0 ? profitValue / baseCost * 100 : 0), pricingError
+    directCost: round2(directCost), overheadCost: round2(overheadCost), totalCost: round2(baseCost), variablePercent: round2(variablePercent), feeFixed: round2(feeFixed), unitsCount: round2(safeUnits), unitCost: round2(baseCost / safeUnits), baseUnitPrice: round2(baseTotalPrice / safeUnits), unitPrice: round2(totalPrice / safeUnits), totalPrice: round2(totalPrice), profitValue: round2(profitValue), profitPercent: round2(baseCost > 0 ? profitValue / baseCost * 100 : 0), pricingError
   };
 };

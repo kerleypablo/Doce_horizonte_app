@@ -1442,9 +1442,13 @@ main {
   z-index: 40;
 }
 
-.shell-back-button { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 4px; padding: 4px 0; border: 0; color: rgba(255, 255, 255, .82); background: transparent; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.app-header > div:first-child:has(.shell-back-button) { display: flex; align-items: center; gap: 12px; }
+.shell-back-button { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 4px 0; border: 0; color: rgba(255, 255, 255, .82); background: transparent; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .shell-back-button:hover { color: #fff; }
 .shell-back-button .material-symbols-outlined { font-size: 18px; }
+
+.catalog-editor-back,
+.order-editor-back { display: none; }
 
 /* Final alignment overrides. */
 .company-settings-content .company-settings-tabs { margin-right: auto; margin-left: auto; }

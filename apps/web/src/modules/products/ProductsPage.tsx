@@ -303,7 +303,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
       prepTimeMinutes: Number(form.prepTimeMinutes),
       notes: form.notes,
       unitsCount: Number(form.unitsCount),
-      targetProfitPercent: priceSource === 'price' ? Math.max(costSummary.profitPercent - form.extraPercent, 0) : Number(form.targetProfitPercent),
+      targetProfitPercent: priceSource === 'price' ? costSummary.profitPercent : Number(form.targetProfitPercent),
       extraPercent: Number(form.extraPercent),
       manualUnitPrice: Number(unitPriceInput || 0),
       channelId: form.channelId,
@@ -496,12 +496,10 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
   const costSummary = useProductPricing({ form, inputs, recipes, products, settings, manualUnitPrice: priceSource === 'price' ? unitPriceInput : undefined });
 
   useEffect(() => {
-    if (priceSource === 'markup') setUnitPriceInput(costSummary.unitPrice);
-  }, [costSummary.unitPrice, priceSource]);
+    if (priceSource === 'markup') setUnitPriceInput(costSummary.baseUnitPrice);
+  }, [costSummary.baseUnitPrice, priceSource]);
 
-  const displayedProfitPercent = priceSource === 'price'
-    ? Number((costSummary.profitPercent - form.extraPercent).toFixed(2))
-    : form.targetProfitPercent;
+  const displayedProfitPercent = priceSource === 'price' ? costSummary.profitPercent : form.targetProfitPercent;
   const actualProfitPercent = costSummary.profitPercent;
   const currentProfitTone = profitTone(actualProfitPercent);
   const profitFeedback = currentProfitTone === 'high'
@@ -639,7 +637,7 @@ export const ProductsPage = ({ editor }: { editor?: CatalogEditorOptions } = {})
             </div>
             <div className={`product-profit-feedback ${currentProfitTone}`}>
               <span className="material-symbols-outlined" aria-hidden="true">{profitFeedback.icon}</span>
-              <div><small>Custo unitário: {formatCurrency(costSummary.unitCost)}</small><strong>{profitFeedback.title}</strong><b>{formatCurrency(costSummary.profitValue)} <em>({formatPercent(actualProfitPercent)}%)</em></b><p>{profitFeedback.message}</p></div>
+              <div><small>Custo unitário: {formatCurrency(costSummary.unitCost)} · Preço final: {formatCurrency(costSummary.unitPrice)}</small><strong>{profitFeedback.title}</strong><b>{formatCurrency(costSummary.profitValue)} <em>({formatPercent(actualProfitPercent)}%)</em></b><p>{profitFeedback.message}</p></div>
             </div>
           </div>
 

@@ -32,6 +32,7 @@ export const useProductPricing = (params: {
     total: preview.totalCost - (channel?.feeFixed ?? 0) * Math.max(params.form.unitsCount, 1),
     baseCost: preview.totalCost,
     unitPrice: preview.unitPrice,
+    baseUnitPrice: preview.baseUnitPrice,
     unitCost: preview.unitCost,
     profitValue: preview.profitValue,
     profitPercent: preview.profitPercent,
