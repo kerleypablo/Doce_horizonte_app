@@ -6335,11 +6335,13 @@ button:disabled {
   gap: 10px;
 }
 
-.finance-analytics-filter-panel { display: grid; gap: 18px; }
-.finance-analytics-filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 260px)); justify-content: center; gap: 14px; }
+.finance-analytics-filter-panel { display: grid; gap: 12px; padding: 14px; }
+.finance-analytics-filter-panel .finance-dashboard-panel-head { margin-bottom: 0; }
+.finance-analytics-filter-panel .finance-dashboard-panel-head h3 { margin-top: 3px; font-size: 20px; }
+.finance-analytics-filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 260px)); justify-content: center; gap: 10px; }
 .finance-analytics-filter-row > label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 700; }
 .finance-analytics-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.finance-analytics-kpis > div { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--border) 88%, white); border-radius: 16px; background: color-mix(in srgb, var(--surface-alt) 70%, white); }
+.finance-analytics-kpis > div { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--border) 88%, white); border-radius: 14px; background: color-mix(in srgb, var(--surface-alt) 70%, white); }
 .finance-analytics-kpis span { color: var(--muted); font-size: 13px; }
 .finance-analytics-kpis strong { font-size: 21px; }
 .finance-movement-calendar-month { color: var(--muted); font-size: 13px; font-weight: 700; text-transform: capitalize; }
@@ -6365,6 +6367,7 @@ button:disabled {
 .finance-calendar-selection { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--surface-alt) 70%, white); }
 .finance-calendar-selection strong { font-size: 13px; }
 .finance-embedded-actions { display: flex; align-items: center; gap: 6px; }
+.finance-dashboard-list-row > .finance-embedded-actions { flex-direction: row; align-items: center; }
 .finance-embedded-actions > strong { white-space: nowrap; margin-right: 6px; }
 
 .finance-dashboard-action-row-left {
