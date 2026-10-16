@@ -239,7 +239,7 @@ export const FinanceManualSalesPage = () => {
       await salesQuery.refetch();
       await tagsQuery.refetch();
       resetForm();
-      navigate('/app/financeiro/vendas-manuais');
+      navigate('/app/financeiro?tab=sales');
     } finally {
       setSaving(false);
     }
@@ -249,7 +249,7 @@ export const FinanceManualSalesPage = () => {
     <div className="page">
       {showForm ? (
         <div className="panel">
-          <FinanceHeader title={editingId ? 'Editar venda avulsa' : 'Nova venda avulsa'} backTo="/app/financeiro/vendas-manuais" />
+          <FinanceHeader title={editingId ? 'Editar venda avulsa' : 'Nova venda avulsa'} backTo="/app/financeiro?tab=sales" />
           <form className="form" onSubmit={submit}>
             <div className="grid-2">
               <label>
@@ -357,7 +357,7 @@ export const FinanceManualSalesPage = () => {
             </div>
             <label>Observacoes<input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
             <div className="actions">
-              <button type="button" className="ghost" onClick={() => navigate('/app/financeiro/vendas-manuais')}>Cancelar</button>
+              <button type="button" className="ghost" onClick={() => navigate('/app/financeiro?tab=sales')}>Cancelar</button>
               <button type="submit" disabled={saving}>{saving ? 'Salvando...' : editingId ? 'Salvar venda' : 'Cadastrar venda'}</button>
             </div>
           </form>

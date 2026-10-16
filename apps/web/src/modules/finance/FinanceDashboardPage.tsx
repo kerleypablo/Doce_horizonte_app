@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
 import { SelectField } from '../shared/SelectField.tsx';
@@ -359,8 +359,9 @@ const FinanceMovementCalendar = ({
 export const FinanceDashboardPage = () => {
   const { user } = useAuth();
   const { from, to, setFrom, setTo } = useFinanceRange();
+  const { search } = useLocation();
   const [activeDashboardTab, setActiveDashboardTab] = useState<DashboardTab>('overview');
-  const [activeHomeTab, setActiveHomeTab] = useState<FinanceHomeTab>('dashboard');
+  const [activeHomeTab, setActiveHomeTab] = useState<FinanceHomeTab>(() => new URLSearchParams(search).get('tab') === 'sales' ? 'sales' : 'dashboard');
   const [activeSalesChartTab, setActiveSalesChartTab] = useState<DetailChartTab>('general');
   const [activeExpensesChartTab, setActiveExpensesChartTab] = useState<DetailChartTab>('general');
   const [salesOriginFilter, setSalesOriginFilter] = useState<'ALL' | SaleOrigin>('ALL');
@@ -853,7 +854,7 @@ export const FinanceDashboardPage = () => {
         <article className="finance-dashboard-side-card">
           <div className="finance-dashboard-list-head">
             <h4>Entradas por origem</h4>
-            <Link to="/app/financeiro/vendas-manuais">Vendas avulsas</Link>
+            <Link to="/app/financeiro?tab=sales">Vendas avulsas</Link>
           </div>
           {renderListRows(
             [...(data?.salesByOrigin ?? [])]

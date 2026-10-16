@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from './modules/auth/LoginPage.tsx';
 import { SplashPage } from './modules/auth/SplashPage.tsx';
 import { ProfilePage } from './modules/auth/ProfilePage.tsx';
@@ -58,7 +58,7 @@ const App = () => {
         <Route path="/app/financeiro/contas/ajustes/novo" element={<FinanceAccountAdjustmentsPage />} />
         <Route path="/app/financeiro/contas/ajustes/:kind/:adjustmentId" element={<FinanceAccountAdjustmentsPage />} />
         <Route path="/app/financeiro/regras" element={<FinanceRulesPage />} />
-        <Route path="/app/financeiro/vendas-manuais" element={<FinanceManualSalesPage />} />
+        <Route path="/app/financeiro/vendas-manuais" element={<Navigate to="/app/financeiro?tab=sales" replace />} />
         <Route path="/app/financeiro/vendas-manuais/novo" element={<FinanceManualSalesPage />} />
         <Route path="/app/financeiro/vendas-manuais/editar/:saleId" element={<FinanceManualSalesPage />} />
         <Route path="/app/financeiro/despesas" element={<FinanceExpensesPage />} />
