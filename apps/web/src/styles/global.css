@@ -6358,6 +6358,14 @@ button:disabled {
 .finance-movement-calendar-dots .payment-dot-cash, .finance-movement-calendar-legend .payment-dot-cash { background: #7c8a9c; }
 .finance-movement-calendar-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px; color: var(--muted); font-size: 12px; }
 .finance-movement-calendar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.finance-movement-calendar .dashboard-calendar { padding: 0; background: transparent; border: 0; box-shadow: none; }
+.finance-movement-calendar .dashboard-calendar-top > div:first-child span, .finance-movement-calendar .dashboard-calendar-top > div:first-child h3 { display: none; }
+.finance-movement-calendar .dashboard-calendar-top { justify-content: flex-end; margin-bottom: 8px; }
+.finance-movement-calendar .dashboard-calendar-navigation { margin-bottom: 8px; }
+.finance-calendar-selection { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--surface-alt) 70%, white); }
+.finance-calendar-selection strong { font-size: 13px; }
+.finance-embedded-actions { display: flex; align-items: center; gap: 6px; }
+.finance-embedded-actions > strong { white-space: nowrap; margin-right: 6px; }
 
 .finance-dashboard-action-row-left {
   justify-content: flex-start;
@@ -7431,6 +7439,8 @@ button.finance-dashboard-action-link {
   .finance-movement-calendar-day, .finance-movement-calendar-empty { min-height: 42px; }
   .finance-movement-calendar-weekdays, .finance-movement-calendar-grid { gap: 4px; }
   .finance-movement-calendar-weekdays span { font-size: 10px; }
+  .finance-calendar-selection { align-items: stretch; flex-direction: column; }
+  .finance-calendar-selection button { width: 100%; }
 }
 
 /* Customers */

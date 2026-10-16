@@ -22,9 +22,10 @@ import type { ExpenseCategory, PaymentMethod } from './types.ts';
 export const FinanceExpensesPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search: locationSearch } = useLocation();
   const params = useParams<{ expenseId?: string }>();
   const isCreateView = pathname.endsWith('/novo');
+  const selectedDate = new URLSearchParams(locationSearch).get('date');
   const editingRouteId = pathname.includes('/editar/') ? params.expenseId ?? null : null;
   const { from, to, setFrom, setTo } = useFinanceRange();
   const expensesQuery = useExpenses(user?.token, from, to);
@@ -60,7 +61,7 @@ export const FinanceExpensesPage = () => {
       setShowForm(true);
       setForm({
         accountId: '',
-        occurredAt: `${todayDate}T09:00`,
+        occurredAt: /^\d{4}-\d{2}-\d{2}$/.test(selectedDate ?? '') ? `${selectedDate}T09:00` : `${todayDate}T09:00`,
         description: '',
         category: 'OUTROS',
         paymentMethod: 'PIX',
@@ -91,7 +92,7 @@ export const FinanceExpensesPage = () => {
     initializedRouteRef.current = routeKey;
     setEditingId(null);
     setShowForm(false);
-  }, [isCreateView, editingRouteId, expensesQuery.data]);
+  }, [isCreateView, editingRouteId, expensesQuery.data, selectedDate]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();

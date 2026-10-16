@@ -1,4 +1,5 @@
 import type { CalendarCell } from './dashboard-types.ts';
+import type React from 'react';
 
 type DashboardCalendarProps = {
   compact: boolean;
@@ -7,6 +8,7 @@ type DashboardCalendarProps = {
   selectedDate: string;
   todayDate: string;
   orderDates: Set<string>;
+  renderDayMarker?: (dateKey: string) => React.ReactNode;
   onToggleCompact: () => void;
   onShift: (direction: -1 | 1) => void;
   onSelectDate: (dateKey: string) => void;
@@ -21,6 +23,7 @@ export const DashboardCalendar = ({
   selectedDate,
   todayDate,
   orderDates,
+  renderDayMarker,
   onToggleCompact,
   onShift,
   onSelectDate
@@ -56,7 +59,7 @@ export const DashboardCalendar = ({
           aria-pressed={selectedDate === cell.dateKey}
         >
           <span>{cell.day}</span>
-          {orderDates.has(cell.dateKey) ? <i aria-label="Há pedidos nesta data" /> : null}
+          {renderDayMarker ? renderDayMarker(cell.dateKey) : orderDates.has(cell.dateKey) ? <i aria-label="Há pedidos nesta data" /> : null}
         </button>
       ) : <span key={`empty-${index}`} className="dashboard-calendar-empty" />)}
     </div>

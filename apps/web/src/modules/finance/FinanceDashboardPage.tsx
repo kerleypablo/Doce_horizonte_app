@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from '../shared/api.ts';
 import { SelectField } from '../shared/SelectField.tsx';
 import { invalidateQueryCache } from '../shared/queryCache.ts';
 import { FinanceAccessBlocked } from './FinanceShared.tsx';
+import { DashboardCalendar } from '../dashboard/DashboardCalendar.tsx';
+import { buildWeekCells } from '../dashboard/dashboard-utils.ts';
+import type { CalendarCell } from '../dashboard/dashboard-types.ts';
 import {
   financeDashboardKey,
   accountTypeLabels,
@@ -297,13 +300,18 @@ const paymentDotClass: Record<PaymentMethod, string> = {
 const FinanceMovementCalendar = ({
   title,
   month,
-  movements
+  movements,
+  newEntryTo
 }: {
   title: string;
   month: string;
-  movements: Array<{ occurredAt: string; paymentMethod: PaymentMethod }>;
+  movements: Array<{ occurredAt: string; paymentMethod: PaymentMethod; netAmount?: number }>;
+  newEntryTo: 'sales' | 'expenses';
 }) => {
+  const navigate = useNavigate();
   const monthDate = new Date(`${month.slice(0, 7)}-01T12:00:00`);
+  const [compact, setCompact] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(month);
   const year = monthDate.getFullYear();
   const monthIndex = monthDate.getMonth();
   const firstWeekday = new Date(year, monthIndex, 1).getDay();
@@ -318,37 +326,31 @@ const FinanceMovementCalendar = ({
     movementsByDay.set(date.getDate(), methods);
   });
 
-  const cells = Array.from({ length: firstWeekday + totalDays }, (_, index) => index - firstWeekday + 1);
-  const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(monthDate);
+  const cells = Array.from({ length: firstWeekday + totalDays }, (_, index) => index < firstWeekday ? null : ({ day: index - firstWeekday + 1, dateKey: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(index - firstWeekday + 1).padStart(2, '0')}` } as CalendarCell));
+  const visibleCells = compact ? buildWeekCells(selectedDate) : cells;
+  const selectedMovements = movements.filter((item) => item.occurredAt.slice(0, 10) === selectedDate);
+  const selectedTotal = selectedMovements.reduce((total, item) => total + Number(item.netAmount ?? 0), 0);
+  const titleLabel = compact
+    ? `${new Date(`${selectedDate}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} — ${new Date(`${selectedDate}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`
+    : new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(monthDate);
+  const shift = (direction: -1 | 1) => {
+    const next = new Date(`${selectedDate}T12:00:00`);
+    next.setDate(next.getDate() + direction * (compact ? 7 : 30));
+    setSelectedDate(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`);
+  };
 
   return (
     <article className="finance-dashboard-panel finance-movement-calendar">
-      <div className="finance-dashboard-panel-head compact">
-        <div>
-          <span className="finance-dashboard-section-label">Agenda financeira</span>
-          <h3>{title}</h3>
-        </div>
-        <span className="finance-movement-calendar-month">{monthLabel}</span>
-      </div>
-      <div className="finance-movement-calendar-weekdays" aria-hidden="true">
-        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => <span key={day}>{day}</span>)}
-      </div>
-      <div className="finance-movement-calendar-grid">
-        {cells.map((day, index) => {
-          if (day < 1) return <span key={`empty-${index}`} className="finance-movement-calendar-empty" />;
-          const methods = Array.from(movementsByDay.get(day) ?? []);
-          return (
-            <div key={day} className={`finance-movement-calendar-day${methods.length ? ' has-movements' : ''}`}>
-              <span>{day}</span>
-              <div className="finance-movement-calendar-dots" aria-label={methods.length ? `${methods.length} tipo(s) de pagamento` : undefined}>
-                {methods.map((method) => <i key={method} className={paymentDotClass[method]} title={methodLabels[method]} />)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <DashboardCalendar compact={compact} title={titleLabel} cells={visibleCells} selectedDate={selectedDate} todayDate={todayDate} orderDates={new Set(movements.map((item) => item.occurredAt.slice(0, 10)))} onToggleCompact={() => setCompact((value) => !value)} onShift={shift} onSelectDate={setSelectedDate} renderDayMarker={(dateKey) => {
+        const methods = Array.from(movementsByDay.get(Number(dateKey.slice(-2))) ?? []);
+        return methods.length ? <span className="finance-movement-calendar-dots">{methods.map((method) => <i key={method} className={paymentDotClass[method]} />)}</span> : null;
+      }} />
       <div className="finance-movement-calendar-legend">
         <span><i className="payment-dot-pix" /> Pix</span><span><i className="payment-dot-card" /> Cartão</span><span><i className="payment-dot-voucher" /> Voucher</span><span><i className="payment-dot-cash" /> Dinheiro</span>
+      </div>
+      <div className="finance-calendar-selection">
+        <strong>{selectedMovements.length ? `${selectedMovements.length} lançamento(s): ${formatCurrency(selectedTotal)}` : 'Nenhum lançamento nesta data'}</strong>
+        <button type="button" className="finance-dashboard-action-link primary" onClick={() => navigate(newEntryTo === 'sales' ? `/app/financeiro/vendas-manuais/novo?date=${selectedDate}` : `/app/financeiro/despesas/novo?date=${selectedDate}`)}>{newEntryTo === 'sales' ? 'Adicionar venda' : 'Adicionar despesa'}</button>
       </div>
     </article>
   );
@@ -365,6 +367,8 @@ export const FinanceDashboardPage = () => {
   const [salesMethodFilter, setSalesMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<'ALL' | string>('ALL');
   const [expenseMethodFilter, setExpenseMethodFilter] = useState<'ALL' | PaymentMethod>('ALL');
+  const [salesPage, setSalesPage] = useState(1);
+  const [expensesPage, setExpensesPage] = useState(1);
 
   const dashboardQuery = useFinanceDashboard(user?.token, from, to);
   const salesQuery = useManualSales(user?.token, from, to);
@@ -753,6 +757,24 @@ export const FinanceDashboardPage = () => {
   const salesNetTotal = filteredSales.reduce((total, item) => total + Number(item.netAmount ?? 0), 0);
   const expensesGrossTotal = filteredExpenses.reduce((total, item) => total + Number(item.amount ?? 0), 0);
   const expensesNetTotal = filteredExpenses.reduce((total, item) => total + Number(item.netAmount ?? 0), 0);
+  const salesPageSize = 10;
+  const expensesPageSize = 10;
+  const visibleSales = filteredSales.slice((salesPage - 1) * salesPageSize, salesPage * salesPageSize);
+  const visibleExpenses = filteredExpenses.slice((expensesPage - 1) * expensesPageSize, expensesPage * expensesPageSize);
+  const salesTotalPages = Math.max(1, Math.ceil(filteredSales.length / salesPageSize));
+  const expensesTotalPages = Math.max(1, Math.ceil(filteredExpenses.length / expensesPageSize));
+
+  const deleteSale = async (id: string, description: string) => {
+    if (!window.confirm(`Excluir a venda "${description}"?`)) return;
+    await apiFetch(`/finance/manual-sales/${id}`, { method: 'DELETE', token: user?.token });
+    await Promise.all([salesQuery.refetch(), dashboardQuery.refetch()]);
+  };
+
+  const deleteExpense = async (id: string, description: string) => {
+    if (!window.confirm(`Excluir a despesa "${description}"?`)) return;
+    await apiFetch(`/finance/expenses/${id}`, { method: 'DELETE', token: user?.token });
+    await Promise.all([expensesQuery.refetch(), dashboardQuery.refetch()]);
+  };
 
   const dashboardSummaryContent = (
     <>
@@ -893,13 +915,14 @@ export const FinanceDashboardPage = () => {
         <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">{activeSalesChartTab === 'general' ? 'Visão geral' : 'Por tipo'}</span><h3>{activeSalesChartTab === 'general' ? 'Vendas por dia' : 'Pagamento por dia'}</h3></div></div>
         <HighchartsReact highcharts={Highcharts} options={activeSalesChartTab === 'general' ? salesDailyChartOptions : salesByMethodDailyChartOptions} />
       </article>
-      <FinanceMovementCalendar title="Dias com registros de venda" month={to} movements={filteredSales} />
+      <FinanceMovementCalendar title="Dias com registros de venda" month={to} movements={filteredSales} newEntryTo="sales" />
       <article className="finance-dashboard-panel finance-embedded-transactions">
         <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Lançamentos</span><h3>Vendas registradas</h3></div></div>
         <div className="finance-dashboard-list">
-          {filteredSales.map((item) => <div key={item.id} className="finance-dashboard-list-row"><div><strong>{item.description}</strong><span>{new Date(item.occurredAt).toLocaleString('pt-BR')} • {methodLabels[item.paymentMethod]}</span></div><strong>{formatCurrency(item.netAmount)}</strong></div>)}
+          {visibleSales.map((item) => <div key={item.id} className="finance-dashboard-list-row"><div><strong>{item.description}</strong><span>{new Date(item.occurredAt).toLocaleString('pt-BR')} • {methodLabels[item.paymentMethod]}</span></div><div className="finance-embedded-actions"><strong>{formatCurrency(item.netAmount)}</strong><button type="button" className="icon-button" aria-label={`Editar venda ${item.description}`} onClick={() => navigate(`/app/financeiro/vendas-manuais/editar/${item.id}`)}><span className="material-symbols-outlined">edit</span></button><button type="button" className="icon-button" aria-label={`Excluir venda ${item.description}`} onClick={() => deleteSale(item.id, item.description)}><span className="material-symbols-outlined">delete</span></button></div></div>)}
           {filteredSales.length === 0 ? <span className="muted">Nenhuma venda encontrada para os filtros selecionados.</span> : null}
         </div>
+        {salesTotalPages > 1 ? <div className="finance-pagination"><button type="button" className="ghost" disabled={salesPage === 1} onClick={() => setSalesPage((page) => page - 1)}>Anterior</button><span>Página {salesPage} de {salesTotalPages}</span><button type="button" className="ghost" disabled={salesPage === salesTotalPages} onClick={() => setSalesPage((page) => page + 1)}>Próxima</button></div> : null}
       </article>
     </>
   );
@@ -929,13 +952,14 @@ export const FinanceDashboardPage = () => {
         <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">{activeExpensesChartTab === 'general' ? 'Visão geral' : 'Por tipo'}</span><h3>{activeExpensesChartTab === 'general' ? 'Despesas por dia' : 'Pagamento por dia'}</h3></div></div>
         <HighchartsReact highcharts={Highcharts} options={activeExpensesChartTab === 'general' ? expensesDailyChartOptions : expensesByMethodDailyChartOptions} />
       </article>
-      <FinanceMovementCalendar title="Dias com lançamentos de despesa" month={to} movements={filteredExpenses} />
+      <FinanceMovementCalendar title="Dias com lançamentos de despesa" month={to} movements={filteredExpenses} newEntryTo="expenses" />
       <article className="finance-dashboard-panel finance-embedded-transactions">
         <div className="finance-dashboard-panel-head compact"><div><span className="finance-dashboard-section-label">Lançamentos</span><h3>Despesas registradas</h3></div></div>
         <div className="finance-dashboard-list">
-          {filteredExpenses.map((item) => <div key={item.id} className="finance-dashboard-list-row"><div><strong>{item.description}</strong><span>{new Date(item.occurredAt).toLocaleString('pt-BR')} • {expenseCategoryLabels[item.category]} • {methodLabels[item.paymentMethod]}</span></div><strong>{formatCurrency(item.netAmount)}</strong></div>)}
+          {visibleExpenses.map((item) => <div key={item.id} className="finance-dashboard-list-row"><div><strong>{item.description}</strong><span>{new Date(item.occurredAt).toLocaleString('pt-BR')} • {expenseCategoryLabels[item.category]} • {methodLabels[item.paymentMethod]}</span></div><div className="finance-embedded-actions"><strong>{formatCurrency(item.netAmount)}</strong><button type="button" className="icon-button" aria-label={`Editar despesa ${item.description}`} onClick={() => navigate(`/app/financeiro/despesas/editar/${item.id}`)}><span className="material-symbols-outlined">edit</span></button><button type="button" className="icon-button" aria-label={`Excluir despesa ${item.description}`} onClick={() => deleteExpense(item.id, item.description)}><span className="material-symbols-outlined">delete</span></button></div></div>)}
           {filteredExpenses.length === 0 ? <span className="muted">Nenhuma despesa encontrada para os filtros selecionados.</span> : null}
         </div>
+        {expensesTotalPages > 1 ? <div className="finance-pagination"><button type="button" className="ghost" disabled={expensesPage === 1} onClick={() => setExpensesPage((page) => page - 1)}>Anterior</button><span>Página {expensesPage} de {expensesTotalPages}</span><button type="button" className="ghost" disabled={expensesPage === expensesTotalPages} onClick={() => setExpensesPage((page) => page + 1)}>Próxima</button></div> : null}
       </article>
     </>
   );

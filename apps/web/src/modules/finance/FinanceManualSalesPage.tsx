@@ -37,9 +37,10 @@ export const FinanceManualSalesPage = () => {
   const pageSize = 10;
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const params = useParams<{ saleId?: string }>();
   const isCreateView = pathname.endsWith('/novo');
+  const selectedDate = new URLSearchParams(search).get('date');
   const editingRouteId = pathname.includes('/editar/') ? params.saleId ?? null : null;
   const { from, to, setFrom, setTo } = useFinanceRange();
   const [filterTag, setFilterTag] = useState('');
@@ -62,8 +63,10 @@ export const FinanceManualSalesPage = () => {
     if (!isCreateView) return;
     setEditingId(null);
     setShowForm(true);
-    setForm(createEmptyManualSaleForm());
-  }, [isCreateView]);
+    const next = createEmptyManualSaleForm();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(selectedDate ?? '')) next.occurredAt = `${selectedDate}T09:00`;
+    setForm(next);
+  }, [isCreateView, selectedDate]);
 
   useEffect(() => {
     if (!editingRouteId) {
