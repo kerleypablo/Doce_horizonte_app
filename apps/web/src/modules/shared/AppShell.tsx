@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { apiFetch } from './api.ts';
@@ -85,12 +85,14 @@ const getHeaderTitle = (pathname: string) => {
 
 export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const isTasksMode = pathname.startsWith('/app/tasks');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const headerTitle = getHeaderTitle(pathname);
+  const canGoBack = pathname.includes('/novo') || pathname.includes('/editar') || /^\/app\/pedidos\/[^/]+$/.test(pathname);
   const visibleNavItems = navItems.filter((item) => {
     if (item.requiresMaster && user?.role !== 'master') return false;
     if (item.requiresModule && !user?.modules?.includes(item.requiresModule)) return false;
@@ -199,6 +201,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
       <div className={`drawer-backdrop ${drawerOpen ? 'open' : ''}`} onClick={() => setDrawerOpen(false)} />
       <main>
         <header className="mobile-header">
+          {canGoBack ? <button className="icon-button shell-back-button" onClick={() => navigate(-1)} aria-label="Voltar"><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span></button> : null}
           <button className="icon-button" onClick={() => setDrawerOpen((prev) => !prev)} aria-label="Menu">
             <span className="material-symbols-outlined" aria-hidden="true">menu</span>
           </button>
@@ -212,6 +215,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
         </header>
         <header className="app-header">
           <div>
+            {canGoBack ? <button type="button" className="shell-back-button" onClick={() => navigate(-1)}><span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>Voltar</button> : null}
             <h2>{headerTitle}</h2>
             {pathname === '/app' ? <p>Custos, receitas e margens sempre atualizados.</p> : null}
           </div>
