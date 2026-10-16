@@ -7439,8 +7439,8 @@ button.finance-dashboard-action-link {
   .finance-movement-calendar-day, .finance-movement-calendar-empty { min-height: 42px; }
   .finance-movement-calendar-weekdays, .finance-movement-calendar-grid { gap: 4px; }
   .finance-movement-calendar-weekdays span { font-size: 10px; }
-  .finance-calendar-selection { align-items: stretch; flex-direction: column; }
-  .finance-calendar-selection button { width: 100%; }
+  .finance-calendar-selection { align-items: center; flex-direction: row; }
+  .finance-calendar-selection button { width: auto; flex: 0 0 auto; }
 }
 
 /* Customers */
