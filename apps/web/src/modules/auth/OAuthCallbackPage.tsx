@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../shared/supabase.ts';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from './AuthContext.tsx';
+import { safeMcpReviewPath } from './safe-return.ts';
 
 export const OAuthCallbackPage = () => {
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,11 @@ export const OAuthCallbackPage = () => {
             }
           : undefined;
         login(token, me.role, me.modules ?? [], profile, data.session?.refresh_token);
-        navigate('/app');
+        const consent = sessionStorage.getItem('oauth_consent_id');
+        sessionStorage.removeItem('oauth_consent_id');
+        const reviewPath = safeMcpReviewPath(sessionStorage.getItem('mcp_review_return'));
+        sessionStorage.removeItem('mcp_review_return');
+        navigate(consent ? '/oauth/consent?authorization_id=' + encodeURIComponent(consent) : reviewPath ?? '/app');
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
         const shouldOnboard =

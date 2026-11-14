@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
 import { calcProductPreview } from '../pricing/product-calc.js';
 import { assertCompanyOwns } from '../common/company-ownership.js';
+import { calcOrderTotal } from './total.js';
 
 const orderProductSchema = z.object({
   productId: z.string().min(1),
@@ -167,6 +168,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
     channelId: row.channel_id ?? undefined,
     extraRecipes: withLegacyBaseRecipe(row.extra_recipes ?? [], row.recipe_id ?? undefined, recipes),
     extraProducts: row.extra_products ?? [],
+    directInputs: row.direct_inputs ?? [],
     packagingInputs: row.packaging_inputs ?? []
   });
 
@@ -200,6 +202,7 @@ export const orderRoutes = async (app: FastifyInstance) => {
         extraPercent: product.extraPercent,
         extraRecipes: product.extraRecipes,
         extraProducts: product.extraProducts,
+        directInputs: product.directInputs,
         packagingInputs: product.packagingInputs,
         settings: {
           overheadMethod: companySettings.overhead_method,
@@ -264,25 +267,6 @@ const toBooleanQueryValue = (value: boolean | string | undefined, defaultValue =
   }
   return defaultValue;
 };
-
-  const calcOrderTotal = (row: any) => {
-    const products = Array.isArray(row.products) ? row.products : [];
-    const additions = Array.isArray(row.additions) ? row.additions : [];
-    const productsTotal = products.reduce(
-      (sum: number, item: any) => sum + Number(item?.unitPrice ?? 0) * Number(item?.quantity ?? 0),
-      0
-    );
-    const additionsTotal = additions.reduce((sum: number, item: any) => {
-      if (item?.mode === 'FIXED') return sum + Number(item?.value ?? 0);
-      return sum + (productsTotal * Number(item?.value ?? 0)) / 100;
-    }, 0);
-    const discountMode = row.discount_mode ?? 'FIXED';
-    const discountValue = Number(row.discount_value ?? 0);
-    const discountTotal = discountMode === 'PERCENT'
-      ? ((productsTotal + additionsTotal) * discountValue) / 100
-      : discountValue;
-    return productsTotal + additionsTotal - discountTotal + Number(row.shipping_value ?? 0);
-  };
 
   const mapOrder = (row: any) => ({
     id: row.id,

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../db/supabase.js';
 
-const inputSchema = z.object({
+export const inputSchema = z.object({
   name: z.string().min(2),
   brand: z.string().optional(),
   category: z.enum(['embalagem', 'producao', 'outros']),

@@ -1,4 +1,4 @@
-export const MODULE_KEYS = ['cadastros', 'pedidos', 'empresa', 'financeiro'] as const;
+export const MODULE_KEYS = ['cadastros', 'pedidos', 'empresa', 'financeiro', 'mcp'] as const;
 
 export type AppModuleKey = (typeof MODULE_KEYS)[number];
 
@@ -33,6 +33,12 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     name: 'Financeiro',
     premium: true,
     description: 'Fluxo de caixa, contas e relatorios financeiros'
+  },
+  {
+    key: 'mcp',
+    name: 'Acesso ao MCP',
+    premium: false,
+    description: 'Permite conectar assistentes de IA aos modulos autorizados'
   }
 ];
 

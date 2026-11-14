@@ -6,7 +6,7 @@ import { LoadingOverlay } from '../shared/LoadingOverlay.tsx';
 import { invalidateQueryCache, useCachedQuery } from '../shared/queryCache.ts';
 import { queryKeys } from '../shared/queryKeys.ts';
 
-type AppModuleKey = 'cadastros' | 'pedidos' | 'empresa' | 'financeiro';
+type AppModuleKey = 'cadastros' | 'pedidos' | 'empresa' | 'financeiro' | 'mcp';
 
 type DashboardCompany = {
   id: string;

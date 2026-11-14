@@ -52,7 +52,8 @@ values
   ('cadastros', 'Cadastros e Producao', false, 'Insumos, receitas, produtos e clientes', true),
   ('pedidos', 'Pedidos', false, 'Gestao de pedidos e orcamentos', true),
   ('empresa', 'Configuracoes da Empresa', false, 'Configuracoes e equipe', true),
-  ('financeiro', 'Financeiro', true, 'Fluxo de caixa, contas e relatorios', true)
+  ('financeiro', 'Financeiro', true, 'Fluxo de caixa, contas e relatorios', true),
+  ('mcp', 'Acesso ao MCP', false, 'Conexao de assistentes de IA aos modulos autorizados', true)
 on conflict (key) do update
 set
   name = excluded.name,

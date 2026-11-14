@@ -4,6 +4,8 @@ import { SplashPage } from './modules/auth/SplashPage.tsx';
 import { ProfilePage } from './modules/auth/ProfilePage.tsx';
 import { RegisterPage } from './modules/auth/RegisterPage.tsx';
 import { OAuthCallbackPage } from './modules/auth/OAuthCallbackPage.tsx';
+import { OAuthConsentPage } from './modules/auth/OAuthConsentPage.tsx';
+import { McpPurchaseReviewPage } from './modules/auth/McpPurchaseReviewPage.tsx';
 import { OnboardingPage } from './modules/auth/OnboardingPage.tsx';
 import { ProtectedLayout } from './modules/auth/ProtectedLayout.tsx';
 import { DashboardPage } from './modules/dashboard/DashboardPage.tsx';
@@ -32,9 +34,11 @@ const App = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/oauth" element={<OAuthCallbackPage />} />
+      <Route path="/oauth/consent" element={<OAuthConsentPage />} />
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/app" element={<DashboardPage />} />
+        <Route path="/app/mcp/revisar/:id" element={<McpPurchaseReviewPage />} />
         <Route path="/app/perfil" element={<ProfilePage />} />
         <Route path="/app/insumos" element={<InputsPage />} />
         <Route path="/app/insumos/novo" element={<InputsPage />} />

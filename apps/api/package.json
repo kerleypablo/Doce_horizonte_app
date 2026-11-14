@@ -7,13 +7,14 @@
     "dev": "tsx watch src/main.ts",
     "prebuild": "npm --workspace @doce-horizonte/domain run build",
     "build": "tsc -p tsconfig.json",
-    "test": "tsx --test src/modules/pricing/*.test.ts",
+    "test": "tsx --test src/modules/pricing/*.test.ts src/modules/orders/*.test.ts src/modules/mcp/*.test.ts ../web/src/modules/auth/*.test.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {
     "@doce-horizonte/domain": "*",
     "@fastify/cors": "^10.0.0",
     "@fastify/jwt": "^9.0.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@supabase/supabase-js": "^2.45.4",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",

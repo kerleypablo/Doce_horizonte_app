@@ -265,7 +265,7 @@ export const backofficeRoutes = async (app: FastifyInstance) => {
 
     const baseModules = await loadBaseModulesForCompany(data.companyId);
     const targetModules = new Set<AppModuleKey>(data.enabledModules);
-    const changedKeys = new Set<AppModuleKey>([...baseModules, ...targetModules]);
+    const changedKeys = new Set<AppModuleKey>(MODULE_KEYS);
 
     const overridesToUpsert: Array<{
       company_id: string;

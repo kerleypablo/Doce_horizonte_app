@@ -5,7 +5,7 @@ import { supabaseAdmin } from '../../db/supabase.js';
 import { calcProductPreview } from '../pricing/product-calc.js';
 import { assertProductCompositionOwnership } from '../common/company-ownership.js';
 
-const productSchema = z.object({
+export const productSchema = z.object({
   name: z.string().min(2),
   prepTimeMinutes: z.number().min(0).default(0),
   notes: z.string().optional(),

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { apiFetch } from '../shared/api.ts';
 import { useAuth } from './AuthContext.tsx';
 import { GoogleButton } from './GoogleButton.tsx';
+import { safeMcpReviewPath } from './safe-return.ts';
 
 export const LoginPage = () => {
   const [email, setEmail] = useState('admin@demo.com');
@@ -11,6 +12,7 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -26,7 +28,10 @@ export const LoginPage = () => {
         }
       );
       login(data.token, data.role, data.modules ?? [], undefined, data.refreshToken);
-      navigate('/app');
+      const consent = new URLSearchParams(window.location.search).get('consent');
+      const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '';
+      const reviewPath = safeMcpReviewPath(from) ?? '/app';
+      navigate(consent ? '/oauth/consent?authorization_id=' + encodeURIComponent(consent) : reviewPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao entrar');
     } finally {
@@ -70,7 +75,7 @@ export const LoginPage = () => {
         <div className="divider">
           <span>ou</span>
         </div>
-        <GoogleButton label="Entrar com Google" />
+        <GoogleButton label="Entrar com Google" returnTo={safeMcpReviewPath((location.state as { from?: { pathname?: string } } | null)?.from?.pathname)} />
         <div className="login-hint">
           <span>Primeiro acesso?</span> <Link to="/register">Criar conta</Link>
         </div>

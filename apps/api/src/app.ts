@@ -13,6 +13,10 @@ import { orderRoutes } from './modules/orders/routes.js';
 import { backofficeRoutes } from './modules/backoffice/routes.js';
 import { financeRoutes } from './modules/finance/routes.js';
 import { ZodError } from 'zod';
+import { mcpRoutes } from './modules/mcp/routes.js';
+import { registerRemoteMcp, remoteConfig } from './modules/mcp/remote.js';
+import { writeEnabled, reviewOrigin } from './modules/mcp/write.js';
+import { reviewRoutes } from './modules/mcp/review.js';
 
 export const buildApp = () => {
   const app = Fastify({
@@ -52,6 +56,11 @@ export const buildApp = () => {
     uptimeSeconds: Math.floor(process.uptime())
   }));
 
+  if (process.env.NODE_ENV === 'development' && process.env.DOCE_MCP_LOCAL_ENABLED === 'true') {
+    app.register(mcpRoutes);
+  }
+  if (writeEnabled()) { reviewOrigin(); app.register(reviewRoutes); }
+  if (process.env.DOCE_MCP_REMOTE_ENABLED === 'true') registerRemoteMcp(app, remoteConfig(process.env));
   app.register(authRoutes);
   app.register(companyRoutes);
   app.register(inputRoutes);

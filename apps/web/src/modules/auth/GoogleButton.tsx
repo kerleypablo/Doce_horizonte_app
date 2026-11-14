@@ -1,7 +1,14 @@
 import { supabase } from '../shared/supabase.ts';
+import { safeMcpReviewPath } from './safe-return.ts';
 
-export const GoogleButton = ({ label }: { label: string }) => {
+export const GoogleButton = ({ label, returnTo }: { label: string; returnTo?: string | null }) => {
   const handleClick = async () => {
+    const reviewPath = safeMcpReviewPath(returnTo);
+    if (reviewPath) sessionStorage.setItem('mcp_review_return', reviewPath);
+    else sessionStorage.removeItem('mcp_review_return');
+    const consent = new URLSearchParams(window.location.search).get('consent');
+    if (consent) sessionStorage.setItem('oauth_consent_id', consent);
+    else sessionStorage.removeItem('oauth_consent_id');
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/oauth` }
