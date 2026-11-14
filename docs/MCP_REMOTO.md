@@ -4,6 +4,8 @@
 
 Em 14/11/2026, as oito migracoes locais de fundacao, funcoes e permissao MCP foram aplicadas em conjunto ao projeto Supabase `yznypthnkuddtfttsbdn` como `20261114221119_mcp_experimental_foundation_and_access`. A permissao nao foi habilitada para planos por essa migracao. O codigo da API e do backoffice ainda precisa ser publicado, e OAuth, integracao real e efeitos de bloqueios ainda precisam de validacao. A criacao das funcoes no banco nao significa que os fluxos estejam prontos para uso em producao.
 
+A migracao local `20261114233500_mcp_oauth_audience.sql` foi aplicada como `20261114232404_mcp_oauth_audience_hook`. Ela cria uma lista restrita de clientes OAuth e uma funcao de hook, mas nao ativa o hook. Somente clientes explicitamente habilitados nessa lista recebem a audiencia MCP. A configuracao do hook e a integracao real precisam de validacao antes do uso; nao substituir um hook existente sem avalia-lo. A API verifica a identidade no endpoint OAuth `userinfo`, mantendo a validacao de emissor, audiencia e permissoes.
+
 ## Permissao no backoffice
 
 O modulo `mcp` fica desabilitado por padrao. O master pode habilitar ou desabilitar **Acesso ao MCP** para cada usuario no backoffice. A permissao MCP nao concede cadastros, pedidos ou financeiro: cada operacao tambem exige seu modulo especifico. A verificacao ocorre em cada acesso e novamente na confirmacao de escritas. A migracao `20261114200000_mcp_access_module.sql` cadastra o modulo sem habilita-lo automaticamente e deve ser aplicada apenas apos revisao e testes em ambiente adequado.
@@ -15,7 +17,7 @@ Para habilitar deliberadamente, configure na API `DOCE_MCP_REMOTE_ENABLED=true`,
 ## Dependencias externas nao verificadas
 
 - Habilite o OAuth 2.1 Server no Supabase, registre o cliente e seu redirect URI e configure o caminho de autorizacao como `/oauth/consent` no site. A tela existente exibe cliente, conta, escopos e destino e encaminha a decisao ao Supabase.
-- Conforme a documentacao do Supabase, a audiencia padrao e `authenticated`; configure com seguranca um Custom Access Token Hook para emitir a URL exata do recurso para clientes MCP autorizados. Nao substitua a validacao por `authenticated`. Verifique que o mesmo token seja aceito por `auth.getUser`; isso e a compatibilidade do fluxo de assinatura/audiencia ainda nao foi validado neste ambiente.
+- Conforme a documentacao do Supabase, a audiencia padrao e `authenticated`; o hook preparado emite a URL exata do recurso para clientes MCP explicitamente autorizados. Nao substitua a validacao por `authenticated`. A compatibilidade com o endpoint OAuth `userinfo` ainda deve ser validada de ponta a ponta.
 - Verifique PKCE, descoberta de autorizacao, redirecionamento, consentimento, renovacao, tokens expirados, revogacao, bloqueio de usuario, isolamento de empresas e acesso dos clientes reais. `getUser` e validacao JWT nao comprovam revogacao imediata de sessoes; mantenha o recurso desabilitado ate estabelecer essa garantia.
 - A API usa service role internamente, logo e essencial revisar todas as consultas e regras de empresa, configurar limites externos de requisicoes e observabilidade sem segredos e validar a cadeia de proxies. A autenticacao, a tela e o transporte ainda nao foram testados de ponta a ponta com Supabase real.
 

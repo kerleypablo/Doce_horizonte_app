@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 process.env.SUPABASE_URL = 'http://127.0.0.1:54321';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
 process.env.SUPABASE_ANON_KEY = 'test-key';
-const { registerRemoteMcp, remoteConfig, verifyRemoteToken } = await import('./remote.js');
+const { registerRemoteMcp, remoteConfig, verifyRemoteToken, getOAuthUserId } = await import('./remote.js');
 const config = { resource: 'https://mcp.example.com/mcp', issuer: 'https://project.supabase.co/auth/v1', origins: ['https://client.example.com'] };
 const jwt = (claims: object) => `e30.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.signature`;
 const valid = { iss: config.issuer, aud: config.resource, sub: 'user-a', client_id: 'client', exp: 2000000000 };
@@ -23,6 +23,19 @@ test('diagnostico identifica audiencia incorreta sem revelar o token', async () 
   assert.equal(await verifyRemoteToken(token, config, async () => 'user-a', 1700000000000, reason => reasons.push(reason)), null);
   assert.deepEqual(reasons, ['audience_mismatch']);
   assert.equal(JSON.stringify(reasons).includes(token), false);
+});
+test('userinfo valida o token OAuth no emissor e nao segue redirecionamentos', async () => {
+  let observed: { url: string; init?: RequestInit } | undefined;
+  const mock = (async (url: string | URL | Request, init?: RequestInit) => {
+    observed = { url: String(url), init };
+    return new Response(JSON.stringify({ sub: 'user-a' }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+  assert.equal(await getOAuthUserId('secret-token', config.issuer, mock), 'user-a');
+  assert.equal(observed?.url, `${config.issuer}/oauth/userinfo`);
+  assert.equal((observed?.init?.headers as Record<string, string>).authorization, 'Bearer secret-token');
+  assert.equal(observed?.init?.redirect, 'error');
+  assert.equal(await getOAuthUserId('bad', config.issuer, (async () => new Response('', { status: 401 })) as typeof fetch), null);
+  assert.equal(await getOAuthUserId('bad', config.issuer, (async () => { throw new Error('offline'); }) as typeof fetch), null);
 });
 test('configuracao remota exige HTTPS e origem de recurso exata', () => {
   assert.throws(() => remoteConfig({ SUPABASE_URL: 'https://project.supabase.co', DOCE_MCP_RESOURCE_URL: 'http://example.com/mcp' }));

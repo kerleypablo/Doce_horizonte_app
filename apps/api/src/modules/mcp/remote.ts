@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { supabaseAdmin, getAppUserByAuthId } from '../../db/supabase.js';
+import { getAppUserByAuthId } from '../../db/supabase.js';
 import { searchRecords, previewPurchase, type McpIdentity } from './service.js';
 import { purchasePreviewSchema } from './purchase.js';
 import { preparePurchase, prepareSchema, writeEnabled } from './write.js';
@@ -39,11 +39,23 @@ export async function verifyRemoteToken(token: string, config: RemoteConfig, get
     const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (claims.iss !== config.issuer || typeof claims.sub !== 'string' || !claims.sub || typeof claims.client_id !== 'string' || !claims.client_id || typeof claims.exp !== 'number' || !Number.isFinite(claims.exp) || claims.exp <= now / 1000) { report?.('invalid_claims'); return null; }
     if (!audience.includes(config.resource)) { report?.('audience_mismatch'); return null; }
-    // getUser validates the signed token at the issuer; never trust decoded claims alone.
+    // The issuer validates the signed token; never trust decoded claims alone.
     const userId = await getUser(token);
     if (userId !== claims.sub) { report?.('issuer_validation_failed'); return null; }
     return userId;
   } catch { report?.('issuer_validation_failed'); return null; }
+}
+export async function getOAuthUserId(token: string, issuer: string, fetcher: typeof fetch = fetch): Promise<string | null> {
+  try {
+    const response = await fetcher(`${issuer}/oauth/userinfo`, {
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      redirect: 'error', signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    if (!data || typeof data !== 'object' || !('sub' in data)) return null;
+    return typeof data.sub === 'string' && data.sub ? data.sub : null;
+  } catch { return null; }
 }
 export type RemoteDeps = {
   authenticate: (token: string, config: RemoteConfig, report?: ReportAuthFailure) => Promise<McpIdentity | null>;
@@ -52,10 +64,7 @@ export type RemoteDeps = {
 };
 const realDeps: RemoteDeps = {
   authenticate: async (token, config, report) => {
-    const userId = await verifyRemoteToken(token, config, async t => {
-      const { data, error } = await supabaseAdmin.auth.getUser(t);
-      return error ? null : data.user?.id ?? null;
-    }, Date.now(), report);
+    const userId = await verifyRemoteToken(token, config, t => getOAuthUserId(t, config.issuer), Date.now(), report);
     if (!userId) return null;
     const user = await getAppUserByAuthId(userId);
     if (!user || user.access_blocked || !(await getMcpModules(user.company_id, userId)).includes('mcp')) { report?.('access_denied'); return null; }
