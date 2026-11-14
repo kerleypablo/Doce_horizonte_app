@@ -45,6 +45,11 @@ test('HTTP publica descoberta e nega origens ou credenciais invalidas', async ()
     const denied = await app.inject({ method: 'POST', url: '/mcp', headers, payload: {} });
     assert.equal(denied.statusCode, 401);
     assert.match(String(denied.headers['www-authenticate']), /oauth-protected-resource\/mcp/);
+    const binaryDenied = await app.inject({ method: 'POST', url: '/mcp', headers: { ...headers, 'content-type': 'application/octet-stream' }, payload: Buffer.from('') });
+    assert.equal(binaryDenied.statusCode, 401);
+    assert.match(String(binaryDenied.headers['www-authenticate']), /oauth-protected-resource\/mcp/);
+    const binaryAuthenticated = await app.inject({ method: 'POST', url: '/mcp', headers: { ...headers, authorization: 'Bearer good', 'content-type': 'application/octet-stream' }, payload: Buffer.from('') });
+    assert.equal(binaryAuthenticated.statusCode, 415);
     assert.equal((await app.inject({ method: 'POST', url: '/mcp', headers: { ...headers, origin: 'https://evil.example', authorization: 'Bearer good' }, payload: {} })).statusCode, 403);
     assert.equal((await app.inject({ method: 'POST', url: '/mcp', headers: { ...headers, host: 'evil.example', authorization: 'Bearer good' }, payload: {} })).statusCode, 403);
     const listed = await app.inject({ method: 'POST', url: '/mcp', headers: { ...headers, authorization: 'Bearer good', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18' }, payload: { jsonrpc: '2.0', id: 8, method: 'tools/list' } });
