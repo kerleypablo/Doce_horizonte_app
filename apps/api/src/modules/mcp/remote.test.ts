@@ -17,6 +17,13 @@ test('token exige emissor, audiencia, cliente, validade e identidade verificada'
   assert.equal(await verifyRemoteToken(jwt(valid), config, async () => null, 1700000000000), null);
   assert.equal(await verifyRemoteToken(jwt(valid), config, async () => { throw new Error('failed'); }, 1700000000000), null);
 });
+test('diagnostico identifica audiencia incorreta sem revelar o token', async () => {
+  const reasons: string[] = [];
+  const token = jwt({ ...valid, aud: 'authenticated' });
+  assert.equal(await verifyRemoteToken(token, config, async () => 'user-a', 1700000000000, reason => reasons.push(reason)), null);
+  assert.deepEqual(reasons, ['audience_mismatch']);
+  assert.equal(JSON.stringify(reasons).includes(token), false);
+});
 test('configuracao remota exige HTTPS e origem de recurso exata', () => {
   assert.throws(() => remoteConfig({ SUPABASE_URL: 'https://project.supabase.co', DOCE_MCP_RESOURCE_URL: 'http://example.com/mcp' }));
   assert.throws(() => remoteConfig({ SUPABASE_URL: 'https://project.supabase.co', DOCE_MCP_RESOURCE_URL: 'https://example.com/mcp?x=1' }));

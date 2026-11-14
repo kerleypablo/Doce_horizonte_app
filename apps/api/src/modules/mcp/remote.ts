@@ -28,33 +28,37 @@ export function remoteConfig(env: NodeJS.ProcessEnv): RemoteConfig {
   if (origins.some(origin => { try { const parsed = new URL(origin); return parsed.origin !== origin || parsed.protocol !== 'https:'; } catch { return true; } })) throw new Error('Origins MCP invalidas');
   return { resource: resource.href, issuer: `${supabase.origin}/auth/v1`, origins };
 }
-export async function verifyRemoteToken(token: string, config: RemoteConfig, getUser: (token: string) => Promise<string | null>, now = Date.now()): Promise<string | null> {
+type AuthFailure = 'malformed_token' | 'invalid_claims' | 'audience_mismatch' | 'issuer_validation_failed' | 'access_denied';
+type ReportAuthFailure = (reason: AuthFailure) => void;
+export async function verifyRemoteToken(token: string, config: RemoteConfig, getUser: (token: string) => Promise<string | null>, now = Date.now(), report?: ReportAuthFailure): Promise<string | null> {
   try {
-    if (token.length > 16384) return null;
+    if (token.length > 16384) { report?.('malformed_token'); return null; }
     const parts = token.split('.');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3) { report?.('malformed_token'); return null; }
     const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
     const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    if (claims.iss !== config.issuer || !audience.includes(config.resource) || typeof claims.sub !== 'string' || !claims.sub || typeof claims.client_id !== 'string' || !claims.client_id || typeof claims.exp !== 'number' || !Number.isFinite(claims.exp) || claims.exp <= now / 1000) return null;
+    if (claims.iss !== config.issuer || typeof claims.sub !== 'string' || !claims.sub || typeof claims.client_id !== 'string' || !claims.client_id || typeof claims.exp !== 'number' || !Number.isFinite(claims.exp) || claims.exp <= now / 1000) { report?.('invalid_claims'); return null; }
+    if (!audience.includes(config.resource)) { report?.('audience_mismatch'); return null; }
     // getUser validates the signed token at the issuer; never trust decoded claims alone.
     const userId = await getUser(token);
-    return userId === claims.sub ? userId : null;
-  } catch { return null; }
+    if (userId !== claims.sub) { report?.('issuer_validation_failed'); return null; }
+    return userId;
+  } catch { report?.('issuer_validation_failed'); return null; }
 }
 export type RemoteDeps = {
-  authenticate: (token: string, config: RemoteConfig) => Promise<McpIdentity | null>;
+  authenticate: (token: string, config: RemoteConfig, report?: ReportAuthFailure) => Promise<McpIdentity | null>;
   search: typeof searchRecords;
   preview: typeof previewPurchase;
 };
 const realDeps: RemoteDeps = {
-  authenticate: async (token, config) => {
+  authenticate: async (token, config, report) => {
     const userId = await verifyRemoteToken(token, config, async t => {
       const { data, error } = await supabaseAdmin.auth.getUser(t);
       return error ? null : data.user?.id ?? null;
-    });
+    }, Date.now(), report);
     if (!userId) return null;
     const user = await getAppUserByAuthId(userId);
-    if (!user || user.access_blocked || !(await getMcpModules(user.company_id, userId)).includes('mcp')) return null;
+    if (!user || user.access_blocked || !(await getMcpModules(user.company_id, userId)).includes('mcp')) { report?.('access_denied'); return null; }
     return { userId, companyId: user.company_id };
   },
   search: searchRecords,
@@ -72,7 +76,7 @@ export function registerRemoteMcp(app: FastifyInstance, config: RemoteConfig, de
   app.route({ method: ['GET', 'POST', 'DELETE'], url: '/mcp', bodyLimit: 65536, handler: async (request, reply) => {
     if (!hostAllowed(request) || !originAllowed(request)) return reply.code(403).send();
     const match = /^Bearer ([^\s]+)$/i.exec(request.headers.authorization ?? '');
-    const identity = match ? await deps.authenticate(match[1], config) : null;
+    const identity = match ? await deps.authenticate(match[1], config, reason => request.log.warn({ reason }, 'MCP authentication rejected')) : null;
     if (!identity) return reply.header('WWW-Authenticate', `Bearer resource_metadata="${metadataUrl}"`).code(401).send({ error: 'invalid_token' });
     const server = new McpServer({ name: 'doce-horizonte', version: '0.1.0' }, { maxToolInputElements: 200 });
     server.registerTool('consultar', {
